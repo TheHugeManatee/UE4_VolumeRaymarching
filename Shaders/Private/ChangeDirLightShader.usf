@@ -1,0 +1,416 @@
+#include "/Engine/Private/Common.ush"
+
+// Thx Temaran for original HLSL & usage example
+
+/**
+	Uniform Buffers have been replaced by regular shader parameters, as most are subject to change between calls.
+*/
+
+RWTexture3D<float> RLightVolume;
+RWTexture3D<float> GLightVolume;
+RWTexture3D<float> BLightVolume;
+RWTexture3D<float> ALightVolume;
+
+RWTexture2D<float4> WriteBuffer;
+Texture2D ReadBuffer;
+
+RWTexture2D<float4> NewWriteBuffer;
+Texture2D NewReadBuffer;
+
+uint Loop;
+
+Texture3D Volume;
+
+Texture2D TransferFunc;
+
+float3 LightPosition;
+
+float3 LightColor;
+
+float LightIntensity;
+
+float3 NewLightPosition;
+
+float3 NewLightColor;
+
+float NewLightIntensity;
+
+// Going from
+// 0 = +X, 1 = -X, 2 = Y, 3 = -Y, 4 = Z, 5 = -Z
+uint Axis;
+
+float Weight;
+float NewWeight;
+
+// The shader code is common for all axes and always 2D in X and Y space
+// If going along X - threadgroup X = Volume Y dimension, threadgroup Y = Volume Z dimension
+// If going along Y - threadgroup X = Volume X dimension, threadgroup Y = Volume Z dimension
+// If going along Z - threadgroup X = Volume X dimension, threadgroup Y = Volume Y dimension (the simple case)
+
+SamplerState TransferFuncSampler;
+//{
+//    Filter = MIN_MAG_MIP_LINEAR;
+//    AddressU = Clamp;
+//    AddressV = Clamp;
+//};
+
+
+SamplerState VolumeSampler;
+//{
+//    Filter = MIN_MAG_MIP_LINEAR;
+//    AddressU = Clamp;
+//    AddressV = Clamp;
+//    AddressW = Clamp;
+//};
+
+// The buffer shall use a hard-set border color (the light outside the volume is not occluded by anything ->
+// sampling outside means full original light.
+SamplerState ReadBufferSampler;
+SamplerState NewReadBufferSampler;
+//{
+//    Filter = MIN_MAG_MIP_LINEAR;
+//    AddressU = Clamp;
+//    AddressV = Clamp;
+//    AddressW = Clamp;
+//    BorderColor = float4(LightColor, LightIntensity);
+//};
+
+void AddColor(int3 pos, float4 addedColor, float4 oldColor)
+{
+    float totalAlpha = oldColor.a + addedColor.a;
+
+    float currentRed   = oldColor.r * oldColor.a;
+    float currentGreen = oldColor.g * oldColor.a;
+    float currentBlue  = oldColor.b * oldColor.a;
+
+	ALightVolume[pos] = totalAlpha;
+
+    if (totalAlpha == 0)
+    {
+		// Division by zero is baaaad, mmkey?
+		// Don't need to set the other colors - since alpha is zero, currentXXX will always equal zero on next add anyways.
+        return;
+    }
+
+    RLightVolume[pos] = (currentRed   + (addedColor.r * addedColor.a)) / totalAlpha;
+    GLightVolume[pos] = (currentGreen + (addedColor.g * addedColor.a)) / totalAlpha;
+    BLightVolume[pos] = (currentBlue  + (addedColor.b * addedColor.a)) / totalAlpha;
+    // Todo? LERP instead of explicit?
+}
+
+void RemoveAndAddColor(int3 pos, float4 removedColor, float4 addedColor, float4 oldColor)
+{
+	// Substract "removed" alpha from original alpha
+    float currentAlpha = oldColor.a - removedColor.a;
+	// Get current weight of color components.
+    float currentRed = oldColor.r * oldColor.a;
+    float currentGreen = oldColor.g * oldColor.a;
+    float currentBlue = oldColor.b * oldColor.a;
+
+	// Set new weight of color components to zero.
+    float afterRemoveRed = 0;
+    float afterRemoveGreen = 0;
+    float afterRemoveBlue = 0;
+
+    if (currentAlpha != 0)
+    {
+		// Only set the new color components to non-zero if alpha is also non-zero.
+        afterRemoveRed = (currentRed - (removedColor.r * removedColor.a)) / currentAlpha;
+        afterRemoveGreen = (currentGreen - (removedColor.g * removedColor.a)) / currentAlpha;
+        afterRemoveBlue = (currentBlue - (removedColor.b * removedColor.a)) / currentAlpha;
+    }
+
+	// Now we have subtracted the color. Start adding the added one. 
+    currentAlpha = currentAlpha + addedColor.a;
+
+	// Hopefully we can assume totalAlpha will be nonzero now 
+	// (Actually, TODO add a check to C code to return on lights with 0 intensity)...
+    ALightVolume[pos] = currentAlpha;
+    RLightVolume[pos] = (afterRemoveRed + (addedColor.r * addedColor.a)) / currentAlpha;
+    GLightVolume[pos] = (afterRemoveGreen + (addedColor.g * addedColor.a)) / currentAlpha;
+    BLightVolume[pos] = (afterRemoveBlue + (addedColor.b * addedColor.a)) / currentAlpha;
+	 
+	// TODO 
+	//
+	// Optimize this!
+
+}
+
+float4 GetColor(int3 pos)
+{
+    return float4(RLightVolume[pos], GLightVolume[pos], BLightVolume[pos], ALightVolume[pos]);
+}
+
+int3 GetPos(uint3 threadId, uint3 VolumeSize)
+{
+    switch (Axis)
+    {
+        case 0:
+            return int3(VolumeSize.x - 1 - Loop, threadId.x, threadId.y);
+        case 1:
+            return int3(Loop, VolumeSize.y - 1 - threadId.x, threadId.y);
+        case 2:
+            return int3(VolumeSize.x - threadId.x - 1, VolumeSize.y - 1 - Loop, threadId.y);
+        case 3:
+            return int3(threadId.x, Loop, threadId.y);
+        case 4:
+            return int3(threadId.x, threadId.y, VolumeSize.z - 1 - Loop);
+        case 5:
+            return int3(threadId.x, VolumeSize.y - threadId.y - 1, Loop);
+        default:
+            return int3(0, 0, 0);
+    }
+}
+
+float2 GetPixOffset()
+{
+    float3 normLightPosition = LightPosition;
+	// Normalize the light position to get the major axis to be one. The other 2 components are then an offset to apply to current pos
+	// to read from our read buffer texture.
+    switch (Axis)
+    {
+        case 0:
+            normLightPosition /= normLightPosition.x;
+            return normLightPosition.yz;
+        case 1:
+            normLightPosition /= -normLightPosition.x;
+            return float2(-normLightPosition.y, normLightPosition.z);
+        case 2:
+            normLightPosition /= normLightPosition.y;
+            return float2(-normLightPosition.x, normLightPosition.z);
+        case 3:
+            normLightPosition /= -normLightPosition.y;
+            return normLightPosition.xz;
+        case 4:
+            normLightPosition /= normLightPosition.z;
+            return normLightPosition.xy;
+        case 5:
+            normLightPosition /= -normLightPosition.z;
+            return float2(normLightPosition.x, -normLightPosition.y);
+        default:
+            return float2(0, 0);
+    }
+}
+
+
+float2 GetNewPixOffset()
+{
+    float3 normLightPosition = NewLightPosition;
+	// Normalize the light position to get the major axis to be one. The other 2 components are then an offset to apply to current pos
+	// to read from our read buffer texture.
+    switch (Axis)
+    {
+        case 0:
+            normLightPosition /= normLightPosition.x;
+            return normLightPosition.yz;
+        case 1:
+            normLightPosition /= -normLightPosition.x;
+            return float2(-normLightPosition.y, normLightPosition.z);
+        case 2:
+            normLightPosition /= normLightPosition.y;
+            return float2(-normLightPosition.x, normLightPosition.z);
+        case 3:
+            normLightPosition /= -normLightPosition.y;
+            return normLightPosition.xz;
+        case 4:
+            normLightPosition /= normLightPosition.z;
+            return normLightPosition.xy;
+        case 5:
+            normLightPosition /= -normLightPosition.z;
+            return float2(normLightPosition.x, -normLightPosition.y);
+        default:
+            return float2(0, 0);
+    }
+}
+
+
+float2 GetUV(float2 pos, float2 texSize) {
+    float2 offset = GetPixOffset();
+    return (pos + float2(0.5, 0.5) + offset) / texSize;
+}
+
+
+float3 GetUVW(uint3 pos, float3 dimensions)
+{
+	// Sample centers of data points.
+    return (pos + float3(0.5, 0.5, 0.5)) / dimensions;
+}
+
+[numthreads(32, 32, 1)]
+void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
+{
+	//Set up some variables we are going to need
+    float sizeX, sizeY, sizeZ;
+    ALightVolume.GetDimensions(sizeX, sizeY, sizeZ);
+	float3 iResolution = float3(sizeX, sizeY, sizeZ);
+    uint3 uResolution = uint3(sizeX, sizeY, sizeZ);
+
+    float texSizeX, texSizeY;
+    WriteBuffer.GetDimensions(texSizeX, texSizeY);
+
+    float cursample = 0;
+    float4 colorsample = 0;
+
+	
+	// Todo keep whole float4, not just alpha
+    uint3 actualPos = uint3(ThreadId.x, ThreadId.y, ThreadId.z);
+    int3 pos = GetPos(actualPos, uResolution);
+    float2 pixelLoc = actualPos.xy;
+    float4 oldColor = GetColor(pos);
+
+	if (Loop == 0)
+    {
+		// Subtract old light, add new light. No occlusion or anything.
+        float4 removedColor = float4(LightColor, Weight * LightIntensity);
+        float4 addedColor = float4(NewLightColor, NewWeight * NewLightIntensity);
+        WriteBuffer[pixelLoc] = removedColor;
+        NewWriteBuffer[pixelLoc] = addedColor;
+       
+        //AddColor(pos, float4(1.0, 1.0, 1.0, -removedColor.a), oldColor);
+        //oldColor = GetColor(pos);
+        //AddColor(pos, float4(1.0, 1.0, 1.0, addedColor.a), oldColor);
+
+         RemoveAndAddColor(pos, removedColor, addedColor, oldColor);
+    }
+    else
+    {
+		// TODO! Set pix offset as a uniform. EVEN better : Save it in UV offset!
+		// + (0.5, 0.5) to sample the centers of pixels!
+        float2 prevXY = actualPos.xy + float2(0.5, 0.5) + GetPixOffset();
+        float2 prevUV = (prevXY) / float2(texSizeX, texSizeY);
+        float4 previousRemovedLightColor = ReadBuffer.SampleLevel(ReadBufferSampler, prevUV, 0);
+
+        prevXY = actualPos.xy + float2(0.5, 0.5) + GetNewPixOffset();
+        prevUV = (prevXY) / float2(texSizeX, texSizeY);
+        float4 previousAddedLightColor = NewReadBuffer.SampleLevel(NewReadBufferSampler, prevUV, 0);
+	
+        cursample = Volume.SampleLevel(VolumeSampler, GetUVW(pos, iResolution), 0);
+		// Get Color&alpha from intensity
+        colorsample = TransferFunc.SampleLevel(TransferFuncSampler, float2(cursample, 0.5f), 0);
+
+        float removedAlpha = previousRemovedLightColor.a * (1 - (colorsample.a));
+        float addedAlpha = previousAddedLightColor.a * (1 - (colorsample.a));
+
+		// The read/write buffers have always positive alpha
+        WriteBuffer[actualPos.xy] = float4(1.0, 1.0, 1.0, removedAlpha);
+        NewWriteBuffer[actualPos.xy] = float4(1.0, 1.0, 1.0, addedAlpha);
+
+        //AddColor(pos, float4(1.0, 1.0, 1.0, -removedAlpha), oldColor);
+        //oldColor = GetColor(pos);
+        //AddColor(pos, float4(1.0, 1.0, 1.0, addedAlpha), oldColor);
+
+
+		// TODO handle colors properly!
+       RemoveAndAddColor(pos, float4(1.0, 1.0, 1.0, removedAlpha), float4(1.0, 1.0, 1.0, addedAlpha), oldColor);
+
+		// Sample readBuffer at [pos - lightVec]
+    }
+    
+}
+
+
+
+// Deprecated
+//int3 GetPosIncrementVector()
+//{
+//    switch (Axis)
+//    {
+//        case 0:
+//            return int3(-1,  0,  0);
+//        case 1:
+//            return int3( 1,  0,  0);
+//        case 2:
+//            return int3( 0, -1,  0);
+//        case 3:
+//            return int3( 0,  1,  0);
+//        case 4:
+//            return int3( 0,  0, -1);
+//        case 5:
+//            return int3( 0,  0,  1);
+//		default:
+//            return int3(0, 0, 0);
+//    }
+//}
+
+//int3 GetFirstPos(uint3 threadId, uint3 VolumeSize)
+//{
+//    switch (Axis)
+//    {
+//        case 0:
+//            return int3(VolumeSize.x - 1, threadId.x, threadId.y);
+//        case 1:
+//            return int3(0, threadId.x, threadId.y);
+//        case 2:
+//            return int3(threadId.x, VolumeSize.y - 1, threadId.y);
+//        case 3:
+//            return int3(threadId.x, 0, threadId.y);
+//        case 4:
+//            return int3(threadId.x, threadId.y, VolumeSize.z - 1);
+//        case 5:
+//            return int3(threadId.x, threadId.y, 0);
+//        default:
+//            return int3(0, 0, 0);
+//    }
+//}
+
+//int3 GetLastPos(uint3 threadId, uint3 VolumeSize)
+//{
+//    switch (Axis)
+//    {
+//        case 0:
+//            return int3(0, threadId.x, threadId.y);
+//        case 1:
+//            return int3(VolumeSize.x - 1, threadId.x, threadId.y);
+//        case 2:
+//            return int3(threadId.x, 0, threadId.y);
+//        case 3:
+//            return int3(threadId.x, VolumeSize.y - 1, threadId.y);
+//        case 4:
+//            return int3(threadId.x, threadId.y, 0);
+//        case 5:
+//            return int3(threadId.x, threadId.y, VolumeSize.z - 1);
+//        default:
+//            return int3(0, 0, 0);
+//    }
+//}
+
+//int GetLoopCount(uint3 VolumeSize)
+//{
+//    switch (Axis)
+//    {
+//        case 0:
+//        case 1:
+//            return VolumeSize.x;
+//        case 2:
+//        case 3:
+//            return VolumeSize.y;
+//        case 4:
+//        case 5:
+//            return VolumeSize.z;
+//        default:
+//            return 1;
+//    }
+//}
+
+
+// Get location of the pixel in the read/write buffer for current position.
+//uint2 GetPixLocation(uint3 pos, uint3 dimensions)
+//{
+//    switch (Axis)
+//    {
+//        case 0:
+//            return pos.yz;
+//        case 1:
+//            return uint2(dimensions.y - pos.y - 1, pos.z);
+//        case 2:
+//            return uint2(dimensions.x - pos.x - 1, pos.z);
+//        case 3:
+//            return pos.xz;
+//        case 4:
+//            return pos.xy;
+//        case 5:
+//            return uint2(pos.x, dimensions.y - pos.y - 1);
+//        default:
+//            return uint2(0, 0);
+//    }
+//}

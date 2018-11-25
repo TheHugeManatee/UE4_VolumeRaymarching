@@ -1,0 +1,51 @@
+float transmittance = 1;
+
+float3 localcamvec = normalize(mul(Parameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+
+float3 lightenergy = 0;
+
+int3 randpos = int3(Parameters.SvPosition.xy, View.StateFrameIndexMod8);
+float rand = float(Rand3DPCG16(randpos).x) / 0xffff;
+CurPos += localcamvec * rand.x * Jitter;
+
+float cursample = 0;
+
+float4 colorsample = 0;
+float4 lightsample = 0;
+
+float3 lightedColor = 0;
+
+[loop] for (
+int i = 0;i <
+MaxSteps; i++)
+{
+	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
+	cursample = Tex.SampleLevel(TexSampler, saturate(CurPos), 0).
+r;
+	colorsample = TF.SampleLevel(TFSampler, float2(cursample, 0.5), 0);
+
+	// Only care if the sample has at least some alpha.
+	if (colorsample.a > 0.01)
+	{
+		// Get lighting information from illumination volume for current position.
+		lightsample.r = RLightVolume.SampleLevel(RLightVolumeSampler, saturate(CurPos), 0);
+		lightsample.g = GLightVolume.SampleLevel(GLightVolumeSampler, saturate(CurPos), 0);
+		lightsample.b = BLightVolume.SampleLevel(BLightVolumeSampler, saturate(CurPos), 0);
+		lightsample.a = ALightVolume.SampleLevel(ALightVolumeSampler, saturate(CurPos), 0);
+
+		// Multiply sampled color with ligth color and adjust intensity according to light strength.
+		lightedColor = colorsample.rgb * lightsample.rgb * lightsample.
+a;
+
+		// Alpha blend back front.
+		lightenergy+= (colorsample.a * lightedColor) * (transmittance);
+		transmittance -= colorsample.a * (transmittance);
+		// Todo? This could be LERPed
+	}
+	CurPos -=
+localcamvec;
+	if (transmittance <= 0.01) {break;};
+}
+
+return float4(lightenergy, transmittance);
+

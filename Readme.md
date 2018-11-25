@@ -8,9 +8,10 @@ Allows volume rendering with Unreal Engine.
 
 # Limitations
  * Needs a custom build of the engine to enable UAV access to `UVolumeTexture` resources for the interactive illumination computation
+ * You can find the branch here: https://github.com/TheHugeManatee/UnrealEngine/tree/raymarching
 
 # Example
-Have a look at https://github.com/TheHugeManatee/UE4_PluginDemos for an example map of how to use various parts of this plugin.
+Have a look at [our example project](https://github.com/TheHugeManatee/UE4_PluginDemos) for an example map of how to use various parts of this plugin.
 
 # Using this plugin in your own project
 If you want to use the functinality in your own project, you will need to
