@@ -1,6 +1,7 @@
 // (C) Technical University of Munich - Computer Aided Medical Procedures
 // Developed by Tomas Bartipan (tomas.bartipan@tum.de)
 
+using System.IO;
 using UnrealBuildTool;
 
 public class Raymarcher : ModuleRules
@@ -11,16 +12,14 @@ public class Raymarcher : ModuleRules
 		
 		PublicIncludePaths.AddRange(
 			new string[] {
-	// ... add public include paths required here ...
 			}
             );
 				
 		
 		PrivateIncludePaths.AddRange(
 			new string[] {
-				"Raymarcher/Private",
-				// ... add other private include paths required here ...
-			}
+				Path.Combine(ModuleDirectory, "Private"),
+            }
             );
 			
 		
@@ -41,7 +40,6 @@ public class Raymarcher : ModuleRules
 			{
 				"CoreUObject",
 				"Engine"
-				// ... add private dependencies that you statically link with here ...	
 			}
 			);
 		
@@ -49,7 +47,6 @@ public class Raymarcher : ModuleRules
 		DynamicallyLoadedModuleNames.AddRange(
 			new string[]
 			{
-				// ... add any modules that your module loads dynamically here ...
 			}
 			);
 	}
