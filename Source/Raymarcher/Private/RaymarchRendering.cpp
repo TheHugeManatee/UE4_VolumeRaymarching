@@ -277,7 +277,9 @@ void AddDirLightToLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, FRHITexture3D* RLightVolumeResource,
     FRHITexture3D* GLightVolumeResource, FRHITexture3D* BLightVolumeResource,
     FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
-    FDirLightParameters LightParams, bool LightAdded, ERHIFeatureLevel::Type FeatureLevel) {
+	FDirLightParameters LightParams, bool LightAdded, FTransform VolumeInvTransform,
+	const FVector LocalClippingCenter, const FVector LocalClippingDirection,
+	ERHIFeatureLevel::Type FeatureLevel) {
   check(IsInRenderingThread());
 
   // Can't have directional light without direction...
@@ -288,6 +290,9 @@ void AddDirLightToLightVolume_RenderThread(
     return;
   }
 
+
+  // Transform light directions into local space.
+  LightParams.LightDirection = VolumeInvTransform.TransformVector(LightParams.LightDirection);
   // Normalize Light Direction to get unit length.
   LightParams.LightDirection.Normalize();
 
@@ -391,8 +396,7 @@ void AddDirLightToLightVolume_RenderThread(
     FUnorderedAccessViewRHIRef Texture1UAV = RHICreateUnorderedAccessView(Texture1);
     FUnorderedAccessViewRHIRef Texture2UAV = RHICreateUnorderedAccessView(Texture2);
 
-    ComputeShader->SetParameters(RHICmdList, LightParams, LightAdded, axes.FaceWeight[i].first,
-                                 axes.FaceWeight[i].second);
+    ComputeShader->SetParameters(RHICmdList, LightParams, LightAdded, axes.FaceWeight[i].first, axes.FaceWeight[i].second, LocalClippingCenter, LocalClippingDirection);
     for (int j = 0; j < groups.Z; j++) {
       // Switch read and write buffers each cycle.
       if (j % 2 == 0) {
@@ -411,9 +415,13 @@ void AddDirLightToLightVolume_RenderThread(
         // axes.FaceWeight[i].second * LightParams.LightIntensity);
       }
 
+
+	  uint32 GroupSizeX = FMath::DivideAndRoundUp(groups.X, NUM_THREADS_PER_GROUP_DIMENSION);
+	  uint32 GroupSizeY = FMath::DivideAndRoundUp(groups.Y, NUM_THREADS_PER_GROUP_DIMENSION);
+
       DispatchComputeShader(RHICmdList, *ComputeShader,
-                            groups.X / (NUM_THREADS_PER_GROUP_DIMENSION),
-                            groups.Y / NUM_THREADS_PER_GROUP_DIMENSION, 1);
+                            GroupSizeX,
+                            GroupSizeY, 1);
     }
   }
 
@@ -428,7 +436,11 @@ void ChangeDirLightInLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, FRHITexture3D* RLightVolumeResource,
     FRHITexture3D* GLightVolumeResource, FRHITexture3D* BLightVolumeResource,
     FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
-    FDirLightParameters LightParams, FDirLightParameters NewLightParams,
+	FDirLightParameters LightParams, FDirLightParameters NewLightParams, FTransform VolumeInvTransform,
+	const FVector LocalClippingCenter,
+	const FVector LocalClippingDirection,
+	const FVector NewLocalClippingCenter,
+	const FVector NewLocalClippingDirection,
     ERHIFeatureLevel::Type FeatureLevel) {
   // Can't have directional light without direction...
   if (LightParams.LightDirection == FVector(0.0, 0.0, 0.0)) {
@@ -437,6 +449,10 @@ void ChangeDirLightInLightVolume_RenderThread(
         TEXT("Returning because the directional light doesn't have a direction."));
     return;
   }
+
+  // Transform light directions into local space.
+  LightParams.LightDirection = VolumeInvTransform.TransformVector(LightParams.LightDirection);
+  NewLightParams.LightDirection = VolumeInvTransform.TransformVector(NewLightParams.LightDirection);
 
   // Normalize Light Direction to get unit length, use old light's axes.
   LightParams.LightDirection.Normalize();
@@ -458,10 +474,10 @@ void ChangeDirLightInLightVolume_RenderThread(
                                                                      newAxes.FaceWeight[1].first /*&& !(oldAxes.FaceWeight[0].second > dominance && newAxes.FaceWeight[0].second > dominance)*/)) {
     AddDirLightToLightVolume_RenderThread(
         RHICmdList, RLightVolumeResource, GLightVolumeResource, BLightVolumeResource,
-        ALightVolumeResource, VolumeResource, TFResource, LightParams, false, FeatureLevel);
+        ALightVolumeResource, VolumeResource, TFResource, LightParams, false, VolumeInvTransform, LocalClippingCenter, LocalClippingDirection, FeatureLevel);
     AddDirLightToLightVolume_RenderThread(
         RHICmdList, RLightVolumeResource, GLightVolumeResource, BLightVolumeResource,
-        ALightVolumeResource, VolumeResource, TFResource, NewLightParams, true, FeatureLevel);
+        ALightVolumeResource, VolumeResource, TFResource, NewLightParams, true, VolumeInvTransform, NewLocalClippingCenter, NewLocalClippingDirection, FeatureLevel);
     return;
   }
 
@@ -574,24 +590,20 @@ void ChangeDirLightInLightVolume_RenderThread(
 
     ComputeShader->SetParameters(RHICmdList, LightParams, NewLightParams,
                                  oldAxes.FaceWeight[i].first, oldAxes.FaceWeight[i].second,
-                                 newAxes.FaceWeight[i].second);
+                                 newAxes.FaceWeight[i].second, LocalClippingCenter, LocalClippingDirection, NewLocalClippingCenter, NewLocalClippingDirection);
     for (int j = 0; j < groups.Z; j++) {
       // Switch read and write buffers each cycle.
       if (j % 2 == 0) {
         RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, Texture1);
         RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, NewTexture1);
-        RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
-                                      EResourceTransitionPipeline::EComputeToCompute, Texture2UAV);
-        RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
-                                      EResourceTransitionPipeline::EComputeToCompute,
-                                      NewTexture2UAV);
+        RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable, EResourceTransitionPipeline::EComputeToCompute, Texture2UAV);
+        RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable, EResourceTransitionPipeline::EComputeToCompute, NewTexture2UAV);
         ComputeShader->SetLoop(RHICmdList, j, Texture1, readBuffSampler, Texture2UAV, NewTexture1,
                                newReadBufferSampler, NewTexture2UAV);
       } else {
         RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, Texture2);
         RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, NewTexture2);
-        RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
-                                      EResourceTransitionPipeline::EComputeToCompute, Texture1UAV);
+        RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable, EResourceTransitionPipeline::EComputeToCompute, Texture1UAV);
         RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
                                       EResourceTransitionPipeline::EComputeToCompute,
                                       NewTexture1UAV);
@@ -599,9 +611,13 @@ void ChangeDirLightInLightVolume_RenderThread(
                                newReadBufferSampler, NewTexture1UAV);
       }
 
-      DispatchComputeShader(RHICmdList, *ComputeShader,
-                            groups.X / (NUM_THREADS_PER_GROUP_DIMENSION),
-                            groups.Y / NUM_THREADS_PER_GROUP_DIMENSION, 1);
+
+	  uint32 GroupSizeX = FMath::DivideAndRoundUp(groups.X, NUM_THREADS_PER_GROUP_DIMENSION);
+	  uint32 GroupSizeY = FMath::DivideAndRoundUp(groups.Y, NUM_THREADS_PER_GROUP_DIMENSION);
+
+	  DispatchComputeShader(RHICmdList, *ComputeShader,
+		  GroupSizeX,
+		  GroupSizeY, 1);
     }
   }
 
@@ -643,9 +659,14 @@ void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
 
   ComputeShader->SetLightVolumeUAVs(RHICmdList, UAVs);
   ComputeShader->SetParameters(RHICmdList, ClearValues, RLightVolumeResource->GetSizeZ());
+
+  uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)RLightVolumeResource->GetSizeX(), NUM_THREADS_PER_GROUP_DIMENSION);
+  uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)RLightVolumeResource->GetSizeY(), NUM_THREADS_PER_GROUP_DIMENSION);
+
   DispatchComputeShader(RHICmdList, *ComputeShader,
-                        RLightVolumeResource->GetSizeX() / (NUM_THREADS_PER_GROUP_DIMENSION),
-                        RLightVolumeResource->GetSizeY() / NUM_THREADS_PER_GROUP_DIMENSION, 1);
+                        GroupSizeX,
+                        GroupSizeY,
+						1);
   ComputeShader->UnbindLightVolumeUAVs(RHICmdList);
 
   RHICmdList.TransitionResources(EResourceTransitionAccess::EReadable,

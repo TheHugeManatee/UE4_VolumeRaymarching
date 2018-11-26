@@ -50,12 +50,12 @@ USTRUCT(BlueprintType) struct FDirLightParameters {
 
 // Enum for indexes for cube faces - used to discern axes for light propagation shader.
 enum FCubeFace : int {
-	Right	= 1,
-	Left	= 2,	
-	Front	= 3,
-	Back	= 4,
-	Top		= 5,
-	Bottom	= 6
+	Right	= 1, // +X
+	Left	= 2, // -X	
+	Front	= 3, // +Y
+	Back	= 4, // -Y
+	Top		= 5, // +Z
+	Bottom	= 6  // -Z
 };
 
 // Normals of corresponding cube faces in object-space.
@@ -255,6 +255,9 @@ public:
 		Axis.Bind(Initializer.ParameterMap, TEXT("Axis"));
 		Weight.Bind(Initializer.ParameterMap, TEXT("Weight"));
 		Loop.Bind(Initializer.ParameterMap, TEXT("Loop"));
+
+		LocalClippingCenter.Bind(Initializer.ParameterMap, TEXT("LocalClippingCenter"));
+		LocalClippingDirection.Bind(Initializer.ParameterMap, TEXT("LocalClippingDirection"));
 	}
 		
 	// Sets loop-dependent uniforms in the pipeline.
@@ -320,7 +323,9 @@ public:
 		FComputeShaderRHIParamRef ShaderRHI,
 		const FDirLightParameters parameters,
 		const unsigned pAxis,
-		const float pWeight
+		const float pWeight,
+		const FVector pLocalClippingCenter,
+		const FVector pLocalClippingDirection
 	)
 	{
 		SetShaderValue(RHICmdList, ShaderRHI, LightPosition, -parameters.LightDirection);
@@ -328,13 +333,16 @@ public:
 		SetShaderValue(RHICmdList, ShaderRHI, LightIntensity, parameters.LightIntensity);
 		SetShaderValue(RHICmdList, ShaderRHI, Axis, pAxis);
 		SetShaderValue(RHICmdList, ShaderRHI, Weight, pWeight);
+		SetShaderValue(RHICmdList, ShaderRHI, LocalClippingCenter, pLocalClippingCenter);
+		SetShaderValue(RHICmdList, ShaderRHI, LocalClippingDirection, pLocalClippingDirection);
+
 	}
 
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParameters = FGenericLightVolumeShader::Serialize(Ar);
 		Ar << Volume << VolumeSampler << TransferFunc << TransferFuncSampler << 
-			LightPosition << LightColor << LightIntensity <<  Axis << Weight << ReadBuffer << ReadBufferSampler << WriteBuffer << Loop;
+			LightPosition << LightColor << LightIntensity <<  Axis << Weight << ReadBuffer << ReadBufferSampler << WriteBuffer << Loop << LocalClippingCenter << LocalClippingDirection;
 		return bShaderHasOutdatedParameters;
 	}
 
@@ -365,6 +373,10 @@ protected:
 	// Loop of the shader.
 	FShaderParameter Loop;
 
+	FShaderParameter LocalClippingCenter;
+
+	FShaderParameter LocalClippingDirection;
+
 };
 
 
@@ -393,12 +405,12 @@ public:
 	}
 
 
-	virtual void SetParameters(FRHICommandListImmediate& RHICmdList, const FDirLightParameters parameters, bool LightAdded, const unsigned pAxis, const float pWeight) {
+	virtual void SetParameters(FRHICommandListImmediate& RHICmdList, const FDirLightParameters parameters, bool LightAdded, const unsigned pAxis, const float pWeight, const FVector pLocalClippingCenter, const FVector pLocalClippingDirection) {
 		FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
 
 		SetShaderValue(RHICmdList, ShaderRHI, bAdded, LightAdded ? 1 : -1);
 
-		FDirLightParentShader::SetParameters(RHICmdList, ShaderRHI, parameters, pAxis, pWeight);
+		FDirLightParentShader::SetParameters(RHICmdList, ShaderRHI, parameters, pAxis, pWeight, pLocalClippingCenter, pLocalClippingDirection);
 	}
 	
 	
@@ -442,6 +454,9 @@ public:
 		NewReadBufferSampler.Bind(Initializer.ParameterMap, TEXT("NewReadBufferSampler"));
 
 		NewWeight.Bind(Initializer.ParameterMap, TEXT("NewWeight"));
+
+		NewLocalClippingCenter.Bind(Initializer.ParameterMap, TEXT("NewLocalClippingCenter"));
+		NewLocalClippingDirection.Bind(Initializer.ParameterMap, TEXT("NewLocalClippingDirection"));
 	}
 
 
@@ -452,18 +467,23 @@ public:
 		const FDirLightParameters NewParameters,
 		const unsigned pAxis,
 		const float pWeight,
-		const float pNewWeight
+		const float pNewWeight,
+		const FVector pLocalClippingCenter,
+		const FVector pLocalClippingDirection,
+		const FVector pNewLocalClippingCenter,
+		const FVector pNewLocalClippingDirection
 	)
 	{
 		FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
 		// Set the old light parameters.
-		FDirLightParentShader::SetParameters(RHICmdList, ShaderRHI, OldParameters, pAxis, pWeight);
+		FDirLightParentShader::SetParameters(RHICmdList, ShaderRHI, OldParameters, pAxis, pWeight, pLocalClippingCenter, pLocalClippingDirection);
 		// Set the new light parameters.
 		SetShaderValue(RHICmdList, ShaderRHI, NewLightPosition, -NewParameters.LightDirection);
 		SetShaderValue(RHICmdList, ShaderRHI, NewLightColor, NewParameters.LightColor);
 		SetShaderValue(RHICmdList, ShaderRHI, NewLightIntensity, NewParameters.LightIntensity);
 		SetShaderValue(RHICmdList, ShaderRHI, NewWeight, pNewWeight);
-
+		SetShaderValue(RHICmdList, ShaderRHI, NewLocalClippingCenter, pNewLocalClippingCenter);
+		SetShaderValue(RHICmdList, ShaderRHI, NewLocalClippingDirection, pNewLocalClippingDirection);
 	}
 
 	virtual void SetLoop (
@@ -490,7 +510,7 @@ public:
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParameters = FDirLightParentShader::Serialize(Ar);
-		Ar << NewReadBuffer << NewReadBufferSampler << NewWriteBuffer << NewLightPosition << NewLightColor << NewLightIntensity << NewWeight;
+		Ar << NewReadBuffer << NewReadBufferSampler << NewWriteBuffer << NewLightPosition << NewLightColor << NewLightIntensity << NewWeight << NewLocalClippingCenter << NewLocalClippingDirection;
 		return bShaderHasOutdatedParameters;
 	}
 
@@ -508,6 +528,11 @@ private:
 	FShaderParameter NewLightIntensity;
 	// New light's weight along the axis
 	FShaderParameter NewWeight;
+
+	FShaderParameter NewLocalClippingCenter;
+
+	FShaderParameter NewLocalClippingDirection;
+
 };
 
 
@@ -559,6 +584,9 @@ void AddDirLightToLightVolume_RenderThread(
 	FRHITexture2D* TFResource,
 	FDirLightParameters LightParams,
 	bool LightAdded,
+	FTransform VolumeInvTransform,
+	const FVector LocalClippingCenter,
+	const FVector LocalClippingDirection,
 	ERHIFeatureLevel::Type FeatureLevel);
 
 void ChangeDirLightInLightVolume_RenderThread(
@@ -571,6 +599,11 @@ void ChangeDirLightInLightVolume_RenderThread(
 	FRHITexture2D* TFResource,
 	FDirLightParameters LightParams,
 	FDirLightParameters NewLightParams,
+	FTransform VolumeInvTransform,
+	const FVector LocalClippingCenter,
+	const FVector LocalClippingDirection,
+	const FVector NewLocalClippingCenter,
+	const FVector NewLocalClippingDirection, 
 	ERHIFeatureLevel::Type FeatureLevel);
 
 void ClearLightVolumes_RenderThread(

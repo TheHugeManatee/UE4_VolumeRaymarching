@@ -28,6 +28,10 @@ float LightIntensity;
 
 int bAdded;
 
+float3 LocalClippingCenter;
+
+float3 LocalClippingDirection;
+
 // Going from
 // 0 = +X, 1 = -X, 2 = Y, 3 = -Y, 4 = Z, 5 = -Z
 uint Axis;  
@@ -196,9 +200,19 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
         float2 prevUV = (prevXY) / float2(texSizeX, texSizeY);
         float4 previousLightColor = ReadBuffer.SampleLevel(ReadBufferSampler, prevUV, 0);
 	
-        cursample = Volume.SampleLevel(VolumeSampler, GetUVW(pos, iResolution), 0);
+        float3 uvw = GetUVW(pos, iResolution);
+
+        // Ignore clipped.
+        if (dot(uvw - LocalClippingCenter, LocalClippingDirection) < 0)
+        {
+            colorsample = float4(0, 0, 0, 0);
+        }
+        else
+        {
+            cursample = Volume.SampleLevel(VolumeSampler, uvw, 0);
 		// Get Color&alpha from intensity
-        colorsample = TransferFunc.SampleLevel(TransferFuncSampler, float2(cursample, 0.5f), 0);
+            colorsample = TransferFunc.SampleLevel(TransferFuncSampler, float2(cursample, 0.5f), 0);
+        }
 
         alpha = previousLightColor.a * (1 - (colorsample.a));
 

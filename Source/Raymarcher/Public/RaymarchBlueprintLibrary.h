@@ -31,6 +31,8 @@ public:
 			const FDirLightParameters LightParameters,
 			const bool Added,
 			const FTransform VolumeInvTransform,
+			const FVector LocalClippingCenter,
+			const FVector LocalClippingDirection,
 			bool& LightAdded);
 
 	/** Changes a light in the light volumes.	 */
@@ -46,6 +48,10 @@ public:
 			FDirLightParameters OldLightParameters,
 			FDirLightParameters NewLightParameters,
 			const FTransform VolumeInvTransform,
+			const FVector OldLocalClippingCenter,
+			const FVector OldLocalClippingDirection,
+			const FVector LocalClippingCenter,
+			const FVector LocalClippingDirection,
 			bool& LightAdded);
 
 

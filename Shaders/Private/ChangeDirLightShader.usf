@@ -29,11 +29,21 @@ float3 LightColor;
 
 float LightIntensity;
 
+
+float3 LocalClippingCenter;
+float3 LocalClippingDirection;
+
+
+
 float3 NewLightPosition;
 
 float3 NewLightColor;
 
 float NewLightIntensity;
+
+float3 NewLocalClippingCenter;
+float3 NewLocalClippingDirection;
+
 
 // Going from
 // 0 = +X, 1 = -X, 2 = Y, 3 = -Y, 4 = Z, 5 = -Z
@@ -250,6 +260,7 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 
     float cursample = 0;
     float4 colorsample = 0;
+    float4 newcolorsample = 0;
 
 	
 	// Todo keep whole float4, not just alpha
@@ -287,9 +298,23 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
         cursample = Volume.SampleLevel(VolumeSampler, GetUVW(pos, iResolution), 0);
 		// Get Color&alpha from intensity
         colorsample = TransferFunc.SampleLevel(TransferFuncSampler, float2(cursample, 0.5f), 0);
+        newcolorsample = colorsample;
+        
+        float3 uvw = GetUVW(pos, iResolution);
+
+        // Ignore clipped.
+        if (dot(uvw - LocalClippingCenter, LocalClippingDirection) < 0)
+        {
+            colorsample = float4(0, 0, 0, 0);
+        }
+        if (dot(uvw - NewLocalClippingCenter, NewLocalClippingDirection) < 0)
+        {
+            newcolorsample = float4(0, 0, 0, 0);
+        }
+
 
         float removedAlpha = previousRemovedLightColor.a * (1 - (colorsample.a));
-        float addedAlpha = previousAddedLightColor.a * (1 - (colorsample.a));
+        float addedAlpha = previousAddedLightColor.a * (1 - (newcolorsample.a));
 
 		// The read/write buffers have always positive alpha
         WriteBuffer[actualPos.xy] = float4(1.0, 1.0, 1.0, removedAlpha);
