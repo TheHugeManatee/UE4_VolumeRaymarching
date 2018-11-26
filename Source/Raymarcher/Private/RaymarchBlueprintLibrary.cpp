@@ -25,8 +25,8 @@ bool dooone = false;
 void URaymarchBlueprintLibrary::AddDirLightToVolumes(
     const UObject* WorldContextObject, UVolumeTexture* RLightVolume, UVolumeTexture* GLightVolume,
     UVolumeTexture* BLightVolume, UVolumeTexture* ALightVolume, const UVolumeTexture* DataVolume,
-    const UTexture2D* TransferFunction, const FDirLightParameters LightParameters, const bool Added,
-    bool& LightAdded) {
+    const UTexture2D* TransferFunction, const FDirLightParameters LightParameters, const bool Added, 			
+	const FTransform VolumeInvTransform,    bool& LightAdded) {
   if (!DataVolume->Resource || !TransferFunction->Resource || !RLightVolume->Resource ||
       !GLightVolume->Resource || !BLightVolume->Resource || !ALightVolume->Resource ||
       !DataVolume->Resource->TextureRHI || !TransferFunction->Resource->TextureRHI ||
@@ -63,7 +63,8 @@ void URaymarchBlueprintLibrary::ChangeDirLightInLightVolumes(
     const UObject* WorldContextObject, UVolumeTexture* RLightVolume, UVolumeTexture* GLightVolume,
     UVolumeTexture* BLightVolume, UVolumeTexture* ALightVolume, const UVolumeTexture* DataVolume,
     const UTexture2D* TransferFunction, FDirLightParameters OldLightParameters,
-    FDirLightParameters NewLightParameters, bool& LightAdded) {
+    FDirLightParameters NewLightParameters,	const FTransform VolumeInvTransform,
+bool& LightAdded) {
   if (!DataVolume->Resource || !TransferFunction->Resource || !RLightVolume->Resource ||
       !GLightVolume->Resource || !BLightVolume->Resource || !ALightVolume->Resource ||
       !DataVolume->Resource->TextureRHI || !TransferFunction->Resource->TextureRHI ||

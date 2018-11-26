@@ -30,6 +30,7 @@ public:
 			const UTexture2D* TransferFunction,
 			const FDirLightParameters LightParameters,
 			const bool Added,
+			const FTransform VolumeInvTransform,
 			bool& LightAdded);
 
 	/** Changes a light in the light volumes.	 */
@@ -44,6 +45,7 @@ public:
 			const UTexture2D* TransferFunction,
 			FDirLightParameters OldLightParameters,
 			FDirLightParameters NewLightParameters,
+			const FTransform VolumeInvTransform,
 			bool& LightAdded);
 
 
