@@ -112,28 +112,21 @@ void RemoveAndAddColor(int3 pos, float4 removedColor, float4 addedColor, float4 
 {
 	// Substract "removed" alpha from original alpha
     float currentAlpha = oldColor.a - removedColor.a;
-	// Get current weight of color components.
+	// Get current weight of color components relative to old alpha.
     float currentRed = oldColor.r * oldColor.a;
     float currentGreen = oldColor.g * oldColor.a;
     float currentBlue = oldColor.b * oldColor.a;
 
-	// Set new weight of color components to zero.
-    float afterRemoveRed = 0;
-    float afterRemoveGreen = 0;
-    float afterRemoveBlue = 0;
-
-    if (currentAlpha != 0)
-    {
-		// Only set the new color components to non-zero if alpha is also non-zero.
-        afterRemoveRed = (currentRed - (removedColor.r * removedColor.a)) / currentAlpha;
-        afterRemoveGreen = (currentGreen - (removedColor.g * removedColor.a)) / currentAlpha;
-        afterRemoveBlue = (currentBlue - (removedColor.b * removedColor.a)) / currentAlpha;
-    }
+	// Get the weights of colors after removing the removed color (these are already relative to the currentAlpha)
+    // As in - if they are now (0.1, 0.1, 0.1, 0.1), it is actually full white at 0.1 intensity
+    float afterRemoveRed = currentRed - (removedColor.r * removedColor.a);
+    float afterRemoveGreen = currentGreen - (removedColor.g * removedColor.a);
+    float afterRemoveBlue = currentBlue - (removedColor.b * removedColor.a);
 
 	// Now we have subtracted the color. Start adding the added one. 
     currentAlpha = currentAlpha + addedColor.a;
 
-	// Hopefully we can assume totalAlpha will be nonzero now 
+	// We can assume currentAlpha will be nonzero now, as otherwise we'd be adding a 0 intensity light
 	// (Actually, TODO add a check to C code to return on lights with 0 intensity)...
     ALightVolume[pos] = currentAlpha;
     RLightVolume[pos] = (afterRemoveRed + (addedColor.r * addedColor.a)) / currentAlpha;
@@ -143,7 +136,6 @@ void RemoveAndAddColor(int3 pos, float4 removedColor, float4 addedColor, float4 
 	// TODO 
 	//
 	// Optimize this!
-
 }
 
 float4 GetColor(int3 pos)
@@ -303,14 +295,14 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
         float3 uvw = GetUVW(pos, iResolution);
 
         // Ignore clipped.
-        if (dot(uvw - LocalClippingCenter, LocalClippingDirection) < 0)
-        {
-            colorsample = float4(0, 0, 0, 0);
-        }
-        if (dot(uvw - NewLocalClippingCenter, NewLocalClippingDirection) < 0)
-        {
-            newcolorsample = float4(0, 0, 0, 0);
-        }
+        //if (dot(uvw - LocalClippingCenter, LocalClippingDirection) < 0)
+        //{
+        //    colorsample = float4(0, 0, 0, 0);
+        //}
+        //if (dot(uvw - NewLocalClippingCenter, NewLocalClippingDirection) < 0)
+        //{
+        //    newcolorsample = float4(0, 0, 0, 0);
+        //}
 
 
         float removedAlpha = previousRemovedLightColor.a * (1 - (colorsample.a));
@@ -320,13 +312,14 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
         WriteBuffer[actualPos.xy] = float4(1.0, 1.0, 1.0, removedAlpha);
         NewWriteBuffer[actualPos.xy] = float4(1.0, 1.0, 1.0, addedAlpha);
 
+
         //AddColor(pos, float4(1.0, 1.0, 1.0, -removedAlpha), oldColor);
         //oldColor = GetColor(pos);
         //AddColor(pos, float4(1.0, 1.0, 1.0, addedAlpha), oldColor);
 
 
 		// TODO handle colors properly!
-       RemoveAndAddColor(pos, float4(1.0, 1.0, 1.0, removedAlpha), float4(1.0, 1.0, 1.0, addedAlpha), oldColor);
+        RemoveAndAddColor(pos, float4(1.0, 1.0, 1.0, removedAlpha), float4(1.0, 1.0, 1.0, addedAlpha), oldColor);
 
 		// Sample readBuffer at [pos - lightVec]
     }

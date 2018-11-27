@@ -202,12 +202,12 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 	
         float3 uvw = GetUVW(pos, iResolution);
 
-        // Ignore clipped.
-        if (dot(uvw - LocalClippingCenter, LocalClippingDirection) < 0)
-        {
-            colorsample = float4(0, 0, 0, 0);
-        }
-        else
+        //// Ignore clipped.
+        //if (dot(uvw - LocalClippingCenter, LocalClippingDirection) < 0)
+        //{
+        //    colorsample = float4(0, 0, 0, 0);
+        //}
+        //else
         {
             cursample = Volume.SampleLevel(VolumeSampler, uvw, 0);
 		// Get Color&alpha from intensity

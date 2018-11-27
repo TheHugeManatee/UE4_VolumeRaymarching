@@ -21,7 +21,7 @@ float AClearValue;
 [numthreads(32, 32, 1)]
 void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 {
-    for (int i = 0; i < ZSize; i++)
+    for (int i = 0; i <= ZSize; i++)
     {
         RLightVolume[int3(ThreadId.x, ThreadId.y, i)] = RClearValue;
         GLightVolume[int3(ThreadId.x, ThreadId.y, i)] = GClearValue;
