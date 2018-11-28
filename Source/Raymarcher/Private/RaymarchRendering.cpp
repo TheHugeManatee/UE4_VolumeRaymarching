@@ -278,8 +278,8 @@ void AddDirLightToLightVolume_RenderThread(
     FRHITexture3D* GLightVolumeResource, FRHITexture3D* BLightVolumeResource,
     FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
     const FDirLightParameters LightParams, const bool LightAdded,
-    const FTransform VolumeInvTransform, const FVector LocalClippingCenter,
-    const FVector LocalClippingDirection, ERHIFeatureLevel::Type FeatureLevel) {
+    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel) { // TODO use a unit inv cube to avoid having to pass MeshMaxBounds!
   check(IsInRenderingThread());
 
   // Can't have directional light without direction...
@@ -331,18 +331,21 @@ void AddDirLightToLightVolume_RenderThread(
   // Set the second axis weight as  1 - (major axis)
   unsigned passes = 2;
 
-  // float dominance = 0.7;
-  //// If the major axis is very dominant, use just that axis.
-  // if (axes.FaceWeight[0].second > dominance) {
-  //	axes.FaceWeight[0].second = 1;
-  //	passes = 1;
-  //}
-  // else {
+  
+  // Get clipping center to (0-1) texture local space. (Invert transform, divide by mesh size,
+  // divide by 2 and add 0.5 to get to (0-1) space.
+  FVector LocalClippingCenter =
+      (VolumeInvTransform.TransformPosition(ClippingParameters.ClippingCenter) /
+       (MeshMaxBounds * 2)) +
+      FVector(0.5, 0.5, 0.5);
+  // Get clipping direction in local space - here we don't care about the mesh size (as long as it's
+  // a cube, which it really bloody better be).
+  FVector LocalClippingDirection =
+      VolumeInvTransform.TransformVectorNoScale(ClippingParameters.ClippingDirection);
+
+
   axes.FaceWeight[1].second = 1 - axes.FaceWeight[0].second;
-  //}
-
-  //	oldAxes.FaceWeight[0].second = newAxes.FaceWeight[0].second = 1;
-
+  
   FString text = "Adding/Removing light with new Major axis weight = " +
                  FString::SanitizeFloat(axes.FaceWeight[0].second) +
                  ", new second axis weight = " + FString::SanitizeFloat(axes.FaceWeight[1].second);
@@ -438,9 +441,8 @@ void ChangeDirLightInLightVolume_RenderThread(
     FRHITexture3D* GLightVolumeResource, FRHITexture3D* BLightVolumeResource,
     FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
     const FDirLightParameters LightParams, const FDirLightParameters NewLightParams,
-    const FTransform VolumeInvTransform, const FVector LocalClippingCenter,
-    const FVector LocalClippingDirection, const FVector NewLocalClippingCenter,
-    const FVector NewLocalClippingDirection, ERHIFeatureLevel::Type FeatureLevel) {
+    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel) {
   // Can't have directional light without direction...
   if (LightParams.LightDirection == FVector(0.0, 0.0, 0.0)) {
     GEngine->AddOnScreenDebugMessage(
@@ -476,29 +478,21 @@ void ChangeDirLightInLightVolume_RenderThread(
   // If lights have different major axes, do a proper removal and addition.
   // If first major axes are the same and above the dominance threshold, ignore whether the second
   // major axes are the same.
-  if (oldAxes.FaceWeight[0].first != newAxes.FaceWeight[0].first || (oldAxes.FaceWeight[1].first !=
-                                                                     newAxes.FaceWeight[1].first /*&& !(oldAxes.FaceWeight[0].second > dominance && newAxes.FaceWeight[0].second > dominance)*/)) {
+  if (oldAxes.FaceWeight[0].first != newAxes.FaceWeight[0].first || 
+	  oldAxes.FaceWeight[1].first != newAxes.FaceWeight[1].first) {
     AddDirLightToLightVolume_RenderThread(
         RHICmdList, RLightVolumeResource, GLightVolumeResource, BLightVolumeResource,
         ALightVolumeResource, VolumeResource, TFResource, LightParams, false, VolumeInvTransform,
-        LocalClippingCenter, LocalClippingDirection, FeatureLevel);
+        ClippingParameters, MeshMaxBounds, FeatureLevel);
     AddDirLightToLightVolume_RenderThread(
         RHICmdList, RLightVolumeResource, GLightVolumeResource, BLightVolumeResource,
         ALightVolumeResource, VolumeResource, TFResource, NewLightParams, true, VolumeInvTransform,
-        NewLocalClippingCenter, NewLocalClippingDirection, FeatureLevel);
+        ClippingParameters, MeshMaxBounds, FeatureLevel);
     return;
   }
 
-  //// If the major axis is very dominant, use just that axis.
-  // if (oldAxes.FaceWeight[0].second > dominance && newAxes.FaceWeight[0].second > dominance) {
-  //	oldAxes.FaceWeight[0].second = 1;
-  //	newAxes.FaceWeight[0].second = 1;
-  //	passes = 1;
-  //}
-  // else {
   oldAxes.FaceWeight[1].second = 1 - oldAxes.FaceWeight[0].second;
   newAxes.FaceWeight[1].second = 1 - newAxes.FaceWeight[0].second;
-  //}
 
   SCOPED_DRAW_EVENTF(RHICmdList, AddDirLightToLightVolume_RenderThread, TEXT("Adding Lights"));
   SCOPED_GPU_STAT(RHICmdList, GPUAddingLights);
@@ -533,6 +527,17 @@ void ChangeDirLightInLightVolume_RenderThread(
       FString::SanitizeFloat(newAxes.FaceWeight[0].second) +
       ", new second axis weight = " + FString::SanitizeFloat(newAxes.FaceWeight[1].second);
   GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, text);
+
+  // Get clipping center to (0-1) texture local space. (Invert transform, divide by mesh size,
+  // divide by 2 and add 0.5 to get to (0-1) space.
+  FVector LocalClippingCenter =
+      (VolumeInvTransform.TransformPosition(ClippingParameters.ClippingCenter) /
+       (MeshMaxBounds * 2)) +
+      FVector(0.5, 0.5, 0.5);
+  // Get clipping direction in local space - here we don't care about the mesh size (as long as
+  // it's a cube, which it really bloody better be).
+  FVector LocalClippingDirection =
+      VolumeInvTransform.TransformVectorNoScale(ClippingParameters.ClippingDirection);
 
   for (unsigned i = 0; i < passes; i++) {
     FVector2D textureOffset =
@@ -600,7 +605,7 @@ void ChangeDirLightInLightVolume_RenderThread(
     ComputeShader->SetParameters(
         RHICmdList, LocalLightParams, NewLocalLightParams, oldAxes.FaceWeight[i].first,
         oldAxes.FaceWeight[i].second, newAxes.FaceWeight[i].second, LocalClippingCenter,
-        LocalClippingDirection, NewLocalClippingCenter, NewLocalClippingDirection);
+        LocalClippingDirection);
     for (int j = 0; j < groups.Z; j++) {
       // Switch read and write buffers each cycle.
       if (j % 2 == 0) {

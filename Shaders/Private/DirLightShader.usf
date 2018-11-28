@@ -34,7 +34,7 @@ float3 LocalClippingDirection;
 
 // Going from
 // 0 = +X, 1 = -X, 2 = Y, 3 = -Y, 4 = Z, 5 = -Z
-uint Axis;  
+uint Axis;
 
 float Weight;
 
@@ -74,11 +74,11 @@ void AddColor(int3 pos, float4 addedColor, float4 oldColor)
 {
     float totalAlpha = oldColor.a + addedColor.a;
 
-    float currentRed   = oldColor.r * oldColor.a;
+    float currentRed = oldColor.r * oldColor.a;
     float currentGreen = oldColor.g * oldColor.a;
-    float currentBlue  = oldColor.b * oldColor.a;
+    float currentBlue = oldColor.b * oldColor.a;
 
-	ALightVolume[pos] = totalAlpha;
+    ALightVolume[pos] = totalAlpha;
 
     if (totalAlpha == 0)
     {
@@ -87,10 +87,30 @@ void AddColor(int3 pos, float4 addedColor, float4 oldColor)
         return;
     }
 
-    RLightVolume[pos] = (currentRed   + (addedColor.r * addedColor.a)) / totalAlpha;
+    RLightVolume[pos] = (currentRed + (addedColor.r * addedColor.a)) / totalAlpha;
     GLightVolume[pos] = (currentGreen + (addedColor.g * addedColor.a)) / totalAlpha;
-    BLightVolume[pos] = (currentBlue  + (addedColor.b * addedColor.a)) / totalAlpha;
-    // Todo? LERP instead of explicit?
+    BLightVolume[pos] = (currentBlue + (addedColor.b * addedColor.a)) / totalAlpha;
+    // Todo? LERP instead of explicit blend?
+}
+
+void AddColorPremultiplied(int3 pos, float4 addedColor, float4 oldColor)
+{
+    ALightVolume[pos] = oldColor.a + addedColor.a;
+    RLightVolume[pos] = oldColor.r + addedColor.r;
+    GLightVolume[pos] = oldColor.g + addedColor.g;
+    BLightVolume[pos] = oldColor.b + addedColor.b;
+    // Todo? LERP instead of explicit blend?
+}
+
+
+
+
+float4 GetOutgoingLight(float4 incomingLight, float4 blockingVoxel)
+{
+    float outAlpha = incomingLight.a * (1 - blockingVoxel.a);
+    float4 voxelLight = float4(blockingVoxel.rgb * 1 - blockingVoxel.a, 1 - blockingVoxel.a);
+    
+    return voxelLight;
 }
 
 float4 GetColor(int3 pos)
@@ -149,7 +169,8 @@ float2 GetPixOffset()
     }
 }
 
-float2 GetUV(float2 pos, float2 texSize) {
+float2 GetUV(float2 pos, float2 texSize)
+{
     float2 offset = GetPixOffset();
     return (pos + float2(0.5, 0.5) + offset) / texSize;
 }
@@ -167,53 +188,55 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 	//Set up some variables we are going to need
     float sizeX, sizeY, sizeZ;
     ALightVolume.GetDimensions(sizeX, sizeY, sizeZ);
-	float3 iResolution = float3(sizeX, sizeY, sizeZ);
     uint3 uResolution = uint3(sizeX, sizeY, sizeZ);
 
-    float texSizeX, texSizeY;
-    WriteBuffer.GetDimensions(texSizeX, texSizeY);
-
-    float cursample = 0;
-    float4 colorsample = 0;
-
-    float alpha = 0;
-	
 	// Todo keep whole float4, not just alpha
     uint3 actualPos = uint3(ThreadId.x, ThreadId.y, ThreadId.z);
     int3 pos = GetPos(actualPos, uResolution);
     float2 pixelLoc = actualPos.xy;
     float4 oldColor = GetColor(pos);
 
-	if (Loop == 0)
+    if (Loop == 0)
     {
         // float4 color = float4(LightColor, Weight * LightIntensity);
-	    float4 color = ReadBuffer.SampleLevel(ReadBufferSampler, float2(-1, -1), 0);
+        // The (-1,-1) sample is here just to make sure that the border color is set properly.
+        // If the border color wasn't good, this would fuck up.
+        float4 color = ReadBuffer.SampleLevel(ReadBufferSampler, float2(-1, -1), 0);
         WriteBuffer[pixelLoc] = color;
         color.a *= bAdded;
         AddColor(pos, color, oldColor);
     }
     else
     {
+
+        float texSizeX, texSizeY;
+        WriteBuffer.GetDimensions(texSizeX, texSizeY);
+        
+        float cursample = 0;
+        float4 colorsample = 0;
+
 		// TODO! Set pix offset as a uniform. EVEN better : Save it in UV offset!
 		// + (0.5, 0.5) to sample the centers of pixels!
         float2 prevXY = actualPos.xy + float2(0.5, 0.5) + GetPixOffset();
         float2 prevUV = (prevXY) / float2(texSizeX, texSizeY);
         float4 previousLightColor = ReadBuffer.SampleLevel(ReadBufferSampler, prevUV, 0);
 	
+    float3 iResolution = float3(sizeX, sizeY, sizeZ);
         float3 uvw = GetUVW(pos, iResolution);
 
-        //// Ignore clipped.
-        //if (dot(uvw - LocalClippingCenter, LocalClippingDirection) < 0)
-        //{
-        //    colorsample = float4(0, 0, 0, 0);
-        //}
-        //else
+        // Ignore clipped.
+        if (dot(uvw - LocalClippingCenter, LocalClippingDirection) < 0)
+        {
+            colorsample = float4(0, 0, 0, 0);
+        }
+        else
         {
             cursample = Volume.SampleLevel(VolumeSampler, uvw, 0);
-		// Get Color&alpha from intensity
+		    // Get Color&alpha from intensity
             colorsample = TransferFunc.SampleLevel(TransferFuncSampler, float2(cursample, 0.5f), 0);
         }
 
+        float alpha = 0;
         alpha = previousLightColor.a * (1 - (colorsample.a));
 
 		// The read/write buffers have always positive alpha

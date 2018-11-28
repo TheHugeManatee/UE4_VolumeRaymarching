@@ -25,10 +25,8 @@ bool dooone = false;
 void URaymarchBlueprintLibrary::AddDirLightToVolumes(
     const UObject* WorldContextObject, UVolumeTexture* RLightVolume, UVolumeTexture* GLightVolume,
     UVolumeTexture* BLightVolume, UVolumeTexture* ALightVolume, const UVolumeTexture* DataVolume,
-    const UTexture2D* TransferFunction, const FDirLightParameters LightParameters, const bool Added, 			
-	const FTransform VolumeInvTransform,
-	const FVector LocalClippingCenter,
-	const FVector LocalClippingDirection, bool& LightAdded) {
+    const UTexture2D* TransferFunction, const FDirLightParameters LightParameters, const bool Added,
+    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds, bool& LightAdded) {
   if (!DataVolume->Resource || !TransferFunction->Resource || !RLightVolume->Resource ||
       !GLightVolume->Resource || !BLightVolume->Resource || !ALightVolume->Resource ||
       !DataVolume->Resource->TextureRHI || !TransferFunction->Resource->TextureRHI ||
@@ -52,13 +50,11 @@ void URaymarchBlueprintLibrary::AddDirLightToVolumes(
   // Call the actual rendering code on RenderThread.
   ENQUEUE_RENDER_COMMAND(CaptureCommand)
   ([RLightVolumeResource, GLightVolumeResource, BLightVolumeResource, ALightVolumeResource,
-	  VolumeResource, TFResource, LightParameters, Added, VolumeInvTransform,
-LocalClippingCenter,
-LocalClippingDirection,
-    FeatureLevel](FRHICommandListImmediate& RHICmdList) {
+    VolumeResource, TFResource, LightParameters, Added, VolumeInvTransform, ClippingParameters, MeshMaxBounds, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
     AddDirLightToLightVolume_RenderThread(
         RHICmdList, RLightVolumeResource, GLightVolumeResource, BLightVolumeResource,
-        ALightVolumeResource, VolumeResource, TFResource, LightParameters, Added, VolumeInvTransform, LocalClippingCenter, LocalClippingDirection, FeatureLevel);
+        ALightVolumeResource, VolumeResource, TFResource, LightParameters, Added,
+        VolumeInvTransform, ClippingParameters, MeshMaxBounds, FeatureLevel);
   });
 }
 
@@ -67,12 +63,10 @@ void URaymarchBlueprintLibrary::ChangeDirLightInLightVolumes(
     const UObject* WorldContextObject, UVolumeTexture* RLightVolume, UVolumeTexture* GLightVolume,
     UVolumeTexture* BLightVolume, UVolumeTexture* ALightVolume, const UVolumeTexture* DataVolume,
     const UTexture2D* TransferFunction, FDirLightParameters OldLightParameters,
-    FDirLightParameters NewLightParameters,	const FTransform VolumeInvTransform,
-	const FVector OldLocalClippingCenter,
-	const FVector OldLocalClippingDirection,
-	const FVector NewLocalClippingCenter,
-	const FVector NewLocalClippingDirection,
-bool& LightAdded) {
+    FDirLightParameters NewLightParameters, const FTransform VolumeInvTransform,
+    const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds,
+	bool& LightAdded)
+{
   if (!DataVolume->Resource || !TransferFunction->Resource || !RLightVolume->Resource ||
       !GLightVolume->Resource || !BLightVolume->Resource || !ALightVolume->Resource ||
       !DataVolume->Resource->TextureRHI || !TransferFunction->Resource->TextureRHI ||
@@ -96,12 +90,12 @@ bool& LightAdded) {
   // Call the actual rendering code on RenderThread.
   ENQUEUE_RENDER_COMMAND(CaptureCommand)
   ([RLightVolumeResource, GLightVolumeResource, BLightVolumeResource, ALightVolumeResource,
-    VolumeResource, TFResource, OldLightParameters, NewLightParameters, VolumeInvTransform, OldLocalClippingCenter, OldLocalClippingDirection, NewLocalClippingCenter, NewLocalClippingDirection,
-    FeatureLevel](FRHICommandListImmediate& RHICmdList) {
-    ChangeDirLightInLightVolume_RenderThread(RHICmdList, RLightVolumeResource, GLightVolumeResource,
-                                             BLightVolumeResource, ALightVolumeResource,
-                                             VolumeResource, TFResource, OldLightParameters,
-                                             NewLightParameters, VolumeInvTransform, OldLocalClippingCenter, OldLocalClippingDirection, NewLocalClippingCenter, NewLocalClippingDirection, FeatureLevel);
+    VolumeResource, TFResource, OldLightParameters, NewLightParameters, VolumeInvTransform,
+    ClippingParameters, MeshMaxBounds, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
+    ChangeDirLightInLightVolume_RenderThread(
+        RHICmdList, RLightVolumeResource, GLightVolumeResource, BLightVolumeResource,
+        ALightVolumeResource, VolumeResource, TFResource, OldLightParameters, NewLightParameters,
+        VolumeInvTransform, ClippingParameters, MeshMaxBounds, FeatureLevel);
   });
 }
 
@@ -267,6 +261,29 @@ void URaymarchBlueprintLibrary::CreateLightVolumes(
     inTexture->UpdateResource();
   }
   return;
+}
+
+void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
+    const UObject* WorldContextObject, UVolumeTexture* ALightVolume,
+    const UVolumeTexture* DataVolume, const UTexture2D* TransferFunction,
+    const FDirLightParameters LightParameters, const bool Added,
+    const FTransform VolumeInvTransform, const FVector LocalClippingCenter,
+    const FVector LocalClippingDirection, bool& LightAdded) {
+
+
+}
+
+void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
+    const UObject* WorldContextObject, UVolumeTexture* ALightVolume,
+    const UVolumeTexture* DataVolume, const UTexture2D* TransferFunction,
+    FDirLightParameters OldLightParameters, FDirLightParameters NewLightParameters,
+    const FTransform VolumeInvTransform, const FVector LocalClippingCenter,
+    const FVector LocalClippingDirection, bool& LightAdded) {
+}
+
+void URaymarchBlueprintLibrary::ClearSingleLightVolume(const UObject* WorldContextObject,
+                                                       UVolumeTexture* ALightVolume,
+                                                       FVector4 ClearValues) {
 }
 
 void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
