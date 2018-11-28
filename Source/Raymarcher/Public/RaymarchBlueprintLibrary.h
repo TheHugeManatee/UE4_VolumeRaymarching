@@ -33,7 +33,8 @@ public:
                                    const UTexture2D* TransferFunction,
                                    const FDirLightParameters LightParameters, const bool Added,
                                    const FTransform VolumeInvTransform,
-                                   const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds, bool& LightAdded);
+                                   const FClippingPlaneParameters ClippingParameters,
+                                   const FVector MeshMaxBounds, bool& LightAdded);
 
   /** Changes a light in the light volumes.	 */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
@@ -43,7 +44,8 @@ public:
       UVolumeTexture* BLightVolume, UVolumeTexture* ALightVolume, const UVolumeTexture* DataVolume,
       const UTexture2D* TransferFunction, FDirLightParameters OldLightParameters,
       FDirLightParameters NewLightParameters, const FTransform VolumeInvTransform,
-      const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds, bool& LightAdded);
+      const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds,
+      bool& LightAdded);
 
   /** Changes a light in the light volumes.	 */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
@@ -66,7 +68,7 @@ public:
   //
   //
 
-  /** Adds a light to light volumes.	 */
+  /** Adds a light to light volume.	 */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void AddDirLightToSingleVolume(const UObject* WorldContextObject,
@@ -75,24 +77,24 @@ public:
                                         const UTexture2D* TransferFunction,
                                         const FDirLightParameters LightParameters, const bool Added,
                                         const FTransform VolumeInvTransform,
-                                        const FVector LocalClippingCenter,
-                                        const FVector LocalClippingDirection, bool& LightAdded);
+                                        const FClippingPlaneParameters ClippingParameters,
+                                        const FVector MeshMaxBounds, bool& LightAdded);
 
-  /** Changes a light in the light volumes.	 */
+  /** Changes a light in the light volume.	 */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void ChangeDirLightInSingleVolume(
       const UObject* WorldContextObject, UVolumeTexture* ALightVolume,
       const UVolumeTexture* DataVolume, const UTexture2D* TransferFunction,
       FDirLightParameters OldLightParameters, FDirLightParameters NewLightParameters,
-      const FTransform VolumeInvTransform, const FVector LocalClippingCenter,
-      const FVector LocalClippingDirection, bool& LightAdded);
+      const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+      const FVector MeshMaxBounds, bool& LightAdded);
 
-  /** Changes a light in the light volumes.	 */
+  /** Clears a light volume. */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void ClearSingleLightVolume(const UObject* WorldContextObject,
-                                     UVolumeTexture* ALightVolume, FVector4 ClearValues);
+                                     UVolumeTexture* ALightVolume, float ClearValue);
 
   /** Creates a Float32 volume texture asset and fills it with all-zeros. If an asset with the same
    * name already exists, overwrites it.*/

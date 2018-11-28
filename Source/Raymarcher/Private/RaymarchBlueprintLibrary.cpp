@@ -267,23 +267,86 @@ void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
     const UObject* WorldContextObject, UVolumeTexture* ALightVolume,
     const UVolumeTexture* DataVolume, const UTexture2D* TransferFunction,
     const FDirLightParameters LightParameters, const bool Added,
-    const FTransform VolumeInvTransform, const FVector LocalClippingCenter,
-    const FVector LocalClippingDirection, bool& LightAdded) {
+    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FVector MeshMaxBounds, bool& LightAdded) {
 
 
+	if (!DataVolume->Resource || !TransferFunction->Resource || !ALightVolume->Resource ||
+      !DataVolume->Resource->TextureRHI || !TransferFunction->Resource->TextureRHI ||
+       !ALightVolume->Resource->TextureRHI) {
+    LightAdded = false;
+    return;
+  } else {
+    LightAdded = true;
+  }
+
+  FRHITexture3D* VolumeResource = DataVolume->Resource->TextureRHI->GetTexture3D();
+  FRHITexture2D* TFResource = TransferFunction->Resource->TextureRHI->GetTexture2D();
+  FRHITexture3D* ALightVolumeResource = ALightVolume->Resource->TextureRHI->GetTexture3D();
+
+  ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
+
+  // Call the actual rendering code on RenderThread.
+  ENQUEUE_RENDER_COMMAND(CaptureCommand)
+  ([ALightVolumeResource,
+    VolumeResource, TFResource, LightParameters, Added, VolumeInvTransform, ClippingParameters,
+    MeshMaxBounds, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
+    AddDirLightToSingleLightVolume_RenderThread(
+        RHICmdList,
+        ALightVolumeResource, VolumeResource, TFResource, LightParameters, Added,
+        VolumeInvTransform, ClippingParameters, MeshMaxBounds, FeatureLevel);
+  });
 }
 
 void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
     const UObject* WorldContextObject, UVolumeTexture* ALightVolume,
     const UVolumeTexture* DataVolume, const UTexture2D* TransferFunction,
     FDirLightParameters OldLightParameters, FDirLightParameters NewLightParameters,
-    const FTransform VolumeInvTransform, const FVector LocalClippingCenter,
-    const FVector LocalClippingDirection, bool& LightAdded) {
+    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FVector MeshMaxBounds, bool& LightAdded) {
+
+	  if (!DataVolume->Resource || !TransferFunction->Resource || !ALightVolume->Resource ||
+      !DataVolume->Resource->TextureRHI || !TransferFunction->Resource->TextureRHI ||
+      !ALightVolume->Resource->TextureRHI) {
+    LightAdded = false;
+    return;
+  } else {
+    LightAdded = true;
+  }
+
+  FRHITexture3D* VolumeResource = DataVolume->Resource->TextureRHI->GetTexture3D();
+  FRHITexture2D* TFResource = TransferFunction->Resource->TextureRHI->GetTexture2D();
+  FRHITexture3D* ALightVolumeResource = ALightVolume->Resource->TextureRHI->GetTexture3D();
+
+  ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
+
+  // Call the actual rendering code on RenderThread.
+  ENQUEUE_RENDER_COMMAND(CaptureCommand)
+  ([ALightVolumeResource, VolumeResource, TFResource, OldLightParameters, NewLightParameters, VolumeInvTransform,
+    ClippingParameters, MeshMaxBounds, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
+    ChangeDirLightInSingleLightVolume_RenderThread(
+        RHICmdList,
+        ALightVolumeResource, VolumeResource, TFResource, OldLightParameters, NewLightParameters,
+        VolumeInvTransform, ClippingParameters, MeshMaxBounds, FeatureLevel);
+  });
+
 }
 
 void URaymarchBlueprintLibrary::ClearSingleLightVolume(const UObject* WorldContextObject,
                                                        UVolumeTexture* ALightVolume,
-                                                       FVector4 ClearValues) {
+                                                       float ClearValue) {
+
+	ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
+
+	FRHITexture3D* ALightVolumeResource = ALightVolume->Resource->TextureRHI->GetTexture3D();
+
+  // Call the actual rendering code on RenderThread.
+  ENQUEUE_RENDER_COMMAND(CaptureCommand)
+  ([ALightVolumeResource, ClearValue, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
+    ClearSingleLightVolume_RenderThread(RHICmdList, ALightVolumeResource, ClearValue,
+                                   FeatureLevel);
+  });
+
 }
 
 void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(

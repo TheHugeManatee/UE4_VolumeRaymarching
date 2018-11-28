@@ -529,22 +529,39 @@ void AddDirLightToLightVolume_RenderThread(
     FRHITexture3D* GLightVolumeResource, FRHITexture3D* BLightVolumeResource,
     FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
     const FDirLightParameters LightParams, const bool LightAdded,
-    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters, 
-	const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel);
+    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel);
 
 void ChangeDirLightInLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, FRHITexture3D* RLightVolumeResource,
     FRHITexture3D* GLightVolumeResource, FRHITexture3D* BLightVolumeResource,
     FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
     const FDirLightParameters LightParams, const FDirLightParameters NewLightParams,
-    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters, 
-	const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel);
+    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel);
 
 void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
                                     FRHITexture3D* RLightVolumeResource,
                                     FRHITexture3D* GLightVolumeResource,
                                     FRHITexture3D* BLightVolumeResource,
                                     FRHITexture3D* ALightVolumeResource, FVector4 ClearValues,
+                                    ERHIFeatureLevel::Type FeatureLevel);
+
+
+void AddDirLightToSingleLightVolume_RenderThread(
+    FRHICommandListImmediate& RHICmdList, FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
+    const FDirLightParameters LightParams, const bool LightAdded,
+    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel);
+
+void ChangeDirLightInSingleLightVolume_RenderThread(
+    FRHICommandListImmediate& RHICmdList, FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
+    const FDirLightParameters LightParams, const FDirLightParameters NewLightParams,
+    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel);
+
+void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
+                                    FRHITexture3D* ALightVolumeResource, float ClearValue,
                                     ERHIFeatureLevel::Type FeatureLevel);
 
 bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
