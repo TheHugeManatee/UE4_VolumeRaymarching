@@ -356,11 +356,11 @@ void AddDirLightToLightVolume_RenderThread(
 
 
   axes.FaceWeight[1].second = 1 - axes.FaceWeight[0].second;
-  
+  /*
   FString text = "Adding/Removing light with new Major axis weight = " +
                  FString::SanitizeFloat(axes.FaceWeight[0].second) +
                  ", new second axis weight = " + FString::SanitizeFloat(axes.FaceWeight[1].second);
-  GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, text);
+  GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, text);*/
 
   for (unsigned i = 0; i < passes; i++) {
     // Break if the main axis weight == 1
@@ -532,12 +532,12 @@ void ChangeDirLightInLightVolume_RenderThread(
   ComputeShader->SetResources(RHICmdList, VolumeResource, TFResource, UAVs);
 
   //	oldAxes.FaceWeight[0].second = newAxes.FaceWeight[0].second = 1;
-
+/*
   FString text =
       "Moving light with new Major axis weight = " +
       FString::SanitizeFloat(newAxes.FaceWeight[0].second) +
       ", new second axis weight = " + FString::SanitizeFloat(newAxes.FaceWeight[1].second);
-  GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, text);
+  GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, text);*/
 
   // Get clipping center to (0-1) texture local space. (Invert transform, divide by mesh size,
   // divide by 2 and add 0.5 to get to (0-1) space.
@@ -772,11 +772,11 @@ void AddDirLightToSingleLightVolume_RenderThread(
 
 
   axes.FaceWeight[1].second = 1 - axes.FaceWeight[0].second;
-  
+  /*
   FString text = "SINGLE Adding/Removing light with new Major axis weight = " +
                  FString::SanitizeFloat(axes.FaceWeight[0].second) +
                  ", new second axis weight = " + FString::SanitizeFloat(axes.FaceWeight[1].second);
-  GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, text);
+  GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, text);*/
 
   for (unsigned i = 0; i < passes; i++) {
     // Break if the main axis weight == 1
@@ -926,12 +926,12 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
   ComputeShader->SetResources(RHICmdList, VolumeResource, TFResource, AVolumeUAV);
 
   //	oldAxes.FaceWeight[0].second = newAxes.FaceWeight[0].second = 1;
-
+/*
   FString text =
       "Moving light with new Major axis weight = " +
       FString::SanitizeFloat(newAxes.FaceWeight[0].second) +
       ", new second axis weight = " + FString::SanitizeFloat(newAxes.FaceWeight[1].second);
-  GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, text);
+  GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, text);*/
 
   // Get clipping center to (0-1) texture local space. (Invert transform, divide by mesh size,
   // divide by 2 and add 0.5 to get to (0-1) space.
