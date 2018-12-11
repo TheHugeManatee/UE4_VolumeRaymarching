@@ -46,13 +46,12 @@ USTRUCT(BlueprintType) struct FDirLightParameters {
 USTRUCT(BlueprintType) struct FClippingPlaneParameters {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadWrite, Category = "ClippingPlaneParameters") FVector ClippingCenter;
-  UPROPERTY(BlueprintReadWrite, Category = "ClippingPlaneParameters") FVector ClippingDirection;
+  UPROPERTY(BlueprintReadWrite, Category = "ClippingPlaneParameters") FVector Center;
+  UPROPERTY(BlueprintReadWrite, Category = "ClippingPlaneParameters") FVector Direction;
 
   FClippingPlaneParameters(FVector ClipCenter, FVector ClipDirection)
-    : ClippingCenter(ClipCenter), ClippingDirection(ClipDirection){};
-  FClippingPlaneParameters()
-    : ClippingCenter(FVector(0, 0, 0)), ClippingDirection(FVector(0, 0, 0)){};
+    : Center(ClipCenter), Direction(ClipDirection){};
+  FClippingPlaneParameters() : Center(FVector(0, 0, 0)), Direction(FVector(0, 0, 0)){};
 };
 
 // struct FDirLightParameters {
@@ -61,7 +60,7 @@ USTRUCT(BlueprintType) struct FClippingPlaneParameters {
 //	float LightIntensity;
 //
 //	FDirLightParameters(FVector LightDir, FVector LightCol, float LightInt) :
-//LightDirection(LightDir), LightColor(LightCol), LightIntensity(LightInt) {};
+// LightDirection(LightDir), LightColor(LightCol), LightIntensity(LightInt) {};
 //};
 
 // Enum for indexes for cube faces - used to discern axes for light propagation shader.
@@ -319,16 +318,16 @@ public:
 
   // Sets the shader uniforms in the pipeline.
   void SetParameters(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
-                     const FDirLightParameters parameters, const unsigned pAxis,
-                     const float pWeight, const FVector pLocalClippingCenter,
-                     const FVector pLocalClippingDirection) {
+                     const FDirLightParameters parameters,
+                     FClippingPlaneParameters LocalClippingParams, const FMajorAxes MajorAxes,
+                     unsigned AxisIndex) {
     SetShaderValue(RHICmdList, ShaderRHI, LightPosition, -parameters.LightDirection);
     SetShaderValue(RHICmdList, ShaderRHI, LightColor, parameters.LightColor);
     SetShaderValue(RHICmdList, ShaderRHI, LightIntensity, parameters.LightIntensity);
-    SetShaderValue(RHICmdList, ShaderRHI, Axis, pAxis);
-    SetShaderValue(RHICmdList, ShaderRHI, Weight, pWeight);
-    SetShaderValue(RHICmdList, ShaderRHI, LocalClippingCenter, pLocalClippingCenter);
-    SetShaderValue(RHICmdList, ShaderRHI, LocalClippingDirection, pLocalClippingDirection);
+    SetShaderValue(RHICmdList, ShaderRHI, Axis, MajorAxes.FaceWeight[AxisIndex].first);
+    SetShaderValue(RHICmdList, ShaderRHI, Weight, MajorAxes.FaceWeight[AxisIndex].second);
+    SetShaderValue(RHICmdList, ShaderRHI, LocalClippingCenter, LocalClippingParams.Center);
+    SetShaderValue(RHICmdList, ShaderRHI, LocalClippingDirection, LocalClippingParams.Direction);
   }
 
   virtual bool Serialize(FArchive& Ar) override {
@@ -389,16 +388,14 @@ public:
   }
 
   virtual void SetParameters(FRHICommandListImmediate& RHICmdList,
-                             const FDirLightParameters parameters, bool LightAdded,
-                             const unsigned pAxis, const float pWeight,
-                             const FVector pLocalClippingCenter,
-                             const FVector pLocalClippingDirection) {
+                             const FDirLightParameters LightParameters, bool LightAdded,
+                             FClippingPlaneParameters LocalClippingParams,
+                             const FMajorAxes MajorAxes, unsigned AxisIndex) {
     FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
 
     SetShaderValue(RHICmdList, ShaderRHI, bAdded, LightAdded ? 1 : -1);
 
-    FDirLightParentShader::SetParameters(RHICmdList, ShaderRHI, parameters, pAxis, pWeight,
-                                         pLocalClippingCenter, pLocalClippingDirection);
+    FDirLightParentShader::SetParameters(RHICmdList, ShaderRHI, LightParameters, LocalClippingParams, MajorAxes, AxisIndex);
   }
 
   virtual bool Serialize(FArchive& Ar) override {
@@ -427,31 +424,31 @@ public:
 
   FChangeDirLightShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
     : FDirLightParentShader(Initializer) {
-    NewLightPosition.Bind(Initializer.ParameterMap, TEXT("NewLightPosition"));
-    NewLightIntensity.Bind(Initializer.ParameterMap, TEXT("NewLightIntensity"));
-    NewLightColor.Bind(Initializer.ParameterMap, TEXT("NewLightColor"));
+    NewLightPositionParam.Bind(Initializer.ParameterMap, TEXT("NewLightPosition"));
+    NewLightIntensityParam.Bind(Initializer.ParameterMap, TEXT("NewLightIntensity"));
+    NewLightColorParam.Bind(Initializer.ParameterMap, TEXT("NewLightColor"));
 
-    NewWriteBuffer.Bind(Initializer.ParameterMap, TEXT("NewWriteBuffer"));
-    NewReadBuffer.Bind(Initializer.ParameterMap, TEXT("NewReadBuffer"));
-    NewReadBufferSampler.Bind(Initializer.ParameterMap, TEXT("NewReadBufferSampler"));
+    NewWriteBufferParam.Bind(Initializer.ParameterMap, TEXT("NewWriteBuffer"));
+    NewReadBufferParam.Bind(Initializer.ParameterMap, TEXT("NewReadBuffer"));
+    NewReadBufferSamplerParam.Bind(Initializer.ParameterMap, TEXT("NewReadBufferSampler"));
 
-    NewWeight.Bind(Initializer.ParameterMap, TEXT("NewWeight"));
+    NewWeightParam.Bind(Initializer.ParameterMap, TEXT("NewWeight"));
   }
 
   // Sets the shader uniforms in the pipeline.
   void SetParameters(FRHICommandListImmediate& RHICmdList, const FDirLightParameters OldParameters,
-                     const FDirLightParameters NewParameters, const unsigned pAxis,
-                     const float pWeight, const float pNewWeight,
-                     const FVector pLocalClippingCenter, const FVector pLocalClippingDirection) {
+                     const FDirLightParameters NewParameters, const FMajorAxes OldAxes,
+                     const FMajorAxes NewAxes, const FClippingPlaneParameters LocalClippingParams,
+                     unsigned index) {
     FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
     // Set the old light parameters.
-    FDirLightParentShader::SetParameters(RHICmdList, ShaderRHI, OldParameters, pAxis, pWeight,
-                                         pLocalClippingCenter, pLocalClippingDirection);
+    FDirLightParentShader::SetParameters(RHICmdList, ShaderRHI, OldParameters,
+                                                     LocalClippingParams, OldAxes, index);
     // Set the new light parameters.
-    SetShaderValue(RHICmdList, ShaderRHI, NewLightPosition, -NewParameters.LightDirection);
-    SetShaderValue(RHICmdList, ShaderRHI, NewLightColor, NewParameters.LightColor);
-    SetShaderValue(RHICmdList, ShaderRHI, NewLightIntensity, NewParameters.LightIntensity);
-    SetShaderValue(RHICmdList, ShaderRHI, NewWeight, pNewWeight);
+    SetShaderValue(RHICmdList, ShaderRHI, NewLightPositionParam, -NewParameters.LightDirection);
+    SetShaderValue(RHICmdList, ShaderRHI, NewLightColorParam, NewParameters.LightColor);
+    SetShaderValue(RHICmdList, ShaderRHI, NewLightIntensityParam, NewParameters.LightIntensity);
+    SetShaderValue(RHICmdList, ShaderRHI, NewWeightParam, NewAxes.FaceWeight[index].second);
   }
 
   virtual void SetLoop(FRHICommandListImmediate& RHICmdList, const unsigned loopIndex,
@@ -468,31 +465,31 @@ public:
                                    pWriteBuffer);
 
     // Set new read/write buffers.
-    SetUAVParameter(RHICmdList, ShaderRHI, NewWriteBuffer, pNewWriteBuffer);
-    SetTextureParameter(RHICmdList, ShaderRHI, NewReadBuffer, NewReadBufferSampler,
+    SetUAVParameter(RHICmdList, ShaderRHI, NewWriteBufferParam, pNewWriteBuffer);
+    SetTextureParameter(RHICmdList, ShaderRHI, NewReadBufferParam, NewReadBufferSamplerParam,
                         pNewReadBuffSampler, pNewReadBuffer);
   }
 
   virtual bool Serialize(FArchive& Ar) override {
     bool bShaderHasOutdatedParameters = FDirLightParentShader::Serialize(Ar);
-    Ar << NewReadBuffer << NewReadBufferSampler << NewWriteBuffer << NewLightPosition
-       << NewLightColor << NewLightIntensity << NewWeight;
+    Ar << NewReadBufferParam << NewReadBufferSamplerParam << NewWriteBufferParam << NewLightPositionParam
+       << NewLightColorParam << NewLightIntensityParam << NewWeightParam;
     return bShaderHasOutdatedParameters;
   }
 
 private:
-  FShaderResourceParameter NewReadBuffer;
-  FShaderResourceParameter NewReadBufferSampler;
+  FShaderResourceParameter NewReadBufferParam;
+  FShaderResourceParameter NewReadBufferSamplerParam;
   // Write buffer for new light UAV.
-  FShaderResourceParameter NewWriteBuffer;
+  FShaderResourceParameter NewWriteBufferParam;
   // Light Direction.
-  FShaderParameter NewLightPosition;
+  FShaderParameter NewLightPositionParam;
   // Light Color.
-  FShaderParameter NewLightColor;
+  FShaderParameter NewLightColorParam;
   // Light Intensity.
-  FShaderParameter NewLightIntensity;
+  FShaderParameter NewLightIntensityParam;
   // New light's weight along the axis
-  FShaderParameter NewWeight;
+  FShaderParameter NewWeightParam;
 };
 
 // Pixel shader for writing to a Volume Texture.
@@ -547,34 +544,31 @@ void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
                                     FRHITexture3D* ALightVolumeResource, FVector4 ClearValues,
                                     ERHIFeatureLevel::Type FeatureLevel);
 
-
 void AddDirLightToSingleLightVolume_RenderThread(
-    FRHICommandListImmediate& RHICmdList, FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
-    const FDirLightParameters LightParams, const bool LightAdded,
-    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
-    const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel);
+    FRHICommandListImmediate& RHICmdList, FRHITexture3D* ALightVolumeResource,
+    FRHITexture3D* VolumeResource, FRHITexture2D* TFResource, const FDirLightParameters LightParams,
+    const bool LightAdded, const FTransform VolumeInvTransform,
+    const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds,
+    ERHIFeatureLevel::Type FeatureLevel);
 
 void ChangeDirLightInSingleLightVolume_RenderThread(
-    FRHICommandListImmediate& RHICmdList, FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
-    const FDirLightParameters LightParams, const FDirLightParameters NewLightParams,
-    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
-    const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel);
+    FRHICommandListImmediate& RHICmdList, FRHITexture3D* ALightVolumeResource,
+    FRHITexture3D* VolumeResource, FRHITexture2D* TFResource, const FDirLightParameters LightParams,
+    const FDirLightParameters NewLightParams, const FTransform VolumeInvTransform,
+    const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds,
+    ERHIFeatureLevel::Type FeatureLevel);
 
 void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                    FRHITexture3D* ALightVolumeResource, float ClearValue,
-                                    ERHIFeatureLevel::Type FeatureLevel);
+                                         FRHITexture3D* ALightVolumeResource, float ClearValue,
+                                         ERHIFeatureLevel::Type FeatureLevel);
 
 bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
                           uint8* BulkData, bool SaveNow = false, TextureAddress TilingX = TA_Clamp,
                           TextureAddress TilingY = TA_Clamp);
 
-
-
-
 //
 // Shaders for single (alpha) light volume follow.
 //
-
 
 // Parent shader for any shader that works on Light Volumes. Provides a way to bind and unbind the 4
 // light volumes.
@@ -593,8 +587,8 @@ public:
   }
 
   virtual void SetLightVolumeUAV(FRHICommandListImmediate& RHICmdList,
-                                  FComputeShaderRHIParamRef ShaderRHI,
-                                  FUnorderedAccessViewRHIParamRef pLightVolume) {
+                                 FComputeShaderRHIParamRef ShaderRHI,
+                                 FUnorderedAccessViewRHIParamRef pLightVolume) {
     SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pLightVolume);
   }
 
@@ -604,7 +598,7 @@ public:
   }
 
   virtual void UnbindLightVolumeUAV(FRHICommandListImmediate& RHICmdList,
-                                     FComputeShaderRHIParamRef ShaderRHI) {
+                                    FComputeShaderRHIParamRef ShaderRHI) {
     // Unbind the UAVs.
     SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, FUnorderedAccessViewRHIParamRef());
   }
@@ -639,8 +633,8 @@ public:
   // constructor.
   FClearSingleLightVolumeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
     : FGenericSingleLightVolumeShader(Initializer) {
-     AClearValue.Bind(Initializer.ParameterMap, TEXT("AClearValue")); // Multibind?
-     ZSize.Bind(Initializer.ParameterMap, TEXT("ZSize"));
+    AClearValue.Bind(Initializer.ParameterMap, TEXT("AClearValue"));  // Multibind?
+    ZSize.Bind(Initializer.ParameterMap, TEXT("ZSize"));
   }
 
   virtual void SetParameters(FRHICommandListImmediate& RHICmdList, float clearColor,
@@ -674,7 +668,8 @@ public:
 
   FDirLightSingleVolumeParentShader(){};
 
-  FDirLightSingleVolumeParentShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+  FDirLightSingleVolumeParentShader(
+      const ShaderMetaType::CompiledShaderInitializerType& Initializer)
     : FGenericSingleLightVolumeShader(Initializer) {
     // Light Volumes are bound in FGenericLightVolumeShader constructor
     ReadBuffer.Bind(Initializer.ParameterMap, TEXT("ReadBuffer"));
@@ -752,22 +747,22 @@ public:
 
   // Sets the shader uniforms in the pipeline.
   void SetParameters(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
-                     const FDirLightParameters parameters, const unsigned pAxis,
-                     const float pWeight, const FVector pLocalClippingCenter,
-                     const FVector pLocalClippingDirection) {
-    SetShaderValue(RHICmdList, ShaderRHI, LightPosition, -parameters.LightDirection);
-    SetShaderValue(RHICmdList, ShaderRHI, LightIntensity, parameters.LightIntensity);
-    SetShaderValue(RHICmdList, ShaderRHI, Axis, pAxis);
-    SetShaderValue(RHICmdList, ShaderRHI, Weight, pWeight);
-    SetShaderValue(RHICmdList, ShaderRHI, LocalClippingCenter, pLocalClippingCenter);
-    SetShaderValue(RHICmdList, ShaderRHI, LocalClippingDirection, pLocalClippingDirection);
+                     const FDirLightParameters LightParameters,
+                     FClippingPlaneParameters LocalClippingParams, const FMajorAxes MajorAxes,
+                     unsigned AxisIndex) {
+    SetShaderValue(RHICmdList, ShaderRHI, LightPosition, -LightParameters.LightDirection);
+    SetShaderValue(RHICmdList, ShaderRHI, LightIntensity, LightParameters.LightIntensity);
+    SetShaderValue(RHICmdList, ShaderRHI, Axis, MajorAxes.FaceWeight[AxisIndex].first);
+    SetShaderValue(RHICmdList, ShaderRHI, Weight, MajorAxes.FaceWeight[AxisIndex].second);
+    SetShaderValue(RHICmdList, ShaderRHI, LocalClippingCenter, LocalClippingParams.Center);
+    SetShaderValue(RHICmdList, ShaderRHI, LocalClippingDirection, LocalClippingParams.Direction);
   }
 
   virtual bool Serialize(FArchive& Ar) override {
     bool bShaderHasOutdatedParameters = FGenericSingleLightVolumeShader::Serialize(Ar);
     Ar << Volume << VolumeSampler << TransferFunc << TransferFuncSampler << LightPosition
-       << LightIntensity << Axis << Weight << ReadBuffer << ReadBufferSampler
-       << WriteBuffer << Loop << LocalClippingCenter << LocalClippingDirection;
+       << LightIntensity << Axis << Weight << ReadBuffer << ReadBufferSampler << WriteBuffer << Loop
+       << LocalClippingCenter << LocalClippingDirection;
     return bShaderHasOutdatedParameters;
   }
 
@@ -795,9 +790,9 @@ protected:
   FShaderParameter Weight;
   // Loop of the shader.
   FShaderParameter Loop;
-
+  // Clipping plane center in local space.
   FShaderParameter LocalClippingCenter;
-
+  // Clipping plane direction in local space.
   FShaderParameter LocalClippingDirection;
 };
 
@@ -813,38 +808,37 @@ public:
     return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
   }
 
-  FAddOrRemoveDirLightSingleVolumeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+  FAddOrRemoveDirLightSingleVolumeShader(
+      const ShaderMetaType::CompiledShaderInitializerType& Initializer)
     : FDirLightSingleVolumeParentShader(Initializer) {
-    bAdded.Bind(Initializer.ParameterMap, TEXT("bAdded"));
+    bAddedParam.Bind(Initializer.ParameterMap, TEXT("bAdded"));
   }
 
   virtual void SetParameters(FRHICommandListImmediate& RHICmdList,
-                             const FDirLightParameters parameters, bool LightAdded,
-                             const unsigned pAxis, const float pWeight,
-                             const FVector pLocalClippingCenter,
-                             const FVector pLocalClippingDirection) {
+                             const FDirLightParameters LocalLightParams, bool LightAdded,
+                             const FClippingPlaneParameters LocalClippingParams,
+                             const FMajorAxes MajorAxes, unsigned AxisIndex) {
     FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
 
-    SetShaderValue(RHICmdList, ShaderRHI, bAdded, LightAdded ? 1 : -1);
+    SetShaderValue(RHICmdList, ShaderRHI, bAddedParam, LightAdded ? 1 : -1);
 
-    FDirLightSingleVolumeParentShader::SetParameters(RHICmdList, ShaderRHI, parameters, pAxis, pWeight,
-                                         pLocalClippingCenter, pLocalClippingDirection);
+    FDirLightSingleVolumeParentShader::SetParameters(RHICmdList, ShaderRHI, LocalLightParams,
+                                                     LocalClippingParams, MajorAxes, AxisIndex);
   }
 
   virtual bool Serialize(FArchive& Ar) override {
     bool bShaderHasOutdatedParameters = FDirLightSingleVolumeParentShader::Serialize(Ar);
-    Ar << bAdded;
+    Ar << bAddedParam;
     return bShaderHasOutdatedParameters;
   }
 
 private:
   // Whether the light is to be added or removed.
-  FShaderParameter bAdded;
+  FShaderParameter bAddedParam;
 };
 
-// Shader optimized for changing a light. It assumes the change in light direction was small (so
-// that the major axes stay the same). If the difference in angles is more than 90 degrees, this
-// will fail for sure.
+// Shader optimized for changing a light. It will only go through if the major axes of the light
+// stay the same. Otherwise, a regular "remove and add" is performed
 class FChangeDirLightSingleVolumeShader : public FDirLightSingleVolumeParentShader {
   DECLARE_SHADER_TYPE(FChangeDirLightSingleVolumeShader, Global)
 
@@ -855,7 +849,8 @@ public:
 
   FChangeDirLightSingleVolumeShader(){};
 
-  FChangeDirLightSingleVolumeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+  FChangeDirLightSingleVolumeShader(
+      const ShaderMetaType::CompiledShaderInitializerType& Initializer)
     : FDirLightSingleVolumeParentShader(Initializer) {
     NewLightPosition.Bind(Initializer.ParameterMap, TEXT("NewLightPosition"));
     NewLightIntensity.Bind(Initializer.ParameterMap, TEXT("NewLightIntensity"));
@@ -869,17 +864,17 @@ public:
 
   // Sets the shader uniforms in the pipeline.
   void SetParameters(FRHICommandListImmediate& RHICmdList, const FDirLightParameters OldParameters,
-                     const FDirLightParameters NewParameters, const unsigned pAxis,
-                     const float pWeight, const float pNewWeight,
-                     const FVector pLocalClippingCenter, const FVector pLocalClippingDirection) {
+                     const FDirLightParameters NewParameters, const FMajorAxes OldAxes,
+                     const FMajorAxes NewAxes, const FClippingPlaneParameters LocalClippingParams,
+                     unsigned index) {
     FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
     // Set the old light parameters.
-    FDirLightSingleVolumeParentShader::SetParameters(RHICmdList, ShaderRHI, OldParameters, pAxis, pWeight,
-													  pLocalClippingCenter, pLocalClippingDirection);
+    FDirLightSingleVolumeParentShader::SetParameters(RHICmdList, ShaderRHI, OldParameters,
+                                                     LocalClippingParams, OldAxes, index);
     // Set the new light parameters.
     SetShaderValue(RHICmdList, ShaderRHI, NewLightPosition, -NewParameters.LightDirection);
     SetShaderValue(RHICmdList, ShaderRHI, NewLightIntensity, NewParameters.LightIntensity);
-    SetShaderValue(RHICmdList, ShaderRHI, NewWeight, pNewWeight);
+    SetShaderValue(RHICmdList, ShaderRHI, NewWeight, NewAxes.FaceWeight[index].second);
   }
 
   virtual void SetLoop(FRHICommandListImmediate& RHICmdList, const unsigned loopIndex,
@@ -892,8 +887,8 @@ public:
     // Actually sets the shader uniforms in the pipeline.
     FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
 
-    FDirLightSingleVolumeParentShader::SetLoop(RHICmdList, ShaderRHI, loopIndex, pReadBuffer, pReadBuffSampler,
-                                   pWriteBuffer);
+    FDirLightSingleVolumeParentShader::SetLoop(RHICmdList, ShaderRHI, loopIndex, pReadBuffer,
+                                               pReadBuffSampler, pWriteBuffer);
 
     // Set new read/write buffers.
     SetUAVParameter(RHICmdList, ShaderRHI, NewWriteBuffer, pNewWriteBuffer);
@@ -903,7 +898,8 @@ public:
 
   virtual bool Serialize(FArchive& Ar) override {
     bool bShaderHasOutdatedParameters = FDirLightSingleVolumeParentShader::Serialize(Ar);
-    Ar << NewReadBuffer << NewReadBufferSampler << NewWriteBuffer << NewLightPosition << NewLightIntensity << NewWeight;
+    Ar << NewReadBuffer << NewReadBufferSampler << NewWriteBuffer << NewLightPosition
+       << NewLightIntensity << NewWeight;
     return bShaderHasOutdatedParameters;
   }
 
@@ -919,5 +915,3 @@ private:
   // New light's weight along the axis
   FShaderParameter NewWeight;
 };
-
-
