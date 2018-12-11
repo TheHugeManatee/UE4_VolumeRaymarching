@@ -30,6 +30,7 @@
     GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT(x)); \
   }
 
+// USTRUCT for Directional light parameters.
 USTRUCT(BlueprintType) struct FDirLightParameters {
   GENERATED_BODY()
 
@@ -43,6 +44,7 @@ USTRUCT(BlueprintType) struct FDirLightParameters {
     : LightDirection(FVector(0, 0, 0)), LightColor(FVector(0, 0, 0)), LightIntensity(0){};
 };
 
+// USTRUCT for Clipping plane parameters.
 USTRUCT(BlueprintType) struct FClippingPlaneParameters {
   GENERATED_BODY()
 
@@ -54,14 +56,40 @@ USTRUCT(BlueprintType) struct FClippingPlaneParameters {
   FClippingPlaneParameters() : Center(FVector(0, 0, 0)), Direction(FVector(0, 0, 0)){};
 };
 
-// struct FDirLightParameters {
-//	FVector LightDirection;
-//	FVector LightColor;
-//	float LightIntensity;
-//
-//	FDirLightParameters(FVector LightDir, FVector LightCol, float LightInt) :
-// LightDirection(LightDir), LightColor(LightCol), LightIntensity(LightInt) {};
-//};
+struct OneAxisReadWriteBufferResources {
+  FTextureRHIRef Texture1;
+  FTextureRHIRef Texture2;
+  FUnorderedAccessViewRHIParamRef Texture1UAV;
+  FUnorderedAccessViewRHIParamRef Texture2UAV;
+};
+
+
+USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
+  GENERATED_BODY()
+
+  // Flag that these RenderingResources have been initialized and can be used.
+  UPROPERTY(BlueprintReadOnly, Category = "FBasicRaymarchRenderingResources") bool isInitialized;
+  FTextureRHIRef VolumeTextureRef;
+  FTextureRHIRef TFTextureRef;
+};
+
+
+USTRUCT(BlueprintType) struct FLightVolumesRenderingResources{
+  GENERATED_BODY()
+
+	  // Flag that these RenderingResources have been initialized and can be used.
+  UPROPERTY(BlueprintReadOnly, Category = "FVolumeRenderingResources") bool isInitialized;
+  FTextureRHIRef RLightVolumeRef;
+  FTextureRHIRef GLightVolumeRef;
+  FTextureRHIRef BLightVolumeRef;
+  FTextureRHIRef ALightVolumeRef;
+  FUnorderedAccessViewRHIParamRef RLightVolumeUAVRef;
+  FUnorderedAccessViewRHIParamRef GLightVolumeUAVRef;
+  FUnorderedAccessViewRHIParamRef BLightVolumeUAVRef;
+  FUnorderedAccessViewRHIParamRef ALightVolumeUAVRef;
+  // Read/Write buffer structs for going along X,Y and Z axes.
+  OneAxisReadWriteBufferResources XYZReadWriteBuffers[3];
+};
 
 // Enum for indexes for cube faces - used to discern axes for light propagation shader.
 enum FCubeFace : int {
