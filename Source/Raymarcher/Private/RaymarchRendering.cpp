@@ -341,35 +341,30 @@ void CreateBufferTexturesAndUAVs(FIntVector Size, EPixelFormat PixelFormat,
 
 uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes MajorAxes,
                                unsigned index) {
-  uint8 alpha = (uint8)(LightParams.LightIntensity * MajorAxes.FaceWeight[index].second * 255);
-// Compose the color int according to system endianness - we want a uin32 with all bytes set (R,G,B
-// == 0xFF), only the alpha component changes. Put it at the end for little endian, at the beginning
-// for big endian.
-#if PLATFORM_LITTLE_ENDIAN
-  uint32 ColorInt = (alpha << 24) & 0xFFFFFFFF;
-#else  // PLATFORM_BIG_ENDIAN
-  uint32 ColorInt = A & 0xFFFFFFFFF;
-#endif
-  return ColorInt;
+  // Set alpha channel to the texture's red channel (when reading single-channel, only red component
+  // is read)
+  FLinearColor LightColor = FLinearColor(LightParams.LightIntensity * MajorAxes.FaceWeight[index].second, 0.0, 0.0, 0.0);
+  return LightColor.ToFColor(true).ToPackedARGB();
+  /*
+  FColor NewColor(retVal);
+  uint32 retVal = Color.;
+
+  FLinearColor LinearColor = FLinearColor(NewColor);
+
+  FString text = "Border color created  = ";
+  text += FString::FromInt(NewColor.R) + ", " + FString::FromInt(NewColor.G) + ", " +
+          FString::FromInt(NewColor.B) + ", " + FString::FromInt(NewColor.A); 
+  text += ", Linear Color = " + FString::SanitizeFloat(LinearColor.R) + ", " + FString::SanitizeFloat(LinearColor.G) + ", " +
+          FString::SanitizeFloat(LinearColor.B) + ", " + FString::SanitizeFloat(LinearColor.A); 
+  GEngine->AddOnScreenDebugMessage(-1, 20.0f, FColor::Yellow, text);
+*/
 }
 
 uint32 GetBorderColorInt(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsigned index) {
-  uint8 alpha = (uint8)(LightParams.LightIntensity * MajorAxes.FaceWeight[index].second * 255);
-  uint8 red = (uint8)(LightParams.LightColor.X * MajorAxes.FaceWeight[index].second * 255);
-  uint8 green = (uint8)(LightParams.LightColor.Y * MajorAxes.FaceWeight[index].second * 255);
-  uint8 blue = (uint8)(LightParams.LightColor.Z * MajorAxes.FaceWeight[index].second * 255);
-
-// Compose the color int according to system endianness - we want a uin32 with all bytes set (R,G,B
-// == 0xFF), only the alpha component changes. Put it at the end for little endian, at the beginning
-// for big endian.
-#if PLATFORM_LITTLE_ENDIAN
-  // Win32 x86
-  uint32 ColorInt = alpha << 24 | red << 16 | green << 8 | blue;
-#else  // PLATFORM_LITTLE_ENDIAN
-  uint32 ColorInt = blue << 24 | green << 16 | red << 8 | alpha;
-#endif
-
-  return ColorInt;
+	FVector LC = LightParams.LightColor;
+	FLinearColor LightColor =
+      FLinearColor(LC.X, LC.Y, LC.Z, LightParams.LightIntensity * MajorAxes.FaceWeight[index].second);
+  return LightColor.ToFColor(true).ToPackedARGB();
 }
 
 void TransitionBufferResources(FRHICommandListImmediate& RHICmdList,
@@ -449,22 +444,25 @@ void AddDirLightToLightVolume_RenderThread(
         GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection);
 
     // Get the X, Y and Z transposed into the current axis orientation.
-    FIntVector TransposedDimensions = GetTransposedDimensions(LocalMajorAxes, ALightVolumeResource, i);
+    FIntVector TransposedDimensions =
+        GetTransposedDimensions(LocalMajorAxes, ALightVolumeResource, i);
 
-    uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
+    uint32 ColorInt = GetBorderColorInt(LocalLightParams, LocalMajorAxes, i);
     FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
 
     FTexture2DRHIRef Texture1, Texture2;
     FUnorderedAccessViewRHIRef Texture1UAV, Texture2UAV;
 
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, Texture1, Texture1UAV, Texture2,
-                                Texture2UAV);
+    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, Texture1, Texture1UAV,
+                                Texture2, Texture2UAV);
 
     ComputeShader->SetParameters(RHICmdList, LocalLightParams, LightAdded, LocalClippingParameters,
                                  LocalMajorAxes, i);
 
-    uint32 GroupSizeX = FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
-    uint32 GroupSizeY = FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
+    uint32 GroupSizeX =
+        FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
+    uint32 GroupSizeY =
+        FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
 
     for (int j = 0; j < TransposedDimensions.Z; j++) {
       // Switch read and write buffers each cycle.
@@ -563,11 +561,12 @@ void ChangeDirLightInLightVolume_RenderThread(
         GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection);
 
     // Get the X, Y and Z transposed into the current axis orientation.
-    FIntVector TransposedDimensions = GetTransposedDimensions(LocalMajorAxes, ALightVolumeResource, i);
+    FIntVector TransposedDimensions =
+        GetTransposedDimensions(LocalMajorAxes, ALightVolumeResource, i);
 
     // Get Color ints for texture borders.
-    uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
-    uint32 NewColorInt = GetBorderColorIntSingle(NewLocalLightParams, NewLocalMajorAxes, i);
+    uint32 ColorInt = GetBorderColorInt(LocalLightParams, LocalMajorAxes, i);
+    uint32 NewColorInt = GetBorderColorInt(NewLocalLightParams, NewLocalMajorAxes, i);
     // Get the sampler for read buffer to use border with the proper light color.
     FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
     FSamplerStateRHIRef newReadBufferSampler = GetBufferSamplerRef(NewColorInt);
@@ -576,17 +575,19 @@ void ChangeDirLightInLightVolume_RenderThread(
     FTexture2DRHIRef Texture1, Texture2, NewTexture1, NewTexture2;
     FUnorderedAccessViewRHIRef Texture1UAV, Texture2UAV, NewTexture1UAV, NewTexture2UAV;
 
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, Texture1, Texture1UAV, Texture2,
-                                Texture2UAV);
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, NewTexture1, NewTexture1UAV, NewTexture2,
-                                NewTexture2UAV);
+    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, Texture1, Texture1UAV,
+                                Texture2, Texture2UAV);
+    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, NewTexture1, NewTexture1UAV,
+                                NewTexture2, NewTexture2UAV);
 
     ComputeShader->SetParameters(RHICmdList, LocalLightParams, NewLocalLightParams, LocalMajorAxes,
                                  NewLocalMajorAxes, LocalClippingParams, i);
 
     // Get group sizes for compute shader
-    uint32 GroupSizeX = FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
-    uint32 GroupSizeY = FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
+    uint32 GroupSizeX =
+        FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
+    uint32 GroupSizeY =
+        FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
 
     for (int j = 0; j < TransposedDimensions.Z; j++) {
       // Switch read and write buffers each cycle.
@@ -601,7 +602,7 @@ void ChangeDirLightInLightVolume_RenderThread(
         ComputeShader->SetLoop(RHICmdList, j, Texture2, readBuffSampler, Texture1UAV, NewTexture2,
                                newReadBufferSampler, NewTexture1UAV);
       }
-	  // Everything ready for this loop -> dispatch shader!
+      // Everything ready for this loop -> dispatch shader!
       DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
     }
   }
@@ -710,22 +711,27 @@ void AddDirLightToSingleLightVolume_RenderThread(
         GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection);
 
     // Get the X, Y and Z transposed into the current axis orientation.
-    FIntVector TransposedDimensions = GetTransposedDimensions(LocalMajorAxes, ALightVolumeResource, i);
+    FIntVector TransposedDimensions =
+        GetTransposedDimensions(LocalMajorAxes, ALightVolumeResource, i);
 
     uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
+    FLinearColor LinearBorderColor = FColor(ColorInt);
+	
     FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
     // Create read-write buffer textures for both lights.
     FTexture2DRHIRef Texture1, Texture2;
     FUnorderedAccessViewRHIRef Texture1UAV, Texture2UAV;
 
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, Texture1, Texture1UAV, Texture2,
+    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_R32_FLOAT, Texture1, Texture1UAV, Texture2,
                                 Texture2UAV);
 
     ComputeShader->SetParameters(RHICmdList, LocalLightParams, LightAdded, LocalClippingParameters,
                                  LocalMajorAxes, i);
 
-    uint32 GroupSizeX = FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
-    uint32 GroupSizeY = FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
+    uint32 GroupSizeX =
+        FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
+    uint32 GroupSizeY =
+        FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
 
     for (int j = 0; j < TransposedDimensions.Z; j++) {
       // Switch read and write buffers each row.
@@ -813,7 +819,8 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
         GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection);
 
     // Get the X, Y and Z transposed into the current axis orientation.
-    FIntVector TransposedDimensions = GetTransposedDimensions(LocalMajorAxes, ALightVolumeResource, i);
+    FIntVector TransposedDimensions =
+        GetTransposedDimensions(LocalMajorAxes, ALightVolumeResource, i);
 
     // Get Color ints for texture borders.
     uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
@@ -822,21 +829,37 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
     FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
     FSamplerStateRHIRef newReadBufferSampler = GetBufferSamplerRef(NewColorInt);
 
+	FLinearColor OldLinearBorderColor = FColor(ColorInt);
+    FLinearColor NewLinearBorderColor = FColor(NewColorInt);
+/*
+    FString text = "Border color removed  = ";
+    text += FString::SanitizeFloat(OldLinearBorderColor.R, 3) + ", " +
+            FString::SanitizeFloat(OldLinearBorderColor.G, 3) + ", " +
+            FString::SanitizeFloat(OldLinearBorderColor.B, 3) + ", " +
+            FString::SanitizeFloat(OldLinearBorderColor.A, 3) +", added = " + 
+			FString::SanitizeFloat(NewLinearBorderColor.R, 3) + ", " +
+            FString::SanitizeFloat(NewLinearBorderColor.G, 3) + ", " +
+            FString::SanitizeFloat(NewLinearBorderColor.B, 3) + ", " +
+            FString::SanitizeFloat(NewLinearBorderColor.A, 3);
+    GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Yellow, text);*/
+
     // Create read-write buffer textures for both lights.
     FTexture2DRHIRef Texture1, Texture2, NewTexture1, NewTexture2;
     FUnorderedAccessViewRHIRef Texture1UAV, Texture2UAV, NewTexture1UAV, NewTexture2UAV;
 
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, Texture1, Texture1UAV, Texture2,
+    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_R32_FLOAT, Texture1, Texture1UAV, Texture2,
                                 Texture2UAV);
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, NewTexture1, NewTexture1UAV, NewTexture2,
-                                NewTexture2UAV);
+    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_R32_FLOAT, NewTexture1, NewTexture1UAV,
+                                NewTexture2, NewTexture2UAV);
 
     ComputeShader->SetParameters(RHICmdList, LocalLightParams, NewLocalLightParams, LocalMajorAxes,
                                  NewLocalMajorAxes, LocalClippingParameters, i);
 
     // Get group sizes for compute shader
-    uint32 GroupSizeX = FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
-    uint32 GroupSizeY = FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
+    uint32 GroupSizeX =
+        FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
+    uint32 GroupSizeY =
+        FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
 
     for (int j = 0; j < TransposedDimensions.Z; j++) {
       // Switch read and write buffers each cycle.

@@ -8,10 +8,10 @@
 
 RWTexture3D<float> ALightVolume;
 
-RWTexture2D<float4> WriteBuffer;
+RWTexture2D<float> WriteBuffer;
 Texture2D ReadBuffer;
 
-RWTexture2D<float4> NewWriteBuffer;
+RWTexture2D<float> NewWriteBuffer;
 Texture2D NewReadBuffer;
 
 uint Loop;
@@ -74,14 +74,14 @@ SamplerState NewReadBufferSampler;
 //    BorderColor = float4(LightColor, LightIntensity);
 //};
 
-void AddColor(int3 pos, float4 addedColor, float4 oldColor)
+void AddColor(int3 pos, float addedColor, float oldColor)
 {
-    ALightVolume[pos] = oldColor.a + addedColor.a;
+    ALightVolume[pos] = oldColor + addedColor;
 }
 
-float4 GetColor(int3 pos)
+float GetColor(int3 pos)
 {
-    return float4(1,1,1, ALightVolume[pos]);
+    return ALightVolume[pos];
 }
 
 int3 GetPos(uint3 threadId, uint3 VolumeSize)
@@ -203,8 +203,9 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 	if (Loop == 0)
     {
 		// Subtract old light, add new light. No occlusion or anything.
-        float4 removedColor = float4(1.0, 1.0, 1.0, Weight * LightIntensity);
-        float4 addedColor = float4(1.0, 1.0, 1.0, NewWeight * NewLightIntensity);
+        float removedColor = ReadBuffer.SampleLevel(ReadBufferSampler, float2(-1, -1), 0);
+        float addedColor = NewReadBuffer.SampleLevel(NewReadBufferSampler, float2(-1, -1), 0);
+                
         WriteBuffer[pixelLoc] = removedColor;
         NewWriteBuffer[pixelLoc] = addedColor;
        
@@ -212,7 +213,7 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
         //oldColor = GetColor(pos);
         //AddColor(pos, float4(1.0, 1.0, 1.0, addedColor.a), oldColor);
 
-        ALightVolume[pos] = oldAlpha - removedColor.a + addedColor.a;
+        ALightVolume[pos] = oldAlpha - removedColor + addedColor;
     }
     else
     {
@@ -220,11 +221,11 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 		// + (0.5, 0.5) to sample the centers of pixels!
         float2 prevXY = actualPos.xy + float2(0.5, 0.5) + GetPixOffset();
         float2 prevUV = (prevXY) / float2(texSizeX, texSizeY);
-        float4 previousRemovedLightColor = ReadBuffer.SampleLevel(ReadBufferSampler, prevUV, 0);
+        float previousRemovedLightColor = ReadBuffer.SampleLevel(ReadBufferSampler, prevUV, 0);
 
         prevXY = actualPos.xy + float2(0.5, 0.5) + GetNewPixOffset();
         prevUV = (prevXY) / float2(texSizeX, texSizeY);
-        float4 previousAddedLightColor = NewReadBuffer.SampleLevel(NewReadBufferSampler, prevUV, 0);
+        float previousAddedLightColor = NewReadBuffer.SampleLevel(NewReadBufferSampler, prevUV, 0);
 	
     
         float3 uvw = GetUVW(pos, iResolution);
@@ -243,12 +244,12 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
         }
 
 
-        float removedAlpha = previousRemovedLightColor.a * (1 - (colorsample.a));
-        float addedAlpha = previousAddedLightColor.a * (1 - (colorsample.a));
+        float removedAlpha = previousRemovedLightColor * (1 - (colorsample.a));
+        float addedAlpha = previousAddedLightColor * (1 - (colorsample.a));
 
 		// The read/write buffers have always positive alpha
-        WriteBuffer[actualPos.xy] = float4(1.0, 1.0, 1.0, removedAlpha);
-        NewWriteBuffer[actualPos.xy] = float4(1.0, 1.0, 1.0, addedAlpha);
+        WriteBuffer[actualPos.xy] = removedAlpha;
+        NewWriteBuffer[actualPos.xy] = addedAlpha;
                
         //AddColor(pos, float4(1.0, 1.0, 1.0, -removedAlpha), oldColor);
         //oldColor = GetColor(pos);

@@ -8,7 +8,7 @@
 
 RWTexture3D<float> ALightVolume;
 
-RWTexture2D<float4> WriteBuffer;
+RWTexture2D<float> WriteBuffer;
 Texture2D ReadBuffer;
 
 uint Loop;
@@ -39,11 +39,6 @@ float Weight;
 // If going along Z - threadgroup X = Volume X dimension, threadgroup Y = Volume Y dimension (the simple case)
 
 SamplerState TransferFuncSampler;
-//{
-//    Filter = MIN_MAG_MIP_LINEAR;
-//    AddressU = Clamp;
-//    AddressV = Clamp; 
-//};
 
 
 SamplerState VolumeSampler;
@@ -148,10 +143,12 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
         // float4 color = float4(LightColor, Weight * LightIntensity);
         // The (-1,-1) sample is here just to make sure that the border color is set properly.
         // If the border color wasn't good, this would fuck up.
-        float4 color = ReadBuffer.SampleLevel(ReadBufferSampler, float2(-1, -1), 0);
+        float color = ReadBuffer.SampleLevel(ReadBufferSampler, float2(-1, -1), 0);
+        //float color = Weight * LightIntensity;
+        
         WriteBuffer[pixelLoc] = color;
-        color.a *= bAdded;
-        ALightVolume[pos] = oldAlpha + color.a;
+        color *= bAdded;
+        ALightVolume[pos] = oldAlpha + color;
     }
     else
     {
@@ -166,7 +163,7 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 		// + (0.5, 0.5) to sample the centers of pixels!
         float2 prevXY = actualPos.xy + float2(0.5, 0.5) + GetPixOffset();
         float2 prevUV = (prevXY) / float2(texSizeX, texSizeY);
-        float4 previousLightColor = ReadBuffer.SampleLevel(ReadBufferSampler, prevUV, 0);
+        float previousLightColor = ReadBuffer.SampleLevel(ReadBufferSampler, prevUV, 0);
 	
         float3 iResolution = float3(sizeX, sizeY, sizeZ);
         float3 uvw = GetUVW(pos, iResolution);
@@ -184,10 +181,10 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
         }
 
         float alpha = 0;
-        alpha = previousLightColor.a * (1 - (colorsample.a));
+        alpha = previousLightColor * (1 - (colorsample.a));
 
 		// The read/write buffers have always positive alpha
-        WriteBuffer[actualPos.xy] = float4(1.0, 1.0, 1.0, alpha);
+        WriteBuffer[actualPos.xy] = alpha;
 		// Adding Color to the volume depends on if we're adding or removing.
         // if we're removing a light, multiply initial alpha by -1.
         alpha *= bAdded;
