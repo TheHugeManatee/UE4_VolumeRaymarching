@@ -1,51 +1,283 @@
-float transmittance = 1;
+//
+// Test
+//
 
-float3 localcamvec = normalize(mul(Parameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+float scale = length(TransformLocalVectorToWorld(Parameters, float3(0.00000000, 1.00000000, 0.00000000)).xyz);
+float localscenedepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(Parameters)));
+float3 camerafwd = mul(float3(0.00000000, 0.00000000, 1.00000000), ResolvedView.ViewToTranslatedWorld);
 
-float3 lightenergy = 0;
 
-int3 randpos = int3(Parameters.SvPosition.xy, View.StateFrameIndexMod8);
-float rand = float(Rand3DPCG16(randpos).x) / 0xffff;
-CurPos += localcamvec * rand.x * Jitter;
+localscenedepth /= (Primitive.LocalObjectBoundsMax.x * 100 * scale);
+//localscenedepth /= abs( dot( camerafwd, Parameters.CameraVector ) );
+return float4(localscenedepth, localscenedepth, localscenedepth, localscenedepth);
 
-float cursample = 0;
 
-float4 colorsample = 0;
-float4 lightsample = 0;
+//
+// Test2
+//
 
-float3 lightedColor = 0;
 
-[loop] for (
-int i = 0;i <
-MaxSteps; i++)
+float scale = length(TransformLocalVectorToWorld(Parameters, float3(0.00000000, 1.00000000, 0.00000000)).xyz);
+float localscenedepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(Parameters)));
+
+float3 camerafwd = mul(float3(0.00000000, 0.00000000, 1.00000000), ResolvedView.ViewToTranslatedWorld);
+
+float maxBound = max(max(Primitive.LocalObjectBoundsMax.x, Primitive.LocalObjectBoundsMax.y), Primitive.LocalObjectBoundsMax.z);
+
+localscenedepth /= (Primitive.LocalObjectBoundsMax.x * 2 * scale);
+localscenedepth /= abs( dot( camerafwd, Parameters.CameraVector ) );
+
+return float4(localscenedepth, localscenedepth, localscenedepth, localscenedepth);
+
+//
+// Prepare
+//
+
+// Get scene depth at this pixel.
+float localscenedepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(Parameters)));
+
+float3 camerafwd = mul(float3(0.00000000, 0.00000000, 1.00000000), ResolvedView.ViewToTranslatedWorld);
+
+float maxBound = max(max(Primitive.LocalObjectBoundsMax.x, Primitive.LocalObjectBoundsMax.y), Primitive.LocalObjectBoundsMax.z);
+
+// Get world space vector going from camera center to current scene depth.
+float3 worldDepthVec = normalize(Parameters.CameraVector) * localscenedepth;
+
+// Transform this vector into the box's local space
+worldDepthVec = mul(worldDepthVec, Primitive.WorldToLocal);
+
+// Get actual depth in local space, account for mesh bounds
+localscenedepth = length(worldDepthVec);
+localscenedepth /= (Primitive.LocalObjectBoundsMax.x * 2);
+
+// Account for difference between camera center vector and camera-to-pixel depth
+localscenedepth /= abs( dot( camerafwd, Parameters.CameraVector ) );
+
+// Get cam pos and vector into local space too.
+float3 localcampos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), (Primitive.WorldToLocal)).xyz;
+float3 localcamvec = -normalize(mul(Parameters.CameraVector, Primitive.WorldToLocal));
+
+//make camera position 0-1
+localcampos = (localcampos / (Primitive.LocalObjectBoundsMax * 2)) + 0.5;
+
+float3 invraydir = 1 / localcamvec;
+
+// Get intersections
+float3 firstintersections = (0 - localcampos) * invraydir;
+float3 secondintersections = (1 - localcampos) * invraydir;
+// Find closest and furthest intersections
+float3 closest = min(firstintersections, secondintersections);
+float3 furthest = max(firstintersections, secondintersections);
+
+// T0 (entry) = the farthest of the closest intersections
+float t0 = max(closest.x, max(closest.y, closest.z));
+// T1 (exit) = the closest of the furthest intersections
+float t1 = min(furthest.x, min(furthest.y, furthest.z));
+
+// TODO understand this:
+float planeoffset = 1 - frac((t0 - length(localcampos - 0.5)) * MaxSteps);
+
+// Make the entry point not be behind the camera
+t0 += (planeoffset / MaxSteps) * PlaneAlignment;
+t0 = max(0, t0);
+
+// Make the exit point not be behind other scene geometry.
+t1 = min(t1, localscenedepth);
+
+// Calculate box thickness in local space.
+float boxthickness = max(0, t1 - t0);
+
+// Get entry position in local space.
+float3 entrypos = localcampos + (max(0, t0) * localcamvec);
+
+return float4(entrypos, boxthickness);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/////////////////////////////////////////BOX CODE/////////////////////////////////////////
+#define Point3 float3
+#define Vector3 float3
+#define Matrix3 float3x3
+#define vec3 float3
+#define bvec3 bool3
+
+struct Box
 {
-	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
-	cursample = Tex.SampleLevel(TexSampler, saturate(CurPos), 0).
-r;
-	colorsample = TF.SampleLevel(TFSampler, float2(cursample, 0.5), 0);
+    Point3 center;
+    Vector3 radius;
+    Vector3 invRadius;
+    Matrix3 rotation;
+};
 
-	// Only care if the sample has at least some alpha.
-	if (colorsample.a > 0.01)
-	{
-		// Get lighting information from illumination volume for current position.
-		lightsample.r = RLightVolume.SampleLevel(RLightVolumeSampler, saturate(CurPos), 0);
-		lightsample.g = GLightVolume.SampleLevel(GLightVolumeSampler, saturate(CurPos), 0);
-		lightsample.b = BLightVolume.SampleLevel(BLightVolumeSampler, saturate(CurPos), 0);
-		lightsample.a = ALightVolume.SampleLevel(ALightVolumeSampler, saturate(CurPos), 0);
+struct Ray
+{
+    Point3 origin;
+    Vector3 direction;
+};
 
-		// Multiply sampled color with ligth color and adjust intensity according to light strength.
-		lightedColor = colorsample.rgb * lightsample.rgb * lightsample.
-a;
+// Just determines whether the ray hits the axis-aligned box.
+// invRayDirection is guaranteed to be finite for all elements.
+//bool ourHitAABox(vec3 boxCenter, vec3 boxRadius, vec3 rayOrigin, vec3 rayDirection, vec3 invRayDirection) {
+//    rayOrigin -= boxCenter;
+//    vec3 distanceToPlane = (-boxRadius * sign(rayDirection) - rayOrigin) * invRayDirection;
+//
+//#   define TEST(U, V,W)\
+//         (float(distanceToPlane.U >= 0.0) * \
+//          float(abs(rayOrigin.V + rayDirection.V * distanceToPlane.U) < boxRadius.V) *\
+//          float(abs(rayOrigin.W + rayDirection.W * distanceToPlane.U) < boxRadius.W))
+//
+//    // If the ray is in the box or there is a hit along any axis, then there is a hit
+//    return bool(float(abs(rayOrigin.x) < boxRadius.x) *
+//        float(abs(rayOrigin.y) < boxRadius.y) *
+//        float(abs(rayOrigin.z) < boxRadius.z) +
+//        TEST(x, y, z) +
+//        TEST(y, z, x) +
+//        TEST(z, x, y));
+//#   undef TEST
+//}
 
-		// Alpha blend back front.
-		lightenergy+= (colorsample.a * lightedColor) * (transmittance);
-		transmittance -= colorsample.a * (transmittance);
-		// Todo? This could be LERPed
-	}
-	CurPos -=
-localcamvec;
-	if (transmittance <= 0.01) {break;};
+float maxComponent(float3 v)
+{
+    return max(max(v.x, v.y), v.z);
 }
+bool ourIntersectBoxCommon(Box box, Ray ray, out float distance, out vec3 normal, const bool rayCanStartInBox, const bool oriented, in vec3 _invRayDirection)
+{
 
-return float4(lightenergy, transmittance);
+    // Move to the box's reference frame. This is unavoidable and un-optimizable.
+    ray.origin = mul(box.rotation, (ray.origin - box.center)); //Can't just use * in hlsl?
+    if (oriented)
+    {
+        ray.direction = mul(box.rotation, ray.direction);
+    }
 
+    // This "rayCanStartInBox" branch is evaluated at compile time because `const` in GLSL
+    // means compile-time constant. The multiplication by 1.0 will likewise be compiled out
+    // when rayCanStartInBox = false.
+    float winding = 1.0; //TODO: for now, ray will never start in box.
+    if (rayCanStartInBox)
+    {
+        // Winding direction: -1 if the ray starts inside of the box (i.e., and is leaving), +1 if it is starting outside of the box
+        winding = (maxComponent(abs(ray.origin) * box.invRadius) < 1.0) ? -1.0 : 1.0;
+    }
+    else
+    {
+        winding = 1.0;
+    }
+
+    // We'll use the negated sign of the ray direction in several places, so precompute it.
+    // The sign() instruction is fast...but surprisingly not so fast that storing the result
+    // temporarily isn't an advantage.
+    Vector3 sgn = -sign(ray.direction);
+
+    // Ray-plane intersection. For each pair of planes, choose the one that is front-facing
+    // to the ray and compute the distance to it.
+    Vector3 distanceToPlane = box.radius * winding * sgn - ray.origin;
+    if (oriented)
+    {
+        distanceToPlane /= ray.direction;
+    }
+    else
+    {
+        distanceToPlane *= _invRayDirection;
+    }
+
+    // Perform all three ray-box tests and cast to 0 or 1 on each axis. 
+    // Use a macro to eliminate the redundant code (no efficiency boost from doing so, of course!)
+    // Could be written with 
+#define TEST(U, VW) (distanceToPlane.U >= 0.0) && all(abs(ray.origin.VW + ray.direction.VW * distanceToPlane.U) < box.radius.VW)
+
+    bvec3 test = bvec3(TEST(x, yz), TEST(y, zx), TEST(z, xy));
+
+    // CMOV chain that guarantees exactly one element of sgn is preserved and that the value has the right sign
+    sgn = test.x ? vec3(sgn.x, 0.0, 0.0) : (test.y ? vec3(0.0, sgn.y, 0.0) : vec3(0.0, 0.0, test.z ? sgn.z : 0.0));
+
+    /*
+    // Slower version that interlaces the moves and tests
+    sgn = TEST(x, yz) ? vec3(sgn.x, 0.0, 0.0) : (TEST(y, zx) ? vec3(0.0, sgn.y, 0.0) : vec3(0.0, 0.0, TEST(z, xy) ? sgn.z : 0.0));
+    */
+
+    /*
+    // Another slower version, using multiplication masking and test as a float vec3
+    // If the intersection was on the x axis, knock out the yz mask
+    test.yz *= 1.0 - test.x;
+    // If the intersection was in y, copy the bit
+    sgn.y   *= test.y;
+    // If the intersection was in y, knock out the xz mask
+    sgn.xz  *= (1.0 - test.y) * test.xz;
+    */
+#undef TEST
+
+    // At most one element of sgn is non-zero now. That element carries the negative sign of the 
+    // ray direction as well. Notice that we were able to drop storage of the test vector from registers,
+    // because it will never be used again.
+
+    // Mask the distance by the non-zero axis
+    // Dot product is faster than this CMOV chain, but doesn't work when distanceToPlane contains nans or infs. 
+    //
+    distance = (sgn.x != 0.0) ? distanceToPlane.x : ((sgn.y != 0.0) ? distanceToPlane.y : distanceToPlane.z);
+
+    /*
+    // This cast is slower; presumably != 0 is in a condition code
+    // distance = bool(sgn.x) ? distanceToPlane.x : (bool(sgn.y) ? distanceToPlane.y : distanceToPlane.z);
+    */
+
+    // Thus our code above has to protect against nan and inf.
+    // Need to protect against nan in fields of distancetoPlane that won't be used
+    // distance = dot(distanceToPlane, abs(sgn));
+
+    // Normal must face back along the ray. If you need
+    // to know whether we're entering or leaving the box, 
+    // then just look at the value of winding. If you need
+    // texture coordinates, then use box.invDirection * hitPoint.
+
+    if (oriented)
+    {
+        normal = mul(sgn, box.rotation);
+    }
+    else
+    {
+        normal = sgn;
+    }
+
+    // The following one line avoids the matrix product, but is actually slower,
+    // presumably because it still has to do all of the multiplications for the conditional moves
+    //    normal = (test.x > 0.0) ? sgn.x * box.rotation[0] : ((test.y > 0.0) ? sgn.y * box.rotation[1] : sgn.z * box.rotation[2]);
+
+    // Was there a hit on any axis? 
+    // Use abs(sgn) here, since abs() is free on a GPU...and
+    // thus allow the registers from the test variable or a boolean hit variable 
+    // to be reclaimed for use during the matrix product above.
+    // Saves about 6% by reducing peak register count
+    // 
+    // Slowest: (abs(sgn.x) + abs(sgn.y) + abs(sgn.z)) > 0.0;
+    // Slower: bool(abs(sgn.x) + abs(sgn.y) + abs(sgn.z));
+
+    // Fastest:
+    return (sgn.x != 0) || (sgn.y != 0) || (sgn.z != 0);
+
+    //distance = 1.0;
+    //normal = float3(0.0,0.0,0.0);
+    //return true;
+}

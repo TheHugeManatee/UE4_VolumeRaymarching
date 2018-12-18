@@ -554,7 +554,7 @@ void AddDirLightToLightVolume_RenderThread(
     FRHITexture3D* GLightVolumeResource, FRHITexture3D* BLightVolumeResource,
     FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
     const FDirLightParameters LightParams, const bool LightAdded,
-    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FTransform VolumeTransform, const FClippingPlaneParameters ClippingParameters,
     const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel);
 
 void ChangeDirLightInLightVolume_RenderThread(
@@ -562,7 +562,7 @@ void ChangeDirLightInLightVolume_RenderThread(
     FRHITexture3D* GLightVolumeResource, FRHITexture3D* BLightVolumeResource,
     FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
     const FDirLightParameters LightParams, const FDirLightParameters NewLightParams,
-    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FTransform VolumeTransform, const FClippingPlaneParameters ClippingParameters,
     const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel);
 
 void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
@@ -575,14 +575,14 @@ void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
 void AddDirLightToSingleLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, FRHITexture3D* ALightVolumeResource,
     FRHITexture3D* VolumeResource, FRHITexture2D* TFResource, const FDirLightParameters LightParams,
-    const bool LightAdded, const FTransform VolumeInvTransform,
+    const bool LightAdded, const FTransform VolumeTransform,
     const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds,
     ERHIFeatureLevel::Type FeatureLevel);
 
 void ChangeDirLightInSingleLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, FRHITexture3D* ALightVolumeResource,
     FRHITexture3D* VolumeResource, FRHITexture2D* TFResource, const FDirLightParameters LightParams,
-    const FDirLightParameters NewLightParams, const FTransform VolumeInvTransform,
+    const FDirLightParameters NewLightParams, const FTransform VolumeTransform,
     const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds,
     ERHIFeatureLevel::Type FeatureLevel);
 

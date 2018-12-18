@@ -281,15 +281,19 @@ FVector2D GetPixOffset(int Axis, FVector LightPosition) {
 }
 
 void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
-                                const FTransform& VolumeInvTransform,
+                                const FTransform& VolumeTransform,
                                 FDirLightParameters& OutLocalLightParameters,
                                 FMajorAxes& OutLocalMajorAxes) {
-  // Transform light directions into local space.
-  OutLocalLightParameters.LightDirection =
-      VolumeInvTransform.TransformVector(LightParameters.LightDirection);
 
+	// TODO Why the fuck does light direction need NoScale and no multiplication by scale and clipping plane
+	// needs to be multiplied?
+	
+	// Transform light directions into local space.
+  OutLocalLightParameters.LightDirection =
+      VolumeTransform.InverseTransformVectorNoScale(LightParameters.LightDirection);
   // Normalize Light Direction to get unit length.
   OutLocalLightParameters.LightDirection.Normalize();
+  
   // Color and Intensity are the same in local space -> copy.
   OutLocalLightParameters.LightColor = LightParameters.LightColor;
   OutLocalLightParameters.LightIntensity = LightParameters.LightIntensity;
@@ -301,20 +305,38 @@ void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
 
   // Set second axis weight to (1 - (first axis weight))
   OutLocalMajorAxes.FaceWeight[1].second = 1 - OutLocalMajorAxes.FaceWeight[0].second;
+
+
+  FString debug = "Global light dir : " + LightParameters.LightDirection.ToString()  + ", Local light dir : " + OutLocalLightParameters.LightDirection.ToString();
+  GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, debug);
+
+  // RetVal.Direction *= VolumeTransform.GetScale3D();
+  
+
 }
 
 FClippingPlaneParameters GetLocalClippingParameters(
     const FClippingPlaneParameters WorldClippingParams, const FVector MeshMaxBounds,
-    const FTransform VolumeInvTransform) {
-  FClippingPlaneParameters RetVal;
+    const FTransform VolumeTransform) {
+
+	FClippingPlaneParameters RetVal;
   // Get clipping center to (0-1) texture local space. (Invert transform, divide by mesh size,
   // divide by 2 and add 0.5 to get to (0-1) space.
   RetVal.Center =
-      (VolumeInvTransform.TransformPosition(WorldClippingParams.Center) / (MeshMaxBounds * 2)) +
-      FVector(0.5, 0.5, 0.5);
+      ((VolumeTransform.InverseTransformPosition(WorldClippingParams.Center) / (MeshMaxBounds) ) / 2.0) + 0.5;
   // Get clipping direction in local space - here we don't care about the mesh size (as long as
   // it's a cube, which it really bloody better be).
-  RetVal.Direction = VolumeInvTransform.TransformVectorNoScale(WorldClippingParams.Direction);
+
+
+	// TODO Why the fuck does light direction need NoScale and no multiplication by scale and clipping
+  // plane needs to be multiplied?
+  RetVal.Direction = VolumeTransform.InverseTransformVectorNoScale(WorldClippingParams.Direction);
+  RetVal.Direction *= VolumeTransform.GetScale3D();
+  RetVal.Direction.Normalize();
+
+  FString debug = "Global clip dir : " + WorldClippingParams.Direction.ToString() + ", Local clip dir : " +  RetVal.Direction.ToString();
+  GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, debug);
+
 
   return RetVal;
 }
@@ -345,20 +367,7 @@ uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes Major
   // is read)
   FLinearColor LightColor = FLinearColor(LightParams.LightIntensity * MajorAxes.FaceWeight[index].second, 0.0, 0.0, 0.0);
   return LightColor.ToFColor(true).ToPackedARGB();
-  /*
-  FColor NewColor(retVal);
-  uint32 retVal = Color.;
-
-  FLinearColor LinearColor = FLinearColor(NewColor);
-
-  FString text = "Border color created  = ";
-  text += FString::FromInt(NewColor.R) + ", " + FString::FromInt(NewColor.G) + ", " +
-          FString::FromInt(NewColor.B) + ", " + FString::FromInt(NewColor.A); 
-  text += ", Linear Color = " + FString::SanitizeFloat(LinearColor.R) + ", " + FString::SanitizeFloat(LinearColor.G) + ", " +
-          FString::SanitizeFloat(LinearColor.B) + ", " + FString::SanitizeFloat(LinearColor.A); 
-  GEngine->AddOnScreenDebugMessage(-1, 20.0f, FColor::Yellow, text);
-*/
-}
+ }
 
 uint32 GetBorderColorInt(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsigned index) {
 	FVector LC = LightParams.LightColor;
@@ -384,7 +393,7 @@ void AddDirLightToLightVolume_RenderThread(
     FRHITexture3D* GLightVolumeResource, FRHITexture3D* BLightVolumeResource,
     FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
     const FDirLightParameters LightParams, const bool LightAdded,
-    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FTransform VolumeTransform, const FClippingPlaneParameters ClippingParameters,
     const FVector MeshMaxBounds,
     ERHIFeatureLevel::Type
         FeatureLevel) {  // TODO use a unit inv cube to avoid having to pass MeshMaxBounds!
@@ -401,10 +410,10 @@ void AddDirLightToLightVolume_RenderThread(
   FDirLightParameters LocalLightParams;
   FMajorAxes LocalMajorAxes;
   // Calculate local Light parameters and corresponding axes.
-  GetLocalLightParamsAndAxes(LightParams, VolumeInvTransform, LocalLightParams, LocalMajorAxes);
+  GetLocalLightParamsAndAxes(LightParams, VolumeTransform, LocalLightParams, LocalMajorAxes);
   // Transform clipping parameters into local space.
   FClippingPlaneParameters LocalClippingParameters =
-      GetLocalClippingParameters(ClippingParameters, MeshMaxBounds, VolumeInvTransform);
+      GetLocalClippingParameters(ClippingParameters, MeshMaxBounds, VolumeTransform);
 
   // For GPU profiling.
   SCOPED_DRAW_EVENTF(RHICmdList, AddDirLightToLightVolume_RenderThread, TEXT("Adding Lights"));
@@ -490,7 +499,7 @@ void ChangeDirLightInLightVolume_RenderThread(
     FRHITexture3D* GLightVolumeResource, FRHITexture3D* BLightVolumeResource,
     FRHITexture3D* ALightVolumeResource, FRHITexture3D* VolumeResource, FRHITexture2D* TFResource,
     const FDirLightParameters LightParams, const FDirLightParameters NewLightParams,
-    const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
+    const FTransform VolumeTransform, const FClippingPlaneParameters ClippingParameters,
     const FVector MeshMaxBounds, ERHIFeatureLevel::Type FeatureLevel) {
   // Can't have directional light without direction...
   if (LightParams.LightDirection == FVector(0.0, 0.0, 0.0)) {
@@ -505,8 +514,8 @@ void ChangeDirLightInLightVolume_RenderThread(
   FDirLightParameters LocalLightParams, NewLocalLightParams;
   FMajorAxes LocalMajorAxes, NewLocalMajorAxes;
   // Calculate local Light parameters and corresponding axes.
-  GetLocalLightParamsAndAxes(LightParams, VolumeInvTransform, LocalLightParams, LocalMajorAxes);
-  GetLocalLightParamsAndAxes(NewLightParams, VolumeInvTransform, NewLocalLightParams,
+  GetLocalLightParamsAndAxes(LightParams, VolumeTransform, LocalLightParams, LocalMajorAxes);
+  GetLocalLightParamsAndAxes(NewLightParams, VolumeTransform, NewLocalLightParams,
                              NewLocalMajorAxes);
 
   // If lights have different major axes, do a proper removal and addition.
@@ -516,11 +525,11 @@ void ChangeDirLightInLightVolume_RenderThread(
       LocalMajorAxes.FaceWeight[1].first != NewLocalMajorAxes.FaceWeight[1].first) {
     AddDirLightToLightVolume_RenderThread(
         RHICmdList, RLightVolumeResource, GLightVolumeResource, BLightVolumeResource,
-        ALightVolumeResource, VolumeResource, TFResource, LightParams, false, VolumeInvTransform,
+        ALightVolumeResource, VolumeResource, TFResource, LightParams, false, VolumeTransform,
         ClippingParameters, MeshMaxBounds, FeatureLevel);
     AddDirLightToLightVolume_RenderThread(
         RHICmdList, RLightVolumeResource, GLightVolumeResource, BLightVolumeResource,
-        ALightVolumeResource, VolumeResource, TFResource, NewLightParams, true, VolumeInvTransform,
+        ALightVolumeResource, VolumeResource, TFResource, NewLightParams, true, VolumeTransform,
         ClippingParameters, MeshMaxBounds, FeatureLevel);
     return;
   }
@@ -554,7 +563,7 @@ void ChangeDirLightInLightVolume_RenderThread(
   ComputeShader->SetResources(RHICmdList, VolumeResource, TFResource, UAVs);
 
   FClippingPlaneParameters LocalClippingParams =
-      GetLocalClippingParameters(ClippingParameters, MeshMaxBounds, VolumeInvTransform);
+      GetLocalClippingParameters(ClippingParameters, MeshMaxBounds, VolumeTransform);
 
   for (unsigned i = 0; i < 2; i++) {
     FVector2D textureOffset =
@@ -661,7 +670,7 @@ void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
 void AddDirLightToSingleLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, FRHITexture3D* ALightVolumeResource,
     FRHITexture3D* VolumeResource, FRHITexture2D* TFResource, const FDirLightParameters LightParams,
-    const bool LightAdded, const FTransform VolumeInvTransform,
+    const bool LightAdded, const FTransform VolumeTransform,
     const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds,
     ERHIFeatureLevel::Type
         FeatureLevel) {  // TODO use a unit inv cube to avoid having to pass MeshMaxBounds!
@@ -678,10 +687,10 @@ void AddDirLightToSingleLightVolume_RenderThread(
   FDirLightParameters LocalLightParams;
   FMajorAxes LocalMajorAxes;
   // Calculate local Light parameters and corresponding axes.
-  GetLocalLightParamsAndAxes(LightParams, VolumeInvTransform, LocalLightParams, LocalMajorAxes);
+  GetLocalLightParamsAndAxes(LightParams, VolumeTransform, LocalLightParams, LocalMajorAxes);
   // Transform clipping parameters into local space.
   FClippingPlaneParameters LocalClippingParameters =
-      GetLocalClippingParameters(ClippingParameters, MeshMaxBounds, VolumeInvTransform);
+      GetLocalClippingParameters(ClippingParameters, MeshMaxBounds, VolumeTransform);
 
   // For GPU profiling.
   SCOPED_DRAW_EVENTF(RHICmdList, AddDirLightToLightVolume_RenderThread, TEXT("Adding Lights"));
@@ -757,7 +766,7 @@ void AddDirLightToSingleLightVolume_RenderThread(
 void ChangeDirLightInSingleLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, FRHITexture3D* ALightVolumeResource,
     FRHITexture3D* VolumeResource, FRHITexture2D* TFResource, const FDirLightParameters LightParams,
-    const FDirLightParameters NewLightParams, const FTransform VolumeInvTransform,
+    const FDirLightParameters NewLightParams, const FTransform VolumeTransform,
     const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds,
     ERHIFeatureLevel::Type FeatureLevel) {
   // Can't have directional light without direction...
@@ -768,13 +777,15 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
     return;
   }
 
+  FClippingPlaneParameters LocalClippingParameters =
+      GetLocalClippingParameters(ClippingParameters, MeshMaxBounds, VolumeTransform);
   // Create local copies of Light Params, so that if we have to fall back to 2x AddOrRemoveLight, we
   // can just pass the original parameters.
   FDirLightParameters LocalLightParams, NewLocalLightParams;
   FMajorAxes LocalMajorAxes, NewLocalMajorAxes;
   // Calculate local Light parameters and corresponding axes.
-  GetLocalLightParamsAndAxes(LightParams, VolumeInvTransform, LocalLightParams, LocalMajorAxes);
-  GetLocalLightParamsAndAxes(NewLightParams, VolumeInvTransform, NewLocalLightParams,
+  GetLocalLightParamsAndAxes(LightParams, VolumeTransform, LocalLightParams, LocalMajorAxes);
+  GetLocalLightParamsAndAxes(NewLightParams, VolumeTransform, NewLocalLightParams,
                              NewLocalMajorAxes);
 
   // If lights have different major axes, do a proper removal and addition.
@@ -782,18 +793,15 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
   // major axes are the same.
   if (LocalMajorAxes.FaceWeight[0].first != NewLocalMajorAxes.FaceWeight[0].first ||
       LocalMajorAxes.FaceWeight[1].first != NewLocalMajorAxes.FaceWeight[1].first) {
-    // |Kkd
+    //
     AddDirLightToSingleLightVolume_RenderThread(RHICmdList, ALightVolumeResource, VolumeResource,
-                                                TFResource, LightParams, false, VolumeInvTransform,
+                                                TFResource, LightParams, false, VolumeTransform,
                                                 ClippingParameters, MeshMaxBounds, FeatureLevel);
     AddDirLightToSingleLightVolume_RenderThread(
         RHICmdList, ALightVolumeResource, VolumeResource, TFResource, NewLightParams, true,
-        VolumeInvTransform, ClippingParameters, MeshMaxBounds, FeatureLevel);
+        VolumeTransform, ClippingParameters, MeshMaxBounds, FeatureLevel);
     return;
   }
-
-  FClippingPlaneParameters LocalClippingParameters =
-      GetLocalClippingParameters(ClippingParameters, MeshMaxBounds, VolumeInvTransform);
 
   // For GPU profiling.
   SCOPED_DRAW_EVENTF(RHICmdList, ChangeDirLightInLightVolume_RenderThread, TEXT("Adding Lights"));

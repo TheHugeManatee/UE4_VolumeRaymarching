@@ -32,7 +32,7 @@ public:
                                    UVolumeTexture* ALightVolume, const UVolumeTexture* DataVolume,
                                    const UTexture2D* TransferFunction,
                                    const FDirLightParameters LightParameters, const bool Added,
-                                   const FTransform VolumeInvTransform,
+                                   const FTransform VolumeTransform,
                                    const FClippingPlaneParameters ClippingParameters,
                                    const FVector MeshMaxBounds, bool& LightAdded);
 
@@ -43,7 +43,7 @@ public:
       const UObject* WorldContextObject, UVolumeTexture* RLightVolume, UVolumeTexture* GLightVolume,
       UVolumeTexture* BLightVolume, UVolumeTexture* ALightVolume, const UVolumeTexture* DataVolume,
       const UTexture2D* TransferFunction, FDirLightParameters OldLightParameters,
-      FDirLightParameters NewLightParameters, const FTransform VolumeInvTransform,
+      FDirLightParameters NewLightParameters, const FTransform VolumeTransform,
       const FClippingPlaneParameters ClippingParameters, const FVector MeshMaxBounds,
       bool& LightAdded);
 
@@ -76,9 +76,9 @@ public:
                                         const UVolumeTexture* DataVolume,
                                         const UTexture2D* TransferFunction,
                                         const FDirLightParameters LightParameters, const bool Added,
-                                        const FTransform VolumeInvTransform,
+                                        const FTransform VolumeTransform,
                                         const FClippingPlaneParameters ClippingParameters,
-                                        const FVector MeshMaxBounds, bool& LightAdded);
+                                        const FVector MeshMaxBounds, bool& LightAdded ,FVector& LocalLightDir);
 
   /** Changes a light in the light volume.	 */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
@@ -87,8 +87,8 @@ public:
       const UObject* WorldContextObject, UVolumeTexture* ALightVolume,
       const UVolumeTexture* DataVolume, const UTexture2D* TransferFunction,
       FDirLightParameters OldLightParameters, FDirLightParameters NewLightParameters,
-      const FTransform VolumeInvTransform, const FClippingPlaneParameters ClippingParameters,
-      const FVector MeshMaxBounds, bool& LightAdded);
+      const FTransform VolumeTransform, const FClippingPlaneParameters ClippingParameters,
+      const FVector MeshMaxBounds, bool& LightAdded, FVector& LocalLightDir);
 
   /** Clears a light volume. */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
