@@ -33,7 +33,7 @@ float LightIntensity;
 float3 LocalClippingCenter;
 float3 LocalClippingDirection;
 
-
+float2 TFIntensityDomain;
 
 float3 NewLightPosition;
 
@@ -80,6 +80,12 @@ SamplerState NewReadBufferSampler;
 //    AddressW = Clamp;
 //    BorderColor = float4(LightColor, LightIntensity);
 //};
+
+float RemapIntensity(float intensity)
+{
+    return clamp((intensity - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
+}
+
 
 void AddColor(int3 pos, float4 addedColor, float4 oldColor)
 {
@@ -292,9 +298,9 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
         else
         {
             cursample = Volume.SampleLevel(VolumeSampler, GetUVW(pos, iResolution), 0);
+            cursample = RemapIntensity(cursample);
 		    // Get Color&alpha from intensity
             colorsample = TransferFunc.SampleLevel(TransferFuncSampler, float2(cursample, 0.5f), 0);
-        
         }
 
 

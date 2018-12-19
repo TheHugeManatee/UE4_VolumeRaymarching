@@ -44,6 +44,7 @@ public:
 
 		std::string readWord;
 
+		// Skip until we get to Dimensions.
 		while (inStream.good() && readWord != "DimSize") {
 			inStream >> readWord;
 		}
@@ -60,7 +61,7 @@ public:
 			return FMhdInfo(FIntVector(0, 0, 0), FVector(0, 0, 0));
 		}
 
-
+		// Skip until we get to spacing.
 		while (inStream.good() && readWord != "ElementSpacing") {
 			inStream >> readWord;
 		}

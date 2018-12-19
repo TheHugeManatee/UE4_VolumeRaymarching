@@ -38,6 +38,9 @@ uint Axis;
 
 float Weight;
 
+float2 TFIntensityDomain;
+
+
 // The shader code is common for all axes and always 2D in X and Y space
 // If going along X - threadgroup X = Volume Y dimension, threadgroup Y = Volume Z dimension
 // If going along Y - threadgroup X = Volume X dimension, threadgroup Y = Volume Z dimension
@@ -69,6 +72,12 @@ SamplerState ReadBufferSampler;
 //    AddressW = Clamp;
 //    BorderColor = float4(LightColor, LightIntensity);
 //};
+
+float RemapIntensity(float intensity)
+{
+    return clamp((intensity - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
+}
+
 
 void AddColor(int3 pos, float4 addedColor, float4 oldColor)
 {
@@ -232,7 +241,8 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
         else
         {
             cursample = Volume.SampleLevel(VolumeSampler, uvw, 0);
-		    // Get Color&alpha from intensity
+            cursample = RemapIntensity(cursample);
+ // Get Color&alpha from intensity
             colorsample = TransferFunc.SampleLevel(TransferFuncSampler, float2(cursample, 0.5f), 0);
         }
 

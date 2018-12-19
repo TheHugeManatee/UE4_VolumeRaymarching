@@ -93,27 +93,110 @@ float3 entrypos = localcampos + (max(0, t0) * localcamvec);
 return float4(entrypos, boxthickness);
 
 
+//
+// Actual raymarch
+//
 
 
 
 
 
+ 
+float transmittance = 1;
+float opacity = 0;
+
+float3 localcamvec = normalize(mul(Parameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+
+float3 lightenergy = 0;
+
+int3 randpos = int3(Parameters.SvPosition.xy, View.StateFrameIndexMod8);
+float rand = float(Rand3DPCG16(randpos).x) / 0xffff;
+CurPos += localcamvec * rand.x *
+Jitter;
+
+//float3 LightVectorWS = normalize(mul(LightVector, Primitive.LocalToWorld));
+float3 LightVectorWS = float3(0, 0, 1);
+
+float cursample = 0;
+
+float4 colorsample = 0;
+float lightAlpha = 0;
+
+float3 lightedColor = 0;
+
+[loop] for (
+int i = 0;i <
+MaxSteps; i++)
+{
+	// Anything that is clipped by the clipping plane shall be ignored.
+	if (dot(CurPos - ClippingCenter, ClippingDirection) < 0) {
+		CurPos -=
+localcamvec;
+		continue;	
+	}
+
+	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
+	cursample = Tex.SampleLevel(TexSampler, saturate(CurPos), 0).r;
+
+    // Get the sample into the intensity domain.
+
+    cursample = clamp((cursample - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
+
+	colorsample = TF.SampleLevel(TFSampler, float2(cursample, 0.5), 0);
+ 
+	colorsample.a = 1.0 - pow(1.0 - colorsample.a, 1.0/512.0 * 200.0);
+
+	// Only care if the sample has at least some alpha.
+	if (colorsample.a > 0.01)
+	{
+		// Get lighting information from illumination volume for current position.
+		// Take the lighting information a little bit closer to the viewer, so that illuminated surfaces don't self-shadow themselves
+		lightAlpha = ALightVolume.SampleLevel(ALightVolumeSampler, saturate(CurPos + localcamvec), 0);
+
+float3 dfpos = 2 * (CurPos - 0.5) * Primitive.LocalObjectBoundsMax.x;
+		dfpos = TransformLocalPositionToWorld(Parameters, dfpos).
+xyz;
+float dftracedist = 1;
+float dfshadow = 1;
+float curdist = 0;
+float DistanceAlongCone = 0;
+		for (
+int d = 0;d <
+DFSteps; d++)
+		{
+			DistanceAlongCone +=
+curdist;
+			curdist = GetDistanceToNearestSurfaceGlobal(dfpos.xyz);
+
+float SphereSize = DistanceAlongCone * LightTangent;
+			dfshadow = min( saturate(curdist / SphereSize) , dfshadow);
+
+			dfpos.xyz += LightVectorWS * dftracedist *
+curdist;
+			dftracedist*= 1.0001;
+		}
+
+		// Multiply sampled color with ligth color and adjust intensity according to light strength.
+		lightedColor = colorsample.rgb *
+lightAlpha;//* (dfshadow);
+
+		// Alpha blend front to back.
+	        lightenergy = lightenergy + lightedColor * colorsample.a * (1.0 - opacity);
+        	opacity = opacity + (1.0 - opacity) * colorsample.
+a;
+
+	}
 
 
+	CurPos -=
+localcamvec;
+	if (opacity > 0.99) {
+		opacity = 1; 	
+		break;
+	};
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+return float4(lightenergy, opacity);
 
 
 /////////////////////////////////////////BOX CODE/////////////////////////////////////////
