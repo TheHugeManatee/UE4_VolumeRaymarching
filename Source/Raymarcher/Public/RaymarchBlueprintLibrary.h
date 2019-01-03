@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include "Classes/Curves/CurveLinearColor.h"
-#include "Classes/Engine/VolumeTexture.h"
-#include "Classes/Kismet/BlueprintFunctionLibrary.h"
+#include "Curves/CurveLinearColor.h"
+#include "Engine/VolumeTexture.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
 #include "CoreMinimal.h"
 #include "RHI.h"
 #include "RHIResources.h"
@@ -167,6 +167,7 @@ public:
                                               UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
                                               UTexture2D* TransferFunction,
                                               FTransferFunctionRangeParameters TFRangeParams,
+											  const bool ColoredLightSupport,
                                               struct FBasicRaymarchRenderingResources& OutParameters);  //
 
   /** Loads a RAW 3D texture into this classes FRHITexture3D member. Will output error log messages

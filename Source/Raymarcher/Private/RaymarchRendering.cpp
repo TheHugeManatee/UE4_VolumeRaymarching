@@ -116,7 +116,6 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
   NewTexture->PlatformData->NumSlices = Dimensions.Z;
   NewTexture->PlatformData->PixelFormat = PixelFormat;
 
-  NewTexture->MipGenSettings = TMGS_NoMipmaps;
   NewTexture->SRGB = false;
 
   FTexture2DMipMap* Mip = new (NewTexture->PlatformData->Mips) FTexture2DMipMap();
@@ -134,9 +133,10 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
   if (UAVCompatible) {
     NewTexture->bUAVCompatible = true;
   }
-
+#if WITH_EDITORONLY_DATA
   NewTexture->Source.Init(Dimensions.X, Dimensions.Y, Dimensions.Z, 1, TextureSourceFormat,
                           ByteArray);
+#endif
   NewTexture->UpdateResource();
   Package->MarkPackageDirty();
   FAssetRegistryModule::AssetCreated(NewTexture);
@@ -186,7 +186,6 @@ bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint
 
   NewTexture->AddressX = TA_Clamp;
   NewTexture->AddressY = TA_Clamp;
-  NewTexture->MipGenSettings = TMGS_NoMipmaps;
   NewTexture->CompressionSettings = TC_Default;
   NewTexture->SRGB = false;
 
@@ -201,8 +200,9 @@ bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint
   FMemory::Memcpy(ByteArray, BulkData, TotalSize);
 
   Mip->BulkData.Unlock();
-
+#if WITH_EDITORONLY_DATA
   NewTexture->Source.Init(Dimensions.X, Dimensions.Y, 1, 1, TextureSourceFormat, ByteArray);
+#endif
   NewTexture->UpdateResource();
   Package->MarkPackageDirty();
   FAssetRegistryModule::AssetCreated(NewTexture);
@@ -241,7 +241,6 @@ bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoi
 
   Texture->AddressX = TA_Clamp;
   Texture->AddressY = TA_Clamp;
-  Texture->MipGenSettings = TMGS_NoMipmaps;
   Texture->CompressionSettings = TC_Default;
   Texture->SRGB = false;
 
@@ -262,15 +261,11 @@ bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoi
   FMemory::Memcpy(ByteArray, BulkData, TotalSize);
 
   Mip->BulkData.Unlock();
-
+#if WITH_EDITORONLY_DATA
   Texture->Source.Init(Dimensions.X, Dimensions.Y, 1, 1, TextureSourceFormat, ByteArray);
+#endif
   Texture->UpdateResource();
   return true;
-}
-
-void CreateBasicRaymarchingResources_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                                  FBasicRaymarchRenderingResources& InParams,
-                                                  ERHIFeatureLevel::Type FeatureLevel) {
 }
 
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat) {
@@ -305,6 +300,13 @@ FIntVector GetTransposedDimensions(FMajorAxes Axes, FRHITexture3D* VolumeRef, un
       return FIntVector(VolumeRef->GetSizeX(), VolumeRef->GetSizeY(), VolumeRef->GetSizeZ());
     default: check(false); return FIntVector(0, 0, 0);
   }
+}
+
+OneAxisReadWriteBufferResources GetBuffers(const FMajorAxes Axes, const unsigned index,
+                                           const FBasicRaymarchRenderingResources& InParams) {
+  FCubeFace face = Axes.FaceWeight[index].first;
+  unsigned axis = face / 2;
+  return InParams.XYZReadWriteBuffers[axis];
 }
 
 FVector2D GetPixOffset(int Axis, FVector LightPosition) {
@@ -359,9 +361,9 @@ void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
   // Set second axis weight to (1 - (first axis weight))
   OutLocalMajorAxes.FaceWeight[1].second = 1 - OutLocalMajorAxes.FaceWeight[0].second;
 
-  //FString debug = "Global light dir : " + LightParameters.LightDirection.ToString() +
+  // FString debug = "Global light dir : " + LightParameters.LightDirection.ToString() +
   //                ", Local light dir : " + OutLocalLightParameters.LightDirection.ToString();
-  //GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, debug);
+  // GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, debug);
 
   // RetVal.Direction *= VolumeTransform.GetScale3D();
 }
@@ -398,20 +400,16 @@ FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt) {
   return RHICreateSamplerState(FSamplerStateInitializerRHI(SF_Trilinear, AM_Border, AM_Border,
                                                            AM_Border, 0, 0, 0, 0, BorderColorInt));
 }
-
-void CreateBufferTexturesAndUAVs(FIntVector Size, EPixelFormat PixelFormat,
-                                 FTexture2DRHIRef& OutTexture1,
-                                 FUnorderedAccessViewRHIRef& OutTexture1UAV,
-                                 FTexture2DRHIRef& OutTexture2,
-                                 FUnorderedAccessViewRHIRef& OutTexture2UAV) {
-  FRHIResourceCreateInfo CreateInfo(FClearValueBinding::Transparent);
-  OutTexture1 = RHICreateTexture2D(Size.X, Size.Y, PixelFormat, 1, 1,
-                                   TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
-  OutTexture2 = RHICreateTexture2D(Size.X, Size.Y, PixelFormat, 1, 1,
-                                   TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
-  OutTexture1UAV = RHICreateUnorderedAccessView(OutTexture1);
-  OutTexture2UAV = RHICreateUnorderedAccessView(OutTexture2);
-}
+//
+//void CreateBufferTexturesAndUAVs(FIntPoint Size, EPixelFormat PixelFormat,
+//                                 OneAxisReadWriteBufferResources& RWBuffers) {
+//  FRHIResourceCreateInfo CreateInfo(FClearValueBinding::Transparent);
+//  for (int i = 0; i < 4; i++) {
+//    RWBuffers.Buffers[i] = RHICreateTexture2D(Size.X, Size.Y, PixelFormat, 1, 1,
+//                                              TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
+//    RWBuffers.UAVs[i] = RHICreateUnorderedAccessView(RWBuffers.Buffers[i]);
+//  }
+//}
 
 uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes MajorAxes,
                                unsigned index) {
@@ -519,8 +517,8 @@ void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
     FTexture2DRHIRef Texture1, Texture2;
     FUnorderedAccessViewRHIRef Texture1UAV, Texture2UAV;
 
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, Texture1, Texture1UAV,
-                                Texture2, Texture2UAV);
+    OneAxisReadWriteBufferResources Buffers = GetBuffers(LocalMajorAxes, i, Resources);
+	for (int i = 0; i < 2;i++) Buffers.UAVs[i] = RHICreateUnorderedAccessView(Buffers.Buffers[i]);
 
     ComputeShader->SetParameters(RHICmdList, LocalLightParams, Added, LocalClippingParameters,
                                  LocalMajorAxes, i, Resources.TFRangeParameters.IntensityDomain);
@@ -531,19 +529,17 @@ void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
         FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
 
     for (int j = 0; j < TransposedDimensions.Z; j++) {
-      // Switch read and write buffers each cycle.
+      // Switch read and write buffers each row.
       if (j % 2 == 0) {
-        TransitionBufferResources(RHICmdList, Texture1, Texture2UAV);
-        ComputeShader->SetLoop(RHICmdList, j, Texture1, readBuffSampler, Texture2UAV);
+        TransitionBufferResources(RHICmdList, Buffers.Buffers[0], Buffers.UAVs[1]);
+        ComputeShader->SetLoop(RHICmdList, j, Buffers.Buffers[0], readBuffSampler, Buffers.UAVs[1]);
       } else {
-        TransitionBufferResources(RHICmdList, Texture2, Texture1UAV);
-        ComputeShader->SetLoop(RHICmdList, j, Texture2, readBuffSampler, Texture1UAV);
+        TransitionBufferResources(RHICmdList, Buffers.Buffers[1], Buffers.UAVs[0]);
+        ComputeShader->SetLoop(RHICmdList, j, Buffers.Buffers[1], readBuffSampler, Buffers.UAVs[0]);
       }
-
       DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
     }
   }
-
   // Unbind UAVs.
   ComputeShader->UnbindUAVs(RHICmdList);
   // Transition resources back to the renderer.
@@ -566,8 +562,8 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
     return;
   }
 
-  // Create local copies of Light Params, so that if we have to fall back to 2x AddOrRemoveLight, we
-  // can just pass the original parameters.
+  // Create local copies of Light Params, so that if we have to fall back to 2x AddOrRemoveLight,
+  // we can just pass the original parameters.
   FDirLightParameters LocalLightParams, NewLocalLightParams;
   FMajorAxes LocalMajorAxes, NewLocalMajorAxes;
   // Calculate local Light parameters and corresponding axes.
@@ -613,9 +609,9 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
   UAVs[2] = BVolumeUAV;
   UAVs[3] = AVolumeUAV;
 
-  // Don't need barriers on these - we only ever read/write to the same pixel from one thread -> no
-  // race conditions But we definitely need to transition the resource to Compute-shader accessible,
-  // otherwise the renderer might touch our textures while we're writing them.
+  // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
+  // no race conditions But we definitely need to transition the resource to Compute-shader
+  // accessible, otherwise the renderer might touch our textures while we're writing them.
   RHICmdList.TransitionResources(EResourceTransitionAccess::EWritable,
                                  EResourceTransitionPipeline::EGfxToCompute, UAVs, 4);
 
@@ -645,13 +641,12 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
     FTexture2DRHIRef Texture1, Texture2, NewTexture1, NewTexture2;
     FUnorderedAccessViewRHIRef Texture1UAV, Texture2UAV, NewTexture1UAV, NewTexture2UAV;
 
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, Texture1, Texture1UAV,
-                                Texture2, Texture2UAV);
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_A32B32G32R32F, NewTexture1, NewTexture1UAV,
-                                NewTexture2, NewTexture2UAV);
+    OneAxisReadWriteBufferResources Buffers = GetBuffers(LocalMajorAxes, i, Resources);
+    for (int i = 0; i < 4; i++) Buffers.UAVs[i] = RHICreateUnorderedAccessView(Buffers.Buffers[i]);
 
     ComputeShader->SetParameters(RHICmdList, LocalLightParams, NewLocalLightParams, LocalMajorAxes,
-                                 NewLocalMajorAxes, LocalClippingParams, i, Resources.TFRangeParameters.IntensityDomain);
+                                 NewLocalMajorAxes, LocalClippingParams, i,
+                                 Resources.TFRangeParameters.IntensityDomain);
 
     // Get group sizes for compute shader
     uint32 GroupSizeX =
@@ -662,340 +657,363 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
     for (int j = 0; j < TransposedDimensions.Z; j++) {
       // Switch read and write buffers each cycle.
       if (j % 2 == 0) {
-        TransitionBufferResources(RHICmdList, Texture1, Texture2UAV);
-        TransitionBufferResources(RHICmdList, NewTexture1, NewTexture2UAV);
-        ComputeShader->SetLoop(RHICmdList, j, Texture1, readBuffSampler, Texture2UAV, NewTexture1,
-                               newReadBufferSampler, NewTexture2UAV);
+        TransitionBufferResources(RHICmdList, Buffers.Buffers[0], Buffers.UAVs[1]);
+        TransitionBufferResources(RHICmdList, Buffers.Buffers[2], Buffers.UAVs[3]);
+        ComputeShader->SetLoop(RHICmdList, j, Buffers.Buffers[0], readBuffSampler, Buffers.UAVs[1],
+                               Buffers.Buffers[2], newReadBufferSampler, Buffers.UAVs[3]);
       } else {
-        TransitionBufferResources(RHICmdList, Texture2, Texture1UAV);
-        TransitionBufferResources(RHICmdList, NewTexture2, NewTexture1UAV);
-        ComputeShader->SetLoop(RHICmdList, j, Texture2, readBuffSampler, Texture1UAV, NewTexture2,
-                               newReadBufferSampler, NewTexture1UAV);
+        TransitionBufferResources(RHICmdList, Buffers.Buffers[1], Buffers.UAVs[0]);
+        TransitionBufferResources(RHICmdList, Buffers.Buffers[3], Buffers.UAVs[2]);
+        ComputeShader->SetLoop(RHICmdList, j, Buffers.Buffers[1], readBuffSampler, Buffers.UAVs[0],
+                               Buffers.Buffers[3], newReadBufferSampler, Buffers.UAVs[2]);
       }
-      // Everything ready for this loop -> dispatch shader!
-      DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
     }
   }
 
-  // Unbind UAVs.
-  ComputeShader->UnbindUAVs(RHICmdList);
+    // Unbind UAVs.
+    ComputeShader->UnbindUAVs(RHICmdList);
 
-  // Transition resources back to the renderer.
-  RHICmdList.TransitionResources(EResourceTransitionAccess::EReadable,
-                                 EResourceTransitionPipeline::EComputeToGfx, UAVs, 4);
-}
-
-void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                    FRHITexture3D* RLightVolumeResource,
-                                    FRHITexture3D* GLightVolumeResource,
-                                    FRHITexture3D* BLightVolumeResource,
-                                    FRHITexture3D* ALightVolumeResource, FVector4 ClearValues,
-                                    ERHIFeatureLevel::Type FeatureLevel) {
-  TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
-  TShaderMapRef<FClearLightVolumesShader> ComputeShader(GlobalShaderMap);
-
-  RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
-  // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier, LightVolumeResource);
-  FUnorderedAccessViewRHIRef RVolumeUAV = RHICreateUnorderedAccessView(RLightVolumeResource);
-  FUnorderedAccessViewRHIRef GVolumeUAV = RHICreateUnorderedAccessView(GLightVolumeResource);
-  FUnorderedAccessViewRHIRef BVolumeUAV = RHICreateUnorderedAccessView(BLightVolumeResource);
-  FUnorderedAccessViewRHIRef AVolumeUAV = RHICreateUnorderedAccessView(ALightVolumeResource);
-
-  FUnorderedAccessViewRHIParamRef UAVs[4];
-  UAVs[0] = RVolumeUAV;
-  UAVs[1] = GVolumeUAV;
-  UAVs[2] = BVolumeUAV;
-  UAVs[3] = AVolumeUAV;
-
-  // Don't need barriers on these - we only ever read/write to the same pixel from one thread -> no
-  // race conditions But we definitely need to transition the resource to Compute-shader accessible,
-  // otherwise the renderer might touch our textures while we're writing them.
-  RHICmdList.TransitionResources(EResourceTransitionAccess::ERWNoBarrier,
-                                 EResourceTransitionPipeline::EGfxToCompute, UAVs, 4);
-
-  ComputeShader->SetLightVolumeUAVs(RHICmdList, UAVs);
-  ComputeShader->SetParameters(RHICmdList, ClearValues, RLightVolumeResource->GetSizeZ());
-
-  uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)RLightVolumeResource->GetSizeX(),
-                                              NUM_THREADS_PER_GROUP_DIMENSION);
-  uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)RLightVolumeResource->GetSizeY(),
-                                              NUM_THREADS_PER_GROUP_DIMENSION);
-
-  DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
-  ComputeShader->UnbindLightVolumeUAVs(RHICmdList);
-
-  RHICmdList.TransitionResources(EResourceTransitionAccess::EReadable,
-                                 EResourceTransitionPipeline::EComputeToGfx, UAVs, 4);
-}
-
-void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                                 const FBasicRaymarchRenderingResources Resources,
-                                                 const FDirLightParameters LightParameters,
-                                                 const bool Added,
-                                                 const FRaymarchWorldParameters WorldParameters,
-                                                 ERHIFeatureLevel::Type FeatureLevel) {
-  check(IsInRenderingThread());
-
-  // Can't have directional light without direction...
-  if (LightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
-    GEngine->AddOnScreenDebugMessage(
-        -1, 100.0f, FColor::Yellow,
-        TEXT("Returning because the directional light doesn't have a direction."));
-    return;
+    // Transition resources back to the renderer.
+    RHICmdList.TransitionResources(EResourceTransitionAccess::EReadable,
+                                   EResourceTransitionPipeline::EComputeToGfx, UAVs, 4);
   }
 
-  FDirLightParameters LocalLightParams;
-  FMajorAxes LocalMajorAxes;
-  // Calculate local Light parameters and corresponding axes.
-  GetLocalLightParamsAndAxes(LightParameters, WorldParameters.VolumeTransform, LocalLightParams,
-                             LocalMajorAxes);
-  // Transform clipping parameters into local space.
-  FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
+  void ClearLightVolumes_RenderThread(
+      FRHICommandListImmediate & RHICmdList, FRHITexture3D * RLightVolumeResource,
+      FRHITexture3D * GLightVolumeResource, FRHITexture3D * BLightVolumeResource,
+      FRHITexture3D * ALightVolumeResource, FVector4 ClearValues,
+      ERHIFeatureLevel::Type FeatureLevel) {
+    TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+    TShaderMapRef<FClearLightVolumesShader> ComputeShader(GlobalShaderMap);
 
-  // For GPU profiling.
-  SCOPED_DRAW_EVENTF(RHICmdList, AddDirLightToLightVolume_RenderThread, TEXT("Adding Lights"));
-  SCOPED_GPU_STAT(RHICmdList, GPUAddingLights);
-  // Get shader ref from GlobalShaderMap
-  TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
-  TShaderMapRef<FAddOrRemoveDirLightSingleVolumeShader> ComputeShader(GlobalShaderMap);
+    RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
+    // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+    // LightVolumeResource);
+    FUnorderedAccessViewRHIRef RVolumeUAV = RHICreateUnorderedAccessView(RLightVolumeResource);
+    FUnorderedAccessViewRHIRef GVolumeUAV = RHICreateUnorderedAccessView(GLightVolumeResource);
+    FUnorderedAccessViewRHIRef BVolumeUAV = RHICreateUnorderedAccessView(BLightVolumeResource);
+    FUnorderedAccessViewRHIRef AVolumeUAV = RHICreateUnorderedAccessView(ALightVolumeResource);
 
-  RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
-  // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier, LightVolumeResource);
-  FUnorderedAccessViewRHIRef AVolumeUAV =
-      RHICreateUnorderedAccessView(Resources.ALightVolumeRef->Resource->TextureRHI);
+    FUnorderedAccessViewRHIParamRef UAVs[4];
+    UAVs[0] = RVolumeUAV;
+    UAVs[1] = GVolumeUAV;
+    UAVs[2] = BVolumeUAV;
+    UAVs[3] = AVolumeUAV;
 
-  // Don't need barriers on these - we only ever read/write to the same pixel from one thread -> no
-  // race conditions But we definitely need to transition the resource to Compute-shader accessible,
-  // otherwise the renderer might touch our textures while we're writing them.
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
-                                EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
-  ComputeShader->SetResources(
-      RHICmdList, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(),
-      Resources.TFTextureRef->Resource->TextureRHI->GetTexture2D(), AVolumeUAV);
-  for (unsigned i = 0; i < 2; i++) {
-    // Break if the main axis weight == 1
-    if (LocalMajorAxes.FaceWeight[i].second == 0) {
-      break;
+    // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
+    // no race conditions But we definitely need to transition the resource to Compute-shader
+    // accessible, otherwise the renderer might touch our textures while we're writing them.
+    RHICmdList.TransitionResources(EResourceTransitionAccess::ERWNoBarrier,
+                                   EResourceTransitionPipeline::EGfxToCompute, UAVs, 4);
+
+    ComputeShader->SetLightVolumeUAVs(RHICmdList, UAVs);
+    ComputeShader->SetParameters(RHICmdList, ClearValues, RLightVolumeResource->GetSizeZ());
+
+    uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)RLightVolumeResource->GetSizeX(),
+                                                NUM_THREADS_PER_GROUP_DIMENSION);
+    uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)RLightVolumeResource->GetSizeY(),
+                                                NUM_THREADS_PER_GROUP_DIMENSION);
+
+    DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
+    ComputeShader->UnbindLightVolumeUAVs(RHICmdList);
+
+    RHICmdList.TransitionResources(EResourceTransitionAccess::EReadable,
+                                   EResourceTransitionPipeline::EComputeToGfx, UAVs, 4);
+  }
+
+  void AddDirLightToSingleLightVolume_RenderThread(
+      FRHICommandListImmediate & RHICmdList, const FBasicRaymarchRenderingResources Resources,
+      const FDirLightParameters LightParameters, const bool Added,
+      const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel) {
+    check(IsInRenderingThread());
+
+    // Can't have directional light without direction...
+    if (LightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
+      GEngine->AddOnScreenDebugMessage(
+          -1, 100.0f, FColor::Yellow,
+          TEXT("Returning because the directional light doesn't have a direction."));
+      return;
     }
 
-    FVector2D textureOffset =
-        GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection);
+    FDirLightParameters LocalLightParams;
+    FMajorAxes LocalMajorAxes;
+    // Calculate local Light parameters and corresponding axes.
+    GetLocalLightParamsAndAxes(LightParameters, WorldParameters.VolumeTransform, LocalLightParams,
+                               LocalMajorAxes);
+    // Transform clipping parameters into local space.
+    FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
 
-    // Get the X, Y and Z transposed into the current axis orientation.
-    FIntVector TransposedDimensions = GetTransposedDimensions(
-        LocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
+    // For GPU profiling.
+    SCOPED_DRAW_EVENTF(RHICmdList, AddDirLightToLightVolume_RenderThread, TEXT("Adding Lights"));
+    SCOPED_GPU_STAT(RHICmdList, GPUAddingLights);
+    // Get shader ref from GlobalShaderMap
+    TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+    TShaderMapRef<FAddOrRemoveDirLightSingleVolumeShader> ComputeShader(GlobalShaderMap);
 
-    uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
-    FLinearColor LinearBorderColor = FColor(ColorInt);
+    RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
+    // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+    // LightVolumeResource);
+    FUnorderedAccessViewRHIRef AVolumeUAV =
+        RHICreateUnorderedAccessView(Resources.ALightVolumeRef->Resource->TextureRHI);
 
-    FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
-    // Create read-write buffer textures for both lights.
-    FTexture2DRHIRef Texture1, Texture2;
-    FUnorderedAccessViewRHIRef Texture1UAV, Texture2UAV;
-
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_R32_FLOAT, Texture1, Texture1UAV, Texture2,
-                                Texture2UAV);
-
-    ComputeShader->SetParameters(RHICmdList, LocalLightParams, Added, LocalClippingParameters,
-                                 LocalMajorAxes, i, Resources.TFRangeParameters.IntensityDomain);
-
-    uint32 GroupSizeX =
-        FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
-    uint32 GroupSizeY =
-        FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
-
-    for (int j = 0; j < TransposedDimensions.Z; j++) {
-      // Switch read and write buffers each row.
-      if (j % 2 == 0) {
-        TransitionBufferResources(RHICmdList, Texture1, Texture2UAV);
-        ComputeShader->SetLoop(RHICmdList, j, Texture1, readBuffSampler, Texture2UAV);
-      } else {
-        TransitionBufferResources(RHICmdList, Texture2, Texture1UAV);
-        ComputeShader->SetLoop(RHICmdList, j, Texture2, readBuffSampler, Texture1UAV);
+    // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
+    // no race conditions But we definitely need to transition the resource to Compute-shader
+    // accessible, otherwise the renderer might touch our textures while we're writing them.
+    RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
+                                  EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
+    ComputeShader->SetResources(
+        RHICmdList, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(),
+        Resources.TFTextureRef->Resource->TextureRHI->GetTexture2D(), AVolumeUAV);
+    for (unsigned i = 0; i < 2; i++) {
+      // Break if the main axis weight == 1
+      if (LocalMajorAxes.FaceWeight[i].second == 0) {
+        break;
       }
 
-      DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
-    }
-  }
+      FVector2D textureOffset =
+          GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection);
 
-  // Unbind UAVs.
-  ComputeShader->UnbindUAVs(RHICmdList);
-  // Transition resources back to the renderer.
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
-                                EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
-}
+      // Get the X, Y and Z transposed into the current axis orientation.
+      FIntVector TransposedDimensions = GetTransposedDimensions(
+          LocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
 
-void ChangeDirLightInSingleLightVolume_RenderThread(
-    FRHICommandListImmediate& RHICmdList, const FBasicRaymarchRenderingResources Resources,
-    const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
-    const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel) {
-  // Can't have directional light without direction...
-  if (NewLightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
-    GEngine->AddOnScreenDebugMessage(
-        -1, 100.0f, FColor::Yellow,
-        TEXT("Returning because the directional light doesn't have a direction."));
-    return;
-  }
+      uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
+      FLinearColor LinearBorderColor = FColor(ColorInt);
 
-  FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
-  // Create local copies of Light Params, so that if we have to fall back to 2x AddOrRemoveLight, we
-  // can just pass the original parameters.
-  FDirLightParameters LocalLightParams, NewLocalLightParams;
-  FMajorAxes LocalMajorAxes, NewLocalMajorAxes;
-  // Calculate local Light parameters and corresponding axes.
-  GetLocalLightParamsAndAxes(OldLightParameters, WorldParameters.VolumeTransform, LocalLightParams,
-                             LocalMajorAxes);
-  GetLocalLightParamsAndAxes(NewLightParameters, WorldParameters.VolumeTransform,
-                             NewLocalLightParams, NewLocalMajorAxes);
+      FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
+      // Create read-write buffer textures for both lights.
+      FTexture2DRHIRef Texture1, Texture2;
+      FUnorderedAccessViewRHIRef Texture1UAV, Texture2UAV;
 
-  // If lights have different major axes, do a proper removal and addition.
-  // If first major axes are the same and above the dominance threshold, ignore whether the second
-  // major axes are the same.
-  if (LocalMajorAxes.FaceWeight[0].first != NewLocalMajorAxes.FaceWeight[0].first ||
-      LocalMajorAxes.FaceWeight[1].first != NewLocalMajorAxes.FaceWeight[1].first) {
-    //
-    AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, OldLightParameters, false,
-                                                WorldParameters, FeatureLevel);
-    AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, NewLightParameters, true,
-                                                WorldParameters, FeatureLevel);
-    return;
-  }
+      OneAxisReadWriteBufferResources Buffers = GetBuffers(LocalMajorAxes, i, Resources);
+      for (int i = 0; i < 2; i++)
+        Buffers.UAVs[i] = RHICreateUnorderedAccessView(Buffers.Buffers[i]);
 
-  // For GPU profiling.
-  SCOPED_DRAW_EVENTF(RHICmdList, ChangeDirLightInLightVolume_RenderThread, TEXT("Adding Lights"));
-  SCOPED_GPU_STAT(RHICmdList, GPUAddingLights);
+      ComputeShader->SetParameters(RHICmdList, LocalLightParams, Added, LocalClippingParameters,
+                                   LocalMajorAxes, i, Resources.TFRangeParameters.IntensityDomain);
 
-  TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
-  TShaderMapRef<FChangeDirLightSingleVolumeShader> ComputeShader(GlobalShaderMap);
+      uint32 GroupSizeX =
+          FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
+      uint32 GroupSizeY =
+          FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
 
-  RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
-  // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier, LightVolumeResource);
-  FUnorderedAccessViewRHIRef AVolumeUAV =
-      RHICreateUnorderedAccessView(Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D());
+      for (int j = 0; j < TransposedDimensions.Z; j++) {
+        // Switch read and write buffers each row.
+        if (j % 2 == 0) {
+          TransitionBufferResources(RHICmdList, Buffers.Buffers[0], Buffers.UAVs[1]);
+          ComputeShader->SetLoop(RHICmdList, j, Buffers.Buffers[0], readBuffSampler,
+                                 Buffers.UAVs[1]);
+        } else {
+          TransitionBufferResources(RHICmdList, Buffers.Buffers[1], Buffers.UAVs[0]);
+          ComputeShader->SetLoop(RHICmdList, j, Buffers.Buffers[1], readBuffSampler,
+                                 Buffers.UAVs[0]);
+        }
 
-  // Don't need barriers on these - we only ever read/write to the same pixel from one thread -> no
-  // race conditions But we definitely need to transition the resource to Compute-shader accessible,
-  // otherwise the renderer might touch our textures while we're writing them.
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
-                                EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
-
-  ComputeShader->SetResources(
-      RHICmdList, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(),
-      Resources.TFTextureRef->Resource->TextureRHI->GetTexture2D(), AVolumeUAV);
-
-  for (unsigned i = 0; i < 2; i++) {
-    FVector2D textureOffset =
-        GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection);
-
-    // Get the X, Y and Z transposed into the current axis orientation.
-    FIntVector TransposedDimensions = GetTransposedDimensions(
-        LocalMajorAxes, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(), i);
-
-    // Get Color ints for texture borders.
-    uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
-    uint32 NewColorInt = GetBorderColorIntSingle(NewLocalLightParams, NewLocalMajorAxes, i);
-    // Get the sampler for read buffer to use border with the proper light color.
-    FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
-    FSamplerStateRHIRef newReadBufferSampler = GetBufferSamplerRef(NewColorInt);
-
-    FLinearColor OldLinearBorderColor = FColor(ColorInt);
-    FLinearColor NewLinearBorderColor = FColor(NewColorInt);
-    /*
-        FString text = "Border color removed  = ";
-        text += FString::SanitizeFloat(OldLinearBorderColor.R, 3) + ", " +
-                FString::SanitizeFloat(OldLinearBorderColor.G, 3) + ", " +
-                FString::SanitizeFloat(OldLinearBorderColor.B, 3) + ", " +
-                FString::SanitizeFloat(OldLinearBorderColor.A, 3) +", added = " +
-          FString::SanitizeFloat(NewLinearBorderColor.R, 3) + ", " +
-                FString::SanitizeFloat(NewLinearBorderColor.G, 3) + ", " +
-                FString::SanitizeFloat(NewLinearBorderColor.B, 3) + ", " +
-                FString::SanitizeFloat(NewLinearBorderColor.A, 3);
-        GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Yellow, text);*/
-
-    // Create read-write buffer textures for both lights.
-    FTexture2DRHIRef Texture1, Texture2, NewTexture1, NewTexture2;
-    FUnorderedAccessViewRHIRef Texture1UAV, Texture2UAV, NewTexture1UAV, NewTexture2UAV;
-
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_R32_FLOAT, Texture1, Texture1UAV, Texture2,
-                                Texture2UAV);
-    CreateBufferTexturesAndUAVs(TransposedDimensions, PF_R32_FLOAT, NewTexture1, NewTexture1UAV,
-                                NewTexture2, NewTexture2UAV);
-
-    ComputeShader->SetParameters(RHICmdList, LocalLightParams, NewLocalLightParams, LocalMajorAxes,
-                                 NewLocalMajorAxes, LocalClippingParameters, i, Resources.TFRangeParameters.IntensityDomain);
-
-    // Get group sizes for compute shader
-    uint32 GroupSizeX =
-        FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
-    uint32 GroupSizeY =
-        FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
-
-    for (int j = 0; j < TransposedDimensions.Z; j++) {
-      // Switch read and write buffers each cycle.
-      if (j % 2 == 0) {
-        TransitionBufferResources(RHICmdList, Texture1, Texture2UAV);
-        TransitionBufferResources(RHICmdList, NewTexture1, NewTexture2UAV);
-        ComputeShader->SetLoop(RHICmdList, j, Texture1, readBuffSampler, Texture2UAV, NewTexture1,
-                               newReadBufferSampler, NewTexture2UAV);
-      } else {
-        TransitionBufferResources(RHICmdList, Texture2, Texture1UAV);
-        TransitionBufferResources(RHICmdList, NewTexture2, NewTexture1UAV);
-        ComputeShader->SetLoop(RHICmdList, j, Texture2, readBuffSampler, Texture1UAV, NewTexture2,
-                               newReadBufferSampler, NewTexture1UAV);
+        DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
       }
-
-      DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
     }
+
+    // Unbind UAVs.
+    ComputeShader->UnbindUAVs(RHICmdList);
+    // Transition resources back to the renderer.
+    RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
+                                  EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
   }
 
-  // Unbind UAVs.
-  ComputeShader->UnbindUAVs(RHICmdList);
-  // Transition resources back to the renderer.
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
-                                EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
-}
+  void ChangeDirLightInSingleLightVolume_RenderThread(
+      FRHICommandListImmediate & RHICmdList, const FBasicRaymarchRenderingResources Resources,
+      const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
+      const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel) {
+    // Can't have directional light without direction...
+    if (NewLightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
+      GEngine->AddOnScreenDebugMessage(
+          -1, 100.0f, FColor::Yellow,
+          TEXT("Returning because the directional light doesn't have a direction."));
+      return;
+    }
 
-void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                         FRHITexture3D* ALightVolumeResource, float ClearValues,
-                                         ERHIFeatureLevel::Type FeatureLevel) {
-  TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
-  TShaderMapRef<FClearSingleLightVolumeShader> ComputeShader(GlobalShaderMap);
+    FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
+    // Create local copies of Light Params, so that if we have to fall back to 2x
+    // AddOrRemoveLight, we can just pass the original parameters.
+    FDirLightParameters LocalLightParams, NewLocalLightParams;
+    FMajorAxes LocalMajorAxes, NewLocalMajorAxes;
+    // Calculate local Light parameters and corresponding axes.
+    GetLocalLightParamsAndAxes(OldLightParameters, WorldParameters.VolumeTransform,
+                               LocalLightParams, LocalMajorAxes);
+    GetLocalLightParamsAndAxes(NewLightParameters, WorldParameters.VolumeTransform,
+                               NewLocalLightParams, NewLocalMajorAxes);
 
-  RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
-  // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier, LightVolumeResource);
-  FUnorderedAccessViewRHIRef AVolumeUAV = RHICreateUnorderedAccessView(ALightVolumeResource);
+    // If lights have different major axes, do a proper removal and addition.
+    // If first major axes are the same and above the dominance threshold, ignore whether the
+    // second major axes are the same.
+    if (LocalMajorAxes.FaceWeight[0].first != NewLocalMajorAxes.FaceWeight[0].first ||
+        LocalMajorAxes.FaceWeight[1].first != NewLocalMajorAxes.FaceWeight[1].first) {
+      //
+      AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, OldLightParameters, false,
+                                                  WorldParameters, FeatureLevel);
+      AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, NewLightParameters, true,
+                                                  WorldParameters, FeatureLevel);
+      return;
+    }
 
-  // Don't need barriers on these - we only ever read/write to the same pixel from one thread -> no
-  // race conditions But we definitely need to transition the resource to Compute-shader accessible,
-  // otherwise the renderer might touch our textures while we're writing them.
-  RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
-                                EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
+    // For GPU profiling.
+    SCOPED_DRAW_EVENTF(RHICmdList, ChangeDirLightInLightVolume_RenderThread, TEXT("Adding Lights"));
+    SCOPED_GPU_STAT(RHICmdList, GPUAddingLights);
 
-  ComputeShader->SetLightVolumeUAV(RHICmdList, AVolumeUAV);
-  ComputeShader->SetParameters(RHICmdList, ClearValues, ALightVolumeResource->GetSizeZ());
+    TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+    TShaderMapRef<FChangeDirLightSingleVolumeShader> ComputeShader(GlobalShaderMap);
 
-  uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)ALightVolumeResource->GetSizeX(),
-                                              NUM_THREADS_PER_GROUP_DIMENSION);
-  uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)ALightVolumeResource->GetSizeY(),
-                                              NUM_THREADS_PER_GROUP_DIMENSION);
+    RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
+    // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+    // LightVolumeResource);
+    FUnorderedAccessViewRHIRef AVolumeUAV = RHICreateUnorderedAccessView(
+        Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D());
 
-  DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
-  ComputeShader->UnbindLightVolumeUAV(RHICmdList);
+    // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
+    // no race conditions But we definitely need to transition the resource to Compute-shader
+    // accessible, otherwise the renderer might touch our textures while we're writing them.
+    RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
+                                  EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
 
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
-                                EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
-}
+    ComputeShader->SetResources(
+        RHICmdList, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(),
+        Resources.TFTextureRef->Resource->TextureRHI->GetTexture2D(), AVolumeUAV);
+
+    for (unsigned i = 0; i < 2; i++) {
+      FVector2D textureOffset =
+          GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection);
+
+      // Get the X, Y and Z transposed into the current axis orientation.
+      FIntVector TransposedDimensions = GetTransposedDimensions(
+          LocalMajorAxes, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(), i);
+
+      // Get Color ints for texture borders.
+      uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
+      uint32 NewColorInt = GetBorderColorIntSingle(NewLocalLightParams, NewLocalMajorAxes, i);
+      // Get the sampler for read buffer to use border with the proper light color.
+      FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
+      FSamplerStateRHIRef newReadBufferSampler = GetBufferSamplerRef(NewColorInt);
+
+      FLinearColor OldLinearBorderColor = FColor(ColorInt);
+      FLinearColor NewLinearBorderColor = FColor(NewColorInt);
+      /*
+          FString text = "Border color removed  = ";
+          text += FString::SanitizeFloat(OldLinearBorderColor.R, 3) + ", " +
+                  FString::SanitizeFloat(OldLinearBorderColor.G, 3) + ", " +
+                  FString::SanitizeFloat(OldLinearBorderColor.B, 3) + ", " +
+                  FString::SanitizeFloat(OldLinearBorderColor.A, 3) +", added = " +
+            FString::SanitizeFloat(NewLinearBorderColor.R, 3) + ", " +
+                  FString::SanitizeFloat(NewLinearBorderColor.G, 3) + ", " +
+                  FString::SanitizeFloat(NewLinearBorderColor.B, 3) + ", " +
+                  FString::SanitizeFloat(NewLinearBorderColor.A, 3);
+          GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Yellow, text);*/
+
+      // Create read-write buffer textures for both lights.
+
+      OneAxisReadWriteBufferResources Buffers = GetBuffers(LocalMajorAxes, i, Resources);
+      for (int i = 0; i < 4; i++)
+        Buffers.UAVs[i] = RHICreateUnorderedAccessView(Buffers.Buffers[i]);
+
+      ComputeShader->SetParameters(RHICmdList, LocalLightParams, NewLocalLightParams,
+                                   LocalMajorAxes, NewLocalMajorAxes, LocalClippingParameters, i,
+                                   Resources.TFRangeParameters.IntensityDomain);
+
+      // Get group sizes for compute shader
+      uint32 GroupSizeX =
+          FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
+      uint32 GroupSizeY =
+          FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
+
+      for (int j = 0; j < TransposedDimensions.Z; j++) {
+        // Switch read and write buffers each cycle.
+        if (j % 2 == 0) {
+          TransitionBufferResources(RHICmdList, Buffers.Buffers[0], Buffers.UAVs[1]);
+          TransitionBufferResources(RHICmdList, Buffers.Buffers[2], Buffers.UAVs[3]);
+          ComputeShader->SetLoop(RHICmdList, j, Buffers.Buffers[0], readBuffSampler,
+                                 Buffers.UAVs[1], Buffers.Buffers[2], newReadBufferSampler,
+                                 Buffers.UAVs[3]);
+        } else {
+          TransitionBufferResources(RHICmdList, Buffers.Buffers[1], Buffers.UAVs[0]);
+          TransitionBufferResources(RHICmdList, Buffers.Buffers[3], Buffers.UAVs[2]);
+          ComputeShader->SetLoop(RHICmdList, j, Buffers.Buffers[1], readBuffSampler,
+                                 Buffers.UAVs[0], Buffers.Buffers[3], newReadBufferSampler,
+                                 Buffers.UAVs[2]);
+        }
+
+        DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
+      }
+    }
+
+    // Unbind UAVs.
+    ComputeShader->UnbindUAVs(RHICmdList);
+    // Transition resources back to the renderer.
+    RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
+                                  EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
+  }
+
+  void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate & RHICmdList,
+                                           FRHITexture3D * ALightVolumeResource, float ClearValues,
+                                           ERHIFeatureLevel::Type FeatureLevel) {
+    TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+    TShaderMapRef<FClearSingleLightVolumeShader> ComputeShader(GlobalShaderMap);
+
+    RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
+    // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+    // LightVolumeResource);
+    FUnorderedAccessViewRHIRef AVolumeUAV = RHICreateUnorderedAccessView(ALightVolumeResource);
+
+    // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
+    // no race conditions But we definitely need to transition the resource to Compute-shader
+    // accessible, otherwise the renderer might touch our textures while we're writing them.
+    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+                                  EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
+
+    ComputeShader->SetLightVolumeUAV(RHICmdList, AVolumeUAV);
+    ComputeShader->SetParameters(RHICmdList, ClearValues, ALightVolumeResource->GetSizeZ());
+
+    uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)ALightVolumeResource->GetSizeX(),
+                                                NUM_THREADS_PER_GROUP_DIMENSION);
+    uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)ALightVolumeResource->GetSizeY(),
+                                                NUM_THREADS_PER_GROUP_DIMENSION);
+
+    DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
+    ComputeShader->UnbindLightVolumeUAV(RHICmdList);
+
+    RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
+                                  EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
+  }
+
+ // void CreateBasicRaymarchingResources_RenderThread(FRHICommandListImmediate & RHICmdList,
+ //                                                   struct FBasicRaymarchRenderingResources& InParams,
+ //                                                   ERHIFeatureLevel::Type FeatureLevel) {
+ //   unsigned X = InParams.VolumeTextureRef->GetSizeX();
+ //   unsigned Y = InParams.VolumeTextureRef->GetSizeY();
+ //   unsigned Z = InParams.VolumeTextureRef->GetSizeZ();
+
+ // //GEngine->AddOnScreenDebugMessage(-1, 20.0f, FColor::Yellow, "Made some fucking buffers, yo!");
+
+ //   FIntPoint XBufferSize = FIntPoint(Y, Z);
+ //   FIntPoint YBufferSize = FIntPoint(X, Z);
+ //   FIntPoint ZBufferSize = FIntPoint(X, Y);
+
+ //   // TODO! Change format for full-color buffers!
+ //   CreateBufferTexturesAndUAVs(XBufferSize, PF_R32_FLOAT, InParams.XYZReadWriteBuffers[0]);
+ //   CreateBufferTexturesAndUAVs(YBufferSize, PF_R32_FLOAT, InParams.XYZReadWriteBuffers[1]);
+ //   CreateBufferTexturesAndUAVs(ZBufferSize, PF_R32_FLOAT, InParams.XYZReadWriteBuffers[2]);
+
+	//InParams.isInitialized = true;
+ // }
 
 #undef LOCTEXT_NAMESPACE
+  
+    /*
+      double end = FPlatformTime::Seconds();
+      FString text = "Time elapsed before shader & copy creation = ";
+      text += FString::SanitizeFloat(end - start, 6);
+      GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, text);*/
 
-/*
-  double end = FPlatformTime::Seconds();
-  FString text = "Time elapsed before shader & copy creation = ";
-  text += FString::SanitizeFloat(end - start, 6);
-  GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, text);*/
+    // start = FPlatformTime::Seconds();
 
-// start = FPlatformTime::Seconds();
-
-// text = "Time elapsed in shader & copy = ";
-// text += FString::SanitizeFloat(start - end, 6);
-// GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, text);
+    // text = "Time elapsed in shader & copy = ";
+    // text += FString::SanitizeFloat(start - end, 6);
+    // GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, text);

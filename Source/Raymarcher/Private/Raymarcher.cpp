@@ -2,8 +2,7 @@
 // Developed by Tomas Bartipan (tomas.bartipan@tum.de)
 
 #include "Raymarcher.h"
-#include "IPluginManager.h"
-#include "Paths.h"
+#include "Misc/Paths.h"
 
 #define LOCTEXT_NAMESPACE "FRaymarcherModule"
 

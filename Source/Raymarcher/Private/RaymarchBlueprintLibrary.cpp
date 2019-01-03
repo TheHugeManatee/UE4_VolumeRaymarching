@@ -25,13 +25,15 @@ bool dooone = false;
 void URaymarchBlueprintLibrary::AddDirLightToVolumes(
     const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources,
     const FColorVolumesResources ColorResources, const FDirLightParameters LightParameters,
-    const bool Added, const FRaymarchWorldParameters WorldParameters, bool& LightAdded)
-{
+    const bool Added, const FRaymarchWorldParameters WorldParameters, bool& LightAdded) {
   if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
       !Resources.ALightVolumeRef->Resource || !Resources.VolumeTextureRef->Resource->TextureRHI ||
-      !ColorResources.RLightVolumeRef->Resource || !ColorResources.RLightVolumeRef->Resource->TextureRHI ||
-      !ColorResources.GLightVolumeRef->Resource || !ColorResources.GLightVolumeRef->Resource->TextureRHI ||
-      !ColorResources.BLightVolumeRef->Resource || !ColorResources.BLightVolumeRef->Resource->TextureRHI ||
+      !ColorResources.RLightVolumeRef->Resource ||
+      !ColorResources.RLightVolumeRef->Resource->TextureRHI ||
+      !ColorResources.GLightVolumeRef->Resource ||
+      !ColorResources.GLightVolumeRef->Resource->TextureRHI ||
+      !ColorResources.BLightVolumeRef->Resource ||
+      !ColorResources.BLightVolumeRef->Resource->TextureRHI ||
       !Resources.TFTextureRef->Resource->TextureRHI ||
       !Resources.ALightVolumeRef->Resource->TextureRHI) {
     LightAdded = false;
@@ -45,25 +47,27 @@ void URaymarchBlueprintLibrary::AddDirLightToVolumes(
   // Call the actual rendering code on RenderThread.
   ENQUEUE_RENDER_COMMAND(CaptureCommand)
   ([=](FRHICommandListImmediate& RHICmdList) {
-		AddDirLightToLightVolume_RenderThread(RHICmdList, Resources, ColorResources, LightParameters, Added, WorldParameters, FeatureLevel);
+    AddDirLightToLightVolume_RenderThread(RHICmdList, Resources, ColorResources, LightParameters,
+                                          Added, WorldParameters, FeatureLevel);
   });
 }
 
 /** Changes a light in the light volumes.	 */
 void URaymarchBlueprintLibrary::ChangeDirLightInLightVolumes(
-	  const UObject* WorldContextObject,
-	  const FBasicRaymarchRenderingResources Resources,
-	  const FColorVolumesResources ColorResources,
-      const FDirLightParameters OldLightParameters, 
-      const FDirLightParameters NewLightParameters, 
-	  const FRaymarchWorldParameters WorldParameters,
-	  bool& LightAdded) {
+    const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources,
+    const FColorVolumesResources ColorResources, const FDirLightParameters OldLightParameters,
+    const FDirLightParameters NewLightParameters, const FRaymarchWorldParameters WorldParameters,
+    bool& LightAdded) {
   if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
       !Resources.ALightVolumeRef->Resource || !Resources.VolumeTextureRef->Resource->TextureRHI ||
-      !ColorResources.RLightVolumeRef->Resource || !ColorResources.RLightVolumeRef->Resource->TextureRHI ||
-      !ColorResources.GLightVolumeRef->Resource || !ColorResources.GLightVolumeRef->Resource->TextureRHI ||
-      !ColorResources.BLightVolumeRef->Resource || !ColorResources.BLightVolumeRef->Resource->TextureRHI ||
-      !Resources.TFTextureRef->Resource->TextureRHI || !Resources.ALightVolumeRef->Resource->TextureRHI) {
+      !ColorResources.RLightVolumeRef->Resource ||
+      !ColorResources.RLightVolumeRef->Resource->TextureRHI ||
+      !ColorResources.GLightVolumeRef->Resource ||
+      !ColorResources.GLightVolumeRef->Resource->TextureRHI ||
+      !ColorResources.BLightVolumeRef->Resource ||
+      !ColorResources.BLightVolumeRef->Resource->TextureRHI ||
+      !Resources.TFTextureRef->Resource->TextureRHI ||
+      !Resources.ALightVolumeRef->Resource->TextureRHI) {
     LightAdded = false;
     return;
   } else {
@@ -75,7 +79,9 @@ void URaymarchBlueprintLibrary::ChangeDirLightInLightVolumes(
   // Call the actual rendering code on RenderThread.
   ENQUEUE_RENDER_COMMAND(CaptureCommand)
   ([=](FRHICommandListImmediate& RHICmdList) {
-    ChangeDirLightInLightVolume_RenderThread(RHICmdList, Resources, ColorResources, OldLightParameters, NewLightParameters, WorldParameters, FeatureLevel);
+    ChangeDirLightInLightVolume_RenderThread(RHICmdList, Resources, ColorResources,
+                                             OldLightParameters, NewLightParameters,
+                                             WorldParameters, FeatureLevel);
   });
 }
 
@@ -135,9 +141,13 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTexture(const UObject* Wo
   }
 
   // Set volume texture parameters.
+
+#if WITH_EDITORONLY_DATA
   inTexture->MipGenSettings = TMGS_LeaveExistingMips;
-  inTexture->NeverStream = false;
   inTexture->CompressionNone = true;
+#endif
+
+  inTexture->NeverStream = false;
   inTexture->SRGB = false;
 
   // Set PlatformData parameters (create PlatformData if it doesn't exist)
@@ -180,7 +190,7 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTexture(const UObject* Wo
   return;
 }
 
-//void URaymarchBlueprintLibrary::Fill
+// void URaymarchBlueprintLibrary::Fill
 
 /** Creates light volumes with the given dimensions */
 void URaymarchBlueprintLibrary::CreateLightVolumes(
@@ -199,22 +209,25 @@ void URaymarchBlueprintLibrary::CreateLightVolumes(
 
     if (!inTexture) break;
 
-	InitLightVolume(inTexture, Dimensions);
+    InitLightVolume(inTexture, Dimensions);
   }
   return;
 }
 
 void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
                                                 FIntVector Dimensions) {
+  if (!LightVolume) return;
 
-	if (!LightVolume) return;
+  const int TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * 4;
 
-	const int TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * 4;
-
-    // Set volume texture parameters.
+  //todo remove?
+#if WITH_EDITORONLY_DATA
   LightVolume->MipGenSettings = TMGS_LeaveExistingMips;
-  LightVolume->NeverStream = false;
   LightVolume->CompressionNone = true;
+#endif
+
+  // Set volume texture parameters.
+  LightVolume->NeverStream = false;
   LightVolume->SRGB = false;
 
   // Set PlatformData parameters (create PlatformData if it doesn't exist)
@@ -254,38 +267,7 @@ void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
     const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources,
     const FDirLightParameters LightParameters, const bool Added,
     const FRaymarchWorldParameters WorldParameters, bool& LightAdded, FVector& LocalLightDir) {
-
-
-	if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource || !Resources.ALightVolumeRef->Resource ||
-      !Resources.VolumeTextureRef->Resource->TextureRHI || !Resources.TFTextureRef->Resource->TextureRHI ||
-       !Resources.ALightVolumeRef->Resource->TextureRHI) {
-    LightAdded = false;
-    return;
-  } else {
-    LightAdded = true;
-  }
-
-  LocalLightDir = WorldParameters.VolumeTransform.InverseTransformVectorNoScale(LightParameters.LightDirection);
-
-  LocalLightDir.Normalize();
-
-  ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
-
-  // Call the actual rendering code on RenderThread.
-  ENQUEUE_RENDER_COMMAND(CaptureCommand)
-  ([=](FRHICommandListImmediate& RHICmdList) {
-    AddDirLightToSingleLightVolume_RenderThread(
-        RHICmdList, Resources, LightParameters, Added, WorldParameters, FeatureLevel);
-  });
-}
-
-void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
-    const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources,
-    const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
-    const FRaymarchWorldParameters WorldParameters,  bool& LightAdded, FVector& LocalLightDir) {
-
-	 
-	if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
+  if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
       !Resources.ALightVolumeRef->Resource || !Resources.VolumeTextureRef->Resource->TextureRHI ||
       !Resources.TFTextureRef->Resource->TextureRHI ||
       !Resources.ALightVolumeRef->Resource->TextureRHI) {
@@ -296,7 +278,7 @@ void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
   }
 
   LocalLightDir =
-      WorldParameters.VolumeTransform.InverseTransformVectorNoScale(NewLightParameters.LightDirection);
+      WorldParameters.VolumeTransform.InverseTransformVectorNoScale(LightParameters.LightDirection);
 
   LocalLightDir.Normalize();
 
@@ -305,27 +287,53 @@ void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
   // Call the actual rendering code on RenderThread.
   ENQUEUE_RENDER_COMMAND(CaptureCommand)
   ([=](FRHICommandListImmediate& RHICmdList) {
-    ChangeDirLightInSingleLightVolume_RenderThread(
-        RHICmdList, Resources, OldLightParameters, NewLightParameters, WorldParameters, FeatureLevel);
+    AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, LightParameters, Added,
+                                                WorldParameters, FeatureLevel);
   });
+}
 
+void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
+    const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources,
+    const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
+    const FRaymarchWorldParameters WorldParameters, bool& LightAdded, FVector& LocalLightDir) {
+  if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
+      !Resources.ALightVolumeRef->Resource || !Resources.VolumeTextureRef->Resource->TextureRHI ||
+      !Resources.TFTextureRef->Resource->TextureRHI ||
+      !Resources.ALightVolumeRef->Resource->TextureRHI) {
+    LightAdded = false;
+    return;
+  } else {
+    LightAdded = true;
+  }
+
+  LocalLightDir = WorldParameters.VolumeTransform.InverseTransformVectorNoScale(
+      NewLightParameters.LightDirection);
+
+  LocalLightDir.Normalize();
+
+  ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
+
+  // Call the actual rendering code on RenderThread.
+  ENQUEUE_RENDER_COMMAND(CaptureCommand)
+  ([=](FRHICommandListImmediate& RHICmdList) {
+    ChangeDirLightInSingleLightVolume_RenderThread(RHICmdList, Resources, OldLightParameters,
+                                                   NewLightParameters, WorldParameters,
+                                                   FeatureLevel);
+  });
 }
 
 void URaymarchBlueprintLibrary::ClearSingleLightVolume(const UObject* WorldContextObject,
                                                        UVolumeTexture* ALightVolume,
                                                        float ClearValue) {
+  ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
 
-	ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
-
-	FRHITexture3D* ALightVolumeResource = ALightVolume->Resource->TextureRHI->GetTexture3D();
+  FRHITexture3D* ALightVolumeResource = ALightVolume->Resource->TextureRHI->GetTexture3D();
 
   // Call the actual rendering code on RenderThread.
   ENQUEUE_RENDER_COMMAND(CaptureCommand)
   ([ALightVolumeResource, ClearValue, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
-    ClearSingleLightVolume_RenderThread(RHICmdList, ALightVolumeResource, ClearValue,
-                                   FeatureLevel);
+    ClearSingleLightVolume_RenderThread(RHICmdList, ALightVolumeResource, ClearValue, FeatureLevel);
   });
-
 }
 
 void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
@@ -450,28 +458,31 @@ void URaymarchBlueprintLibrary::ExportColorCurveToTexture(const UObject* WorldCo
     FMemory::Memcpy(samples + (i * sampleCount * 4), samples, sampleCount * 4 * 2);
   }
 
-  Create2DTextureAsset(TextureName, PF_FloatRGBA, FIntPoint(sampleCount, TextureHeight), (uint8*)samples,
-                       true);
+  Create2DTextureAsset(TextureName, PF_FloatRGBA, FIntPoint(sampleCount, TextureHeight),
+                       (uint8*)samples, true);
 
   delete[] samples;  // Don't forget to free the memory here
   return;
 }
-void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(const UObject* WorldContextObject, UCurveLinearColor* Curve,
-                               UTexture2D* Texture, FTransferFunctionRangeParameters parameters)
-{
+void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(
+    const UObject* WorldContextObject, UCurveLinearColor* Curve, UTexture2D* Texture,
+    FTransferFunctionRangeParameters parameters) {
+  if (parameters.IntensityDomain.Y <= parameters.IntensityDomain.X ||
+      parameters.Cutoffs.Y <= parameters.Cutoffs.X) {
+    CustomLog(WorldContextObject,
+              "Failed creating TF texture because of nonsense cutoff parameters.", 10);
+    return;
+  }
 
-	if (parameters.IntensityDomain.Y <= parameters.IntensityDomain.X || parameters.Cutoffs.Y <= parameters.Cutoffs.X) {
-		CustomLog(WorldContextObject, "Failed creating TF texture because of nonsense cutoff parameters.", 10);
-		return;
-	}
-
-	// Sanity check
+  // Sanity check
   parameters.IntensityDomain.X = FMath::Clamp(parameters.IntensityDomain.X, 0.0f, 1.0f);
   parameters.IntensityDomain.Y = FMath::Clamp(parameters.IntensityDomain.Y, 0.0f, 1.0f);
-  parameters.Cutoffs.X = FMath::Clamp(parameters.Cutoffs.X, parameters.IntensityDomain.X, parameters.IntensityDomain.Y);
-  parameters.Cutoffs.Y = FMath::Clamp(parameters.Cutoffs.Y, parameters.IntensityDomain.X, parameters.IntensityDomain.Y);
+  parameters.Cutoffs.X = FMath::Clamp(parameters.Cutoffs.X, parameters.IntensityDomain.X,
+                                      parameters.IntensityDomain.Y);
+  parameters.Cutoffs.Y = FMath::Clamp(parameters.Cutoffs.Y, parameters.IntensityDomain.X,
+                                      parameters.IntensityDomain.Y);
 
-	// Using float16 format because RGBA8 wouldn't be persistent for some reason.
+  // Using float16 format because RGBA8 wouldn't be persistent for some reason.
   const unsigned sampleCount = 1000;
 
   // Give the texture some height, so it can be inspected in the asset editor.
@@ -483,44 +494,42 @@ void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(const UObject* WorldCo
 
   // Position in original TF space.
   float position = parameters.IntensityDomain.X;
-  float step = range / ((float)sampleCount - 1); // -1 ?
+  float step = range / ((float)sampleCount - 1);  // -1 ?
   unsigned i = 0;
   FLinearColor picked;
 
   // Fill the low end of the transfer function
   if (parameters.Cutoffs.X > parameters.IntensityDomain.X) {
+    picked = FLinearColor(0, 0, 0, 0);
+    // for cutting off with clamp instead of clear
+    if (parameters.LowCutMode == FTransferFunctionCutoffMode::TF_Clamp) {
+      // Get color at bottom cutoff
+      picked = Curve->GetLinearColorValue(parameters.Cutoffs.X);
+    }
 
-	  picked= FLinearColor(0,0,0,0);
-      // for cutting off with clamp instead of clear
-	  if (parameters.LowCutMode == FTransferFunctionCutoffMode::TF_Clamp) {
-		   // Get color at bottom cutoff
-		  picked = Curve->GetLinearColorValue(parameters.Cutoffs.X);
-	  }
-
-	  for (i = 0; i < parameters.Cutoffs.X * sampleCount; i++) {
-		  samples[i * 4] = picked.R;
-		  samples[i * 4 + 1] = picked.G;
-		  samples[i * 4 + 2] = picked.B;
-		  samples[i * 4 + 3] = picked.A;
-	  }
-		// After cutoff, set current position in original TF space
-	  position = parameters.Cutoffs.X;
+    for (i = 0; i < parameters.Cutoffs.X * sampleCount; i++) {
+      samples[i * 4] = picked.R;
+      samples[i * 4 + 1] = picked.G;
+      samples[i * 4 + 2] = picked.B;
+      samples[i * 4 + 3] = picked.A;
+    }
+    // After cutoff, set current position in original TF space
+    position = parameters.Cutoffs.X;
   }
 
-   // Fill the center of the Transfer function
+  // Fill the center of the Transfer function
   for (position; position < parameters.Cutoffs.Y; position += step) {
-	picked = Curve->GetLinearColorValue(position);
+    picked = Curve->GetLinearColorValue(position);
     samples[i * 4] = picked.R;
     samples[i * 4 + 1] = picked.G;
     samples[i * 4 + 2] = picked.B;
     samples[i * 4 + 3] = picked.A;
-	i++;
+    i++;
   }
 
-    // Fill the cutoff high end of the transfer function
+  // Fill the cutoff high end of the transfer function
   if (parameters.Cutoffs.Y < parameters.IntensityDomain.Y) {
-    
-	// Only clear picked if we're clamping by clearing.
+    // Only clear picked if we're clamping by clearing.
     if (parameters.LowCutMode == FTransferFunctionCutoffMode::TF_Clear) {
       // Get color at bottom cutoff
       picked = FLinearColor(0, 0, 0, 0);
@@ -536,38 +545,67 @@ void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(const UObject* WorldCo
     position = parameters.Cutoffs.X;
   }
 
-//  assert(i == sampleCount);
+  //  assert(i == sampleCount);
 
   for (unsigned i = 1; i < TextureHeight; i++) {
     FMemory::Memcpy(samples + (i * sampleCount * 4), samples, sampleCount * 4 * 2);
   }
 
-  Update2DTextureAsset(Texture, PF_FloatRGBA, FIntPoint(sampleCount, TextureHeight), (uint8*)samples);
+  Update2DTextureAsset(Texture, PF_FloatRGBA, FIntPoint(sampleCount, TextureHeight),
+                       (uint8*)samples);
 
   delete[] samples;  // Don't forget to free the memory here
   return;
 }
 
-void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
-    const UObject* WorldContextObject, UVolumeTexture* Volume, UVolumeTexture* ALightVolume, UTexture2D* TransferFunction,
-    FTransferFunctionRangeParameters TFRangeParams,
-    struct FBasicRaymarchRenderingResources& OutParameters) {
+void CreateBufferTexturesAndUAVs(FIntPoint Size, EPixelFormat PixelFormat,
+                                 OneAxisReadWriteBufferResources& RWBuffers) {
+  FRHIResourceCreateInfo CreateInfo(FClearValueBinding::Transparent);
+  for (int i = 0; i < 4; i++) {
+    RWBuffers.Buffers[i] = RHICreateTexture2D(Size.X, Size.Y, PixelFormat, 1, 1,
+                                              TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
+  }
+}
 
+void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
+    const UObject* WorldContextObject, UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
+    UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFRangeParams,
+    const bool ColoredLightSupport,
+    struct FBasicRaymarchRenderingResources& OutParameters) {
   OutParameters.VolumeTextureRef = Volume;
   OutParameters.ALightVolumeRef = ALightVolume;
-  InitLightVolume(ALightVolume, FIntVector(Volume->GetSizeX(),Volume->GetSizeY(),Volume->GetSizeZ()));
+  OutParameters.TFTextureRef = TransferFunction;
 
-  OutParameters.TFTextureRef= TransferFunction;
-  
-  ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
+  unsigned X = Volume->GetSizeX();
+  unsigned Y = Volume->GetSizeY();
+  unsigned Z = Volume->GetSizeZ();
 
-  // Call the actual rendering code on RenderThread.
-  ENQUEUE_RENDER_COMMAND(CaptureCommand)
-  ([&OutParameters, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
-    CreateBasicRaymarchingResources_RenderThread( RHICmdList, OutParameters, FeatureLevel);
-  });
+  // Initialize the Alpha Light volume
+  InitLightVolume(ALightVolume, FIntVector(X, Y, Z));
 
+  // GEngine->AddOnScreenDebugMessage(-1, 20.0f, FColor::Yellow, "Made some fucking buffers, yo!");
 
+  FIntPoint XBufferSize = FIntPoint(Y, Z);
+  FIntPoint YBufferSize = FIntPoint(X, Z);
+  FIntPoint ZBufferSize = FIntPoint(X, Y);
+
+  // Make buffers fully colored if we need to support colored lights.
+  EPixelFormat PixelFormat = (ColoredLightSupport ? PF_A32B32G32R32F : PF_R32_FLOAT);
+
+  CreateBufferTexturesAndUAVs(XBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[0]);
+  CreateBufferTexturesAndUAVs(YBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[1]);
+  CreateBufferTexturesAndUAVs(ZBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[2]);
+
+  OutParameters.isInitialized = true;
+  OutParameters.supportsColor = ColoredLightSupport;
+
+  // ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
+
+  //// Call the actual rendering code on RenderThread.
+  // ENQUEUE_RENDER_COMMAND(CaptureCommand)
+  //([&OutParameters, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
+  //  CreateBasicRaymarchingResources_RenderThread( RHICmdList, OutParameters, FeatureLevel);
+  //});
 }
 
 void URaymarchBlueprintLibrary::CreateLightVolumeAsset(const UObject* WorldContextObject,

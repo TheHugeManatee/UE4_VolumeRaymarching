@@ -5,19 +5,19 @@
 
 #include "CoreMinimal.h"
 
-#include "Classes/Engine/TextureRenderTarget2D.h"
-#include "Classes/Engine/VolumeTexture.h"
-#include "Classes/Engine/World.h"
-#include "Classes/Kismet/BlueprintFunctionLibrary.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Engine/VolumeTexture.h"
+#include "Engine/World.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
 #include "Engine.h"
-#include "Public/GlobalShader.h"
-#include "Public/Internationalization/Internationalization.h"
-#include "Public/Logging/MessageLog.h"
-#include "Public/PipelineStateCache.h"
-#include "Public/RHIStaticStates.h"
-#include "Public/SceneInterface.h"
-#include "Public/SceneUtils.h"
-#include "Public/ShaderParameterUtils.h"
+#include "GlobalShader.h"
+#include "Internationalization/Internationalization.h"
+#include "Logging/MessageLog.h"
+#include "PipelineStateCache.h"
+#include "RHIStaticStates.h"
+#include "SceneInterface.h"
+#include "SceneUtils.h"
+#include "ShaderParameterUtils.h"
 #include "UObject/ObjectMacros.h"
 
 #include <algorithm>  // std::sort
@@ -92,12 +92,11 @@ USTRUCT(BlueprintType) struct FTransferFunctionRangeParameters {
     , HighCutMode(FTransferFunctionCutoffMode::TF_Clamp){};
 };
 
-// A structure for 2 switchable read-write buffers. Used for one axis.
+// A structure for 4 switchable read-write buffers. Used for one axis. Need 2 pairs for change-light
+// shader.
 struct OneAxisReadWriteBufferResources {
-  FTextureRHIRef Texture1;
-  FTextureRHIRef Texture2;
-  FUnorderedAccessViewRHIParamRef Texture1UAV;
-  FUnorderedAccessViewRHIParamRef Texture2UAV;
+  FTexture2DRHIRef Buffers[4];
+  FUnorderedAccessViewRHIParamRef UAVs[4];
 };
 
 USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
@@ -105,10 +104,16 @@ USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
 
   // Flag that these Rendering Resources have been initialized and can be used.
   UPROPERTY(BlueprintReadOnly, Category = "Basic Raymarch Rendering Resources") bool isInitialized;
-  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources") UVolumeTexture* VolumeTextureRef;
-  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources") UTexture2D* TFTextureRef;
-  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources") UVolumeTexture* ALightVolumeRef;
-  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources") FTransferFunctionRangeParameters TFRangeParameters;
+  UPROPERTY(BlueprintReadOnly, Category = "Basic Raymarch Rendering Resources") bool supportsColor;
+
+  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources")
+  UVolumeTexture* VolumeTextureRef;
+  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources")
+  UTexture2D* TFTextureRef;
+  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources")
+  UVolumeTexture* ALightVolumeRef;
+  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources")
+  FTransferFunctionRangeParameters TFRangeParameters;
   // Not visible in BPs.
   FUnorderedAccessViewRHIParamRef ALightVolumeUAVRef;
   OneAxisReadWriteBufferResources XYZReadWriteBuffers[3];
@@ -117,12 +122,13 @@ USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
 USTRUCT(BlueprintType) struct FRaymarchWorldParameters {
   GENERATED_BODY()
 
-	  UPROPERTY(BlueprintReadWrite, Category = "Raymarch Rendering World Parameters") FTransform VolumeTransform;
-  UPROPERTY(BlueprintReadWrite, Category = "Raymarch Rendering World Parameters") FClippingPlaneParameters ClippingPlaneParameters;
-  UPROPERTY(BlueprintReadWrite, Category = "Raymarch Rendering World Parameters") FVector MeshMaxBounds;
-
+  UPROPERTY(BlueprintReadWrite, Category = "Raymarch Rendering World Parameters")
+  FTransform VolumeTransform;
+  UPROPERTY(BlueprintReadWrite, Category = "Raymarch Rendering World Parameters")
+  FClippingPlaneParameters ClippingPlaneParameters;
+  UPROPERTY(BlueprintReadWrite, Category = "Raymarch Rendering World Parameters")
+  FVector MeshMaxBounds;
 };
-
 
 USTRUCT(BlueprintType) struct FColorVolumesResources {
   GENERATED_BODY()
@@ -137,7 +143,6 @@ USTRUCT(BlueprintType) struct FColorVolumesResources {
   FUnorderedAccessViewRHIParamRef BLightVolumeUAVRef;
   // Read/Write buffer structs for going along X,Y and Z axes.
 };
-
 
 // Enum for indexes for cube faces - used to discern axes for light propagation shader.
 enum FCubeFace : int {
@@ -341,8 +346,7 @@ public:
     LocalClippingCenter.Bind(Initializer.ParameterMap, TEXT("LocalClippingCenter"));
     LocalClippingDirection.Bind(Initializer.ParameterMap, TEXT("LocalClippingDirection"));
 
-	TFIntensityDomain.Bind(Initializer.ParameterMap, TEXT("TFIntensityDomain"));
-
+    TFIntensityDomain.Bind(Initializer.ParameterMap, TEXT("TFIntensityDomain"));
   }
 
   // Sets loop-dependent uniforms in the pipeline.
@@ -408,7 +412,6 @@ public:
     SetShaderValue(RHICmdList, ShaderRHI, LocalClippingCenter, LocalClippingParams.Center);
     SetShaderValue(RHICmdList, ShaderRHI, LocalClippingDirection, LocalClippingParams.Direction);
     SetShaderValue(RHICmdList, ShaderRHI, TFIntensityDomain, TFDomain);
-
   }
 
   virtual bool Serialize(FArchive& Ar) override {
@@ -605,15 +608,21 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat);
 
-void AddDirLightToLightVolume_RenderThread (
-    FRHICommandListImmediate& RHICmdList, const FBasicRaymarchRenderingResources Resources,
-    const FColorVolumesResources ColorResources, const FDirLightParameters LightParameters,
-    const bool Added, const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel);
+void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
+                                           const FBasicRaymarchRenderingResources Resources,
+                                           const FColorVolumesResources ColorResources,
+                                           const FDirLightParameters LightParameters,
+                                           const bool Added,
+                                           const FRaymarchWorldParameters WorldParameters,
+                                           ERHIFeatureLevel::Type FeatureLevel);
 
-void ChangeDirLightInLightVolume_RenderThread(
-    FRHICommandListImmediate& RHICmdList, const FBasicRaymarchRenderingResources Resources, const FColorVolumesResources ColorResources,
-    const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
-    const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel);
+void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
+                                              const FBasicRaymarchRenderingResources Resources,
+                                              const FColorVolumesResources ColorResources,
+                                              const FDirLightParameters OldLightParameters,
+                                              const FDirLightParameters NewLightParameters,
+                                              const FRaymarchWorldParameters WorldParameters,
+                                              ERHIFeatureLevel::Type FeatureLevel);
 
 void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
                                     FRHITexture3D* RLightVolumeResource,
@@ -632,8 +641,7 @@ void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICm
 void ChangeDirLightInSingleLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, const FBasicRaymarchRenderingResources Resources,
     const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
-    const FRaymarchWorldParameters WorldParameters,
-    ERHIFeatureLevel::Type FeatureLevel);
+    const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel);
 
 void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                          FRHITexture3D* ALightVolumeResource, float ClearValue,
@@ -775,7 +783,7 @@ public:
     LocalClippingCenter.Bind(Initializer.ParameterMap, TEXT("LocalClippingCenter"));
     LocalClippingDirection.Bind(Initializer.ParameterMap, TEXT("LocalClippingDirection"));
 
-	TFIntensityDomain.Bind(Initializer.ParameterMap, TEXT("TFIntensityDomain"));
+    TFIntensityDomain.Bind(Initializer.ParameterMap, TEXT("TFIntensityDomain"));
   }
 
   // Sets loop-dependent uniforms in the pipeline.
@@ -840,10 +848,8 @@ public:
     SetShaderValue(RHICmdList, ShaderRHI, LocalClippingCenter, LocalClippingParams.Center);
     SetShaderValue(RHICmdList, ShaderRHI, LocalClippingDirection, LocalClippingParams.Direction);
     SetShaderValue(RHICmdList, ShaderRHI, TFIntensityDomain, TFDomain);
-
   }
   virtual bool Serialize(FArchive& Ar) override {
-
     bool bShaderHasOutdatedParameters = FGenericSingleLightVolumeShader::Serialize(Ar);
     Ar << Volume << VolumeSampler << TransferFunc << TransferFuncSampler << LightPosition
        << LightIntensity << Axis << Weight << ReadBuffer << ReadBufferSampler << WriteBuffer << Loop
@@ -910,7 +916,8 @@ public:
     SetShaderValue(RHICmdList, ShaderRHI, bAddedParam, LightAdded ? 1 : -1);
 
     FDirLightSingleVolumeParentShader::SetParameters(RHICmdList, ShaderRHI, LocalLightParams,
-                                                     LocalClippingParams, MajorAxes, AxisIndex, TFDomain);
+                                                     LocalClippingParams, MajorAxes, AxisIndex,
+                                                     TFDomain);
   }
 
   virtual bool Serialize(FArchive& Ar) override {
@@ -1003,7 +1010,6 @@ private:
   FShaderParameter NewWeight;
 };
 
-
-static void CreateBasicRaymarchingResources_RenderThread(FRHICommandListImmediate& RHICmdList, 
-	FBasicRaymarchRenderingResources& InParams, 
-	ERHIFeatureLevel::Type FeatureLevel);
+static void CreateBasicRaymarchingResources_RenderThread(
+    FRHICommandListImmediate& RHICmdList, struct FBasicRaymarchRenderingResources& InParams,
+    ERHIFeatureLevel::Type FeatureLevel);
