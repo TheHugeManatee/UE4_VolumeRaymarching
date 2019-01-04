@@ -2,10 +2,6 @@
 #include "DirLightCommon.usf"
 // Thx Temaran for original HLSL & usage example
 
-/**
-	Uniform Buffers have been replaced by regular shader parameters, as most are subject to change between calls.
-*/
-
 RWTexture3D<float> RLightVolume;
 RWTexture3D<float> GLightVolume;
 RWTexture3D<float> BLightVolume;
