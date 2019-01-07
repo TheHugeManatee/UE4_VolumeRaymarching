@@ -2,13 +2,13 @@
 
 // Thx Temaran for original HLSL & usage example
 
-RWTexture3D<uint> MarkedVolume;
+RWTexture3D<float> MarkedVolume;
 
 int3 CuboidCenter;
 
 int3 CuboidSize;
 
-uint WrittenValue;
+float WrittenValue;
 
 [numthreads(1, 1, 1)]
 void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)

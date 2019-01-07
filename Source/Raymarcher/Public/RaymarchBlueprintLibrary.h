@@ -95,9 +95,15 @@ public:
 
   /** Clears a light volume. */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
-            meta = (WorldContext = "WorldContextObject"))
-  static void ClearSingleLightVolume(const UObject* WorldContextObject,
-                                     UVolumeTexture* ALightVolume, float ClearValue);
+	  meta = (WorldContext = "WorldContextObject"))
+	  static void ClearSingleLightVolume(const UObject* WorldContextObject,
+		  UVolumeTexture* ALightVolume, float ClearValue);
+
+  /** Clears a light volume. */
+  UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
+	  meta = (WorldContext = "WorldContextObject"))
+	  static void ClearResourceLightVolumes(const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources, float ClearValue);
+
 
   /** Creates a Float32 volume texture asset and fills it with all-zeros. If an asset with the same
    * name already exists, overwrites it.*/
@@ -189,6 +195,14 @@ public:
 
   /** Logs a string to the on-screen debug messages */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
-            meta = (WorldContext = "WorldContextObject"))
-  static void CustomLog(const UObject* WorldContextObject, FString LoggedString, float Duration);
+	  meta = (WorldContext = "WorldContextObject"))
+	  static void CustomLog(const UObject* WorldContextObject, FString LoggedString, float Duration);
+
+
+  /** Logs a string to the on-screen debug messages */
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher",
+	  meta = (WorldContext = "WorldContextObject"))
+	  static void GetVolumeTextureDimensions(const UObject* WorldContextObject, UVolumeTexture* Texture, FIntVector& Dimensions);
+
+
 };

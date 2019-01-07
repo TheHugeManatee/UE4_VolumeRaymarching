@@ -17,6 +17,7 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 {
     for (int i = 0; i <= ZSize; i++)
     {
+
         ALightVolume[int3(ThreadId.x, ThreadId.y, i)] = AClearValue;
     }
 }

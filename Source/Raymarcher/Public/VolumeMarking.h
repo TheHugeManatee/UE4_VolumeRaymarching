@@ -37,14 +37,14 @@ public:
     SetUAVParameter(RHICmdList, ShaderRHI, MarkedVolume, pMarkedVolume);
   }
 
-  void SetParameters(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FIntVector pCuboidCenter, FIntVector pCuboidSize, unsigned pWrittenValue)
+  void SetParameters(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FIntVector pCuboidCenter, FIntVector pCuboidSize, float pWrittenValue)
   {
 	  SetShaderValue(RHICmdList, ShaderRHI, CuboidCenter, pCuboidCenter);
 	  SetShaderValue(RHICmdList, ShaderRHI, CuboidSize, pCuboidSize);
 	  SetShaderValue(RHICmdList, ShaderRHI, WrittenValue, pWrittenValue);
   }
 
-  virtual void UnbindMarkedVolumeUAV(FRHICommandListImmediate& RHICmdList,
+  void UnbindMarkedVolumeUAV(FRHICommandListImmediate& RHICmdList,
                                      FComputeShaderRHIParamRef ShaderRHI) {
     // Unbind the UAVs.
     SetUAVParameter(RHICmdList, ShaderRHI, MarkedVolume, FUnorderedAccessViewRHIParamRef());
@@ -66,7 +66,7 @@ protected:
   FShaderParameter WrittenValue;
 };
 
-void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRHITexture3D * MarkedVolume, FVector BrushWorldCenter, FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, unsigned WrittenValue);
+void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRHITexture3D * MarkedVolume, const FVector BrushWorldCenter, const FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, float WrittenValue);
 
 
 // Actual blueprint library follows
@@ -76,12 +76,12 @@ class UVolumeMarkingLibrary : public UBlueprintFunctionLibrary {
 public:
 
 	///** Writes specified value into a volume at a cuboid specified in world coordinates. */
-	//UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
-	//	meta = (WorldContext = "WorldContextObject"))
-	//	static void CreateMarkingVolume(UVolumeTexture* MarkedVolume, FVector BrushWorldCenter, FVector BrushWorldSize);
+	UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
+		meta = (WorldContext = "WorldContextObject"))
+		static void CreateMarkingVolume(FIntVector Dimensions, FString AssetName, UVolumeTexture*& OutTexture);
 
 	/** Writes specified value into a volume at a cuboid specified in world coordinates. */
 	UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
 		meta = (WorldContext = "WorldContextObject"))
-	static void MarkCuboidInVolumeWorld(UVolumeTexture* MarkedVolume, FVector BrushWorldCenter, FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, int WrittenValue);
+	static void MarkCuboidInVolumeWorld(UVolumeTexture* MarkedVolume, FVector BrushWorldCenter, FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, float WrittenValue);
 };

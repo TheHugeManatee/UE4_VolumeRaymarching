@@ -735,7 +735,7 @@ public:
 
   virtual bool Serialize(FArchive& Ar) override {
     bool bShaderHasOutdatedParameters = FGenericSingleLightVolumeShader::Serialize(Ar);
-    Ar << AClearValue;
+    Ar << AClearValue << ZSize;
     return bShaderHasOutdatedParameters;
   }
 

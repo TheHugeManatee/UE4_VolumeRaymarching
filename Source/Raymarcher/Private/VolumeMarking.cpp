@@ -11,22 +11,24 @@
 IMPLEMENT_SHADER_TYPE(, FWriteCuboidToVolumeShader, TEXT("/Plugin/VolumeRaymarching/Private/WriteCuboidShader.usf"),
                       TEXT("MainComputeShader"), SF_Compute)
 
-void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRHITexture3D * MarkedVolume, FVector BrushWorldCenter, FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, unsigned WrittenValue)
+void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRHITexture3D * MarkedVolume, const FVector BrushWorldCenter, const FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, float WrittenValue)
 {
 	// Get local center.
 	FVector localCenter = ((WorldParameters.VolumeTransform.InverseTransformPosition(BrushWorldCenter) /
 		(WorldParameters.MeshMaxBounds)) / 2.0) + 0.5;
 	// Get local center in integer space
 
-	int x = localCenter.X * MarkedVolume->GetSizeX();
-	int y = localCenter.Y * MarkedVolume->GetSizeY();
-	int z = localCenter.Z * MarkedVolume->GetSizeZ();
+	int32 x = localCenter.X * MarkedVolume->GetSizeX();
+	int32 y = localCenter.Y * MarkedVolume->GetSizeY();
+	int32 z = localCenter.Z * MarkedVolume->GetSizeZ();
 
-	FString kkt = "a " + localCenter.ToString() + ", local = " + FString::FromInt(x)+ " " + FString::FromInt(y) + " "+ FString::FromInt(z);
+
+	FIntVector localCenterIntCoords;
+	localCenterIntCoords.X = x; localCenterIntCoords.Y = y; localCenterIntCoords.Z = z;
+
+	FString kkt = "a " + localCenter.ToString() + ", local = " + FString::FromInt(x)+ " " + FString::FromInt(y) + " "+ FString::FromInt(z) + ", local intvec = " + localCenterIntCoords.ToString();
 
 	GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, kkt);
-
-	FIntVector localCenterIntCoords(x, y, z);
 	
 	// Get shader ref from GlobalShaderMap
 	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
@@ -37,14 +39,16 @@ void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRH
 	FUnorderedAccessViewRHIRef MarkedVolumeUAV = RHICreateUnorderedAccessView(MarkedVolume);
 	
 	// Transfer from gfx to compute, otherwise the renderer might touch our textures while we're writing them.
-	RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
+	RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier,
 		EResourceTransitionPipeline::EGfxToCompute, MarkedVolumeUAV);
+
+	FIntVector brush = FIntVector(BrushWorldSize);
 
 	FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
 	ComputeShader->SetMarkedVolumeUAV(RHICmdList, cs, MarkedVolumeUAV);
-	ComputeShader->SetParameters(RHICmdList, cs, localCenterIntCoords, FIntVector(7, 7, 7), WrittenValue);
+	ComputeShader->SetParameters(RHICmdList, cs, localCenterIntCoords, brush, WrittenValue);
 
-	DispatchComputeShader(RHICmdList, *ComputeShader, 7, 7, 7);
+	DispatchComputeShader(RHICmdList, *ComputeShader, BrushWorldSize.X, BrushWorldSize.Y, BrushWorldSize.Z);
 	
 	ComputeShader->UnbindMarkedVolumeUAV(RHICmdList, cs);
 
@@ -53,7 +57,24 @@ void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRH
 }
 
 
-void UVolumeMarkingLibrary::MarkCuboidInVolumeWorld(UVolumeTexture* MarkedVolume, FVector BrushWorldCenter, FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, int WrittenValue)
+void UVolumeMarkingLibrary::CreateMarkingVolume(FIntVector Dimensions, FString AssetName, UVolumeTexture*& OutTexture)
+{
+	int TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * 4;
+	uint8* dummy = (uint8*)FMemory::Malloc(TotalSize);
+	FMemory::Memset(dummy, 0, TotalSize);
+
+	if (CreateVolumeTextureAsset(AssetName, PF_R32_FLOAT, Dimensions, dummy, false, true, &OutTexture))
+	{
+		GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, "Marking volume created succesfuly");
+	}
+	else {
+		GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, "Failed creating the marking volume.");
+	}
+
+	FMemory::Free(dummy);
+}
+
+void UVolumeMarkingLibrary::MarkCuboidInVolumeWorld(UVolumeTexture* MarkedVolume, const FVector BrushWorldCenter, const FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, const float WrittenValue)
 {
 	if (MarkedVolume->Resource == NULL) return;
 	// Call the actual rendering code on RenderThread.

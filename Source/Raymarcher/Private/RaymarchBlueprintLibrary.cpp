@@ -323,17 +323,31 @@ void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
 }
 
 void URaymarchBlueprintLibrary::ClearSingleLightVolume(const UObject* WorldContextObject,
-                                                       UVolumeTexture* ALightVolume,
-                                                       float ClearValue) {
-  ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
+	UVolumeTexture* ALightVolume,
+	float ClearValue) {
+	ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
 
-  FRHITexture3D* ALightVolumeResource = ALightVolume->Resource->TextureRHI->GetTexture3D();
+	FRHITexture3D* ALightVolumeResource = ALightVolume->Resource->TextureRHI->GetTexture3D();
 
-  // Call the actual rendering code on RenderThread.
-  ENQUEUE_RENDER_COMMAND(CaptureCommand)
-  ([ALightVolumeResource, ClearValue, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
-    ClearSingleLightVolume_RenderThread(RHICmdList, ALightVolumeResource, ClearValue, FeatureLevel);
-  });
+	// Call the actual rendering code on RenderThread.
+	ENQUEUE_RENDER_COMMAND(CaptureCommand)
+		([ALightVolumeResource, ClearValue, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
+		ClearSingleLightVolume_RenderThread(RHICmdList, ALightVolumeResource, ClearValue, FeatureLevel);
+	});
+}
+
+
+void URaymarchBlueprintLibrary::ClearResourceLightVolumes(const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources, float ClearValue) 
+{
+	ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
+
+	FRHITexture3D* ALightVolumeResource = Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D();
+
+	// Call the actual rendering code on RenderThread.
+	ENQUEUE_RENDER_COMMAND(CaptureCommand)
+		([ALightVolumeResource, ClearValue, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
+		ClearSingleLightVolume_RenderThread(RHICmdList, ALightVolumeResource, ClearValue, FeatureLevel);
+	});
 }
 
 void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
@@ -652,6 +666,17 @@ void URaymarchBlueprintLibrary::ReadTransferFunctionFromFile(const UObject* Worl
 void URaymarchBlueprintLibrary::CustomLog(const UObject* WorldContextObject, FString LoggedString,
                                           float Duration) {
   GEngine->AddOnScreenDebugMessage(-1, Duration, FColor::Yellow, LoggedString);
+}
+
+void URaymarchBlueprintLibrary::GetVolumeTextureDimensions(const UObject* WorldContextObject, UVolumeTexture* Texture, FIntVector& Dimensions)
+{
+	if (Texture && Texture->Resource) {
+		// This is slightly retarded...
+		Dimensions = Texture->Resource->TextureRHI->GetTexture3D()->GetSizeXYZ();
+	}
+	else {
+		Dimensions = FIntVector(0,0,0);
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

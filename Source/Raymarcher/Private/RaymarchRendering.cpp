@@ -92,11 +92,11 @@ void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVec
 bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntVector Dimensions,
                               uint8* BulkData, bool SaveNow, bool UAVCompatible,
                               UVolumeTexture** pOutCreatedTexture) {
-  ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
+  //ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
 
-  if (TextureSourceFormat == TSF_Invalid) {
-    return false;
-  }
+  //if (TextureSourceFormat == TSF_Invalid) {
+  //  return false;
+  //}
 
   int TotalSize =
       Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
@@ -116,7 +116,11 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
   NewTexture->PlatformData->NumSlices = Dimensions.Z;
   NewTexture->PlatformData->PixelFormat = PixelFormat;
 
-  NewTexture->SRGB = false;
+  NewTexture->MipGenSettings = TMGS_LeaveExistingMips;
+
+  // Set volume texture parameters.
+  NewTexture->NeverStream = false;
+  NewTexture->SRGB = false; 
 
   FTexture2DMipMap* Mip = new (NewTexture->PlatformData->Mips) FTexture2DMipMap();
   Mip->SizeX = Dimensions.X;
@@ -130,12 +134,11 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 
   Mip->BulkData.Unlock();
 
-  if (UAVCompatible) {
-    NewTexture->bUAVCompatible = true;
-  }
+  NewTexture->bUAVCompatible = UAVCompatible;
+
 #if WITH_EDITORONLY_DATA
-  NewTexture->Source.Init(Dimensions.X, Dimensions.Y, Dimensions.Z, 1, TextureSourceFormat,
-                          ByteArray);
+//  NewTexture->Source.Init(Dimensions.X, Dimensions.Y, Dimensions.Z, 1, TextureSourceFormat,
+//                          ByteArray);
 #endif
   NewTexture->UpdateResource();
   Package->MarkPackageDirty();
@@ -483,7 +486,7 @@ void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
   // Don't need barriers on these - we only ever read/write to the same pixel from one thread -> no
   // race conditions But we definitely need to transition the resource to Compute-shader accessible,
   // otherwise the renderer might touch our textures while we're writing them.
-  RHICmdList.TransitionResources(EResourceTransitionAccess::EWritable,
+  RHICmdList.TransitionResources(EResourceTransitionAccess::ERWBarrier,
                                  EResourceTransitionPipeline::EGfxToCompute, UAVs, 4);
 
   ComputeShader->SetResources(RHICmdList,
@@ -751,7 +754,7 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
     // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
     // no race conditions But we definitely need to transition the resource to Compute-shader
     // accessible, otherwise the renderer might touch our textures while we're writing them.
-    RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
+    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier,
                                   EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
     ComputeShader->SetResources(
         RHICmdList, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(),
@@ -957,11 +960,14 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
     // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
     // no race conditions But we definitely need to transition the resource to Compute-shader
     // accessible, otherwise the renderer might touch our textures while we're writing them.
-    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier,
                                   EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
 
-    ComputeShader->SetLightVolumeUAV(RHICmdList, AVolumeUAV);
-    ComputeShader->SetParameters(RHICmdList, ClearValues, ALightVolumeResource->GetSizeZ());
+	FString log = "Cleared Z = " + ALightVolumeResource->GetSizeZ();
+	GEngine->AddOnScreenDebugMessage(0, 10.0, FColor::Red, log);
+
+	ComputeShader->SetLightVolumeUAV(RHICmdList, AVolumeUAV);
+	ComputeShader->SetParameters(RHICmdList, ClearValues, ALightVolumeResource->GetSizeZ());
 
     uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)ALightVolumeResource->GetSizeX(),
                                                 NUM_THREADS_PER_GROUP_DIMENSION);

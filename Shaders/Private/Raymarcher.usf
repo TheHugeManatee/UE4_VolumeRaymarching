@@ -99,9 +99,6 @@ return float4(entrypos, boxthickness);
 
 
 
-
-
- 
 float transmittance = 1;
 float opacity = 0;
 
@@ -124,10 +121,44 @@ float lightAlpha = 0;
 
 float3 lightedColor = 0;
 
+float3 labelcolor = 0;
+float labelalpha = 0;
+
 [loop] for (
 int i = 0;i <
 MaxSteps; i++)
 {
+
+    if (LabelVolumeEnabled) {
+        // Labels not affected by clipping!
+        // Check Label volume for labels
+        
+        float labelValue = LabelVolume.SampleLevel(LabelVolumeSampler, saturate(CurPos), 0);
+        if (labelValue == 0.1) {
+        // Placed target
+            labelcolor = float3(0,1,0);
+            labelalpha = 0.1;
+        } else if (labelValue == 0.2) {
+        // Placed risk
+            labelcolor = float3(1,0,0);
+            labelalpha = 0.1;
+        } else if (labelValue == 0.3) {
+        // Potential target
+            labelcolor = float3(0,1,0);
+            labelalpha = 0.05;
+        } else if (labelValue == 0.4) {
+        // potential risk
+            labelcolor = float3(1,0,0);
+            labelalpha = 0.05;
+        } else {
+            labelcolor = float3(0,0,0);
+            labelalpha = 0.0;
+        }
+
+        lightenergy = lightenergy + labelcolor * labelalpha * (1.0 - opacity);
+        opacity = opacity + (1.0 - opacity) * labelalpha;
+    }
+
 	// Anything that is clipped by the clipping plane shall be ignored.
 	if (dot(CurPos - ClippingCenter, ClippingDirection) < 0) {
 		CurPos -=
@@ -136,7 +167,8 @@ localcamvec;
 	}
 
 	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
-	cursample = Tex.SampleLevel(TexSampler, saturate(CurPos), 0).r;
+	cursample = Tex.SampleLevel(TexSampler, saturate(CurPos), 0).
+r;
 
     // Get the sample into the intensity domain.
 
@@ -185,6 +217,7 @@ lightAlpha;//* (dfshadow);
         	opacity = opacity + (1.0 - opacity) * colorsample.
 a;
 
+
 	}
 
 
@@ -197,6 +230,12 @@ localcamvec;
 }
 
 return float4(lightenergy, opacity);
+
+
+
+
+
+
 
 
 /////////////////////////////////////////BOX CODE/////////////////////////////////////////
@@ -364,3 +403,81 @@ bool ourIntersectBoxCommon(Box box, Ray ray, out float distance, out vec3 normal
     //normal = float3(0.0,0.0,0.0);
     //return true;
 }
+
+
+
+///
+///
+/// Shader for marked volume marching follows
+///
+///
+
+
+
+float3 lightenergy = 0;
+float opacity = 0;
+float3 curcolor = 0;
+float curalpha = 0;
+
+float3 localcamvec = normalize(mul(Parameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+
+
+int3 randpos = int3(Parameters.SvPosition.xy, View.StateFrameIndexMod8);
+float rand = float(Rand3DPCG16(randpos).x) / 0xffff;
+CurPos += localcamvec * rand.x * Jitter;
+
+//float3 LightVectorWS = normalize(mul(LightVector, Primitive.LocalToWorld));
+float3 LightVectorWS = float3(0, 0, 1);
+
+float cursample = 0;
+
+
+[loop] for (int i = 0 ;i < MaxSteps; i++)
+{
+	// Anything that is clipped by the clipping plane shall be ignored.
+//	if (dot(CurPos - ClippingCenter, ClippingDirection) < 0) {
+//		CurPos -= localcamvec;
+//		continue;
+//	}
+
+	cursample = Tex.SampleLevel(TexSampler, saturate(CurPos), 0);
+    if (cursample == 0) {
+       		CurPos -=localcamvec;
+       		continue;
+    }	        
+
+    if (cursample == 0.1) {
+    // Placed target
+        curcolor = float3(0,1,0);
+        curalpha = 0.2;
+    } else if (cursample == 0.2) {
+    // Placed risk
+        curcolor = float3(1,0,0);
+        curalpha = 0.2;
+    } else if (cursample == 0.3) {
+    // Potential target
+        curcolor = float3(0,1,0);
+        curalpha = 0.05;
+    } else if (cursample == 0.4) {
+    // potential risk
+        curcolor = float3(1,0,0);
+        curalpha = 0.05;
+    }
+
+    lightenergy = lightenergy + curcolor * curalpha * (1.0 - opacity);
+    opacity = opacity + (1.0 - opacity) * curalpha;
+	
+    CurPos -= localcamvec;
+
+	if (opacity > 0.99) {
+		opacity = 1;
+		break;
+	};
+}
+
+return float4(lightenergy, opacity);
+
+
+
+
+
