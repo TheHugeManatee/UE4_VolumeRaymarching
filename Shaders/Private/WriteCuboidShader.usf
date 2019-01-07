@@ -1,0 +1,18 @@
+#include "/Engine/Private/Common.ush"
+
+// Thx Temaran for original HLSL & usage example
+
+RWTexture3D<uint> MarkedVolume;
+
+int3 CuboidCenter;
+
+int3 CuboidSize;
+
+uint WrittenValue;
+
+[numthreads(1, 1, 1)]
+void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
+{
+    int3 myPos = CuboidCenter - (CuboidSize / 2) + ThreadId;
+    MarkedVolume[myPos] = WrittenValue;
+}

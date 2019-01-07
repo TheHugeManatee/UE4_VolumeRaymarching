@@ -400,17 +400,8 @@ FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt) {
   return RHICreateSamplerState(FSamplerStateInitializerRHI(SF_Trilinear, AM_Border, AM_Border,
                                                            AM_Border, 0, 0, 0, 0, BorderColorInt));
 }
-//
-//void CreateBufferTexturesAndUAVs(FIntPoint Size, EPixelFormat PixelFormat,
-//                                 OneAxisReadWriteBufferResources& RWBuffers) {
-//  FRHIResourceCreateInfo CreateInfo(FClearValueBinding::Transparent);
-//  for (int i = 0; i < 4; i++) {
-//    RWBuffers.Buffers[i] = RHICreateTexture2D(Size.X, Size.Y, PixelFormat, 1, 1,
-//                                              TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
-//    RWBuffers.UAVs[i] = RHICreateUnorderedAccessView(RWBuffers.Buffers[i]);
-//  }
-//}
 
+// Returns the color int required for the given light color and major axis (single channel)
 uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes MajorAxes,
                                unsigned index) {
   // Set alpha channel to the texture's red channel (when reading single-channel, only red component
@@ -420,6 +411,7 @@ uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes Major
   return LightColor.ToFColor(true).ToPackedARGB();
 }
 
+// Returns the color int required for the given light color and major axis.
 uint32 GetBorderColorInt(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsigned index) {
   FVector LC = LightParams.LightColor;
   FLinearColor LightColor = FLinearColor(
