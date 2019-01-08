@@ -2,10 +2,6 @@
 
 // Thx Temaran for original HLSL & usage example
 
-/**
-	Uniform Buffers have been replaced by regular shader parameters, as most are subject to change between calls.
-*/
-
 RWTexture3D<float> ALightVolume;
 
 int ZSize;
@@ -17,7 +13,6 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 {
     for (int i = 0; i <= ZSize; i++)
     {
-
         ALightVolume[int3(ThreadId.x, ThreadId.y, i)] = AClearValue;
     }
 }

@@ -199,10 +199,16 @@ public:
 	  static void CustomLog(const UObject* WorldContextObject, FString LoggedString, float Duration);
 
 
-  /** Logs a string to the on-screen debug messages */
+  /** Dets volume texture dimension. */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
 	  meta = (WorldContext = "WorldContextObject"))
 	  static void GetVolumeTextureDimensions(const UObject* WorldContextObject, UVolumeTexture* Texture, FIntVector& Dimensions);
+
+
+  /** Transforms a transform to a matrix. */
+  UFUNCTION(BlueprintPure, Category = "Raymarcher",
+	  meta = (WorldContext = "WorldContextObject"))
+	  static void TransformToMatrix(const UObject* WorldContextObject, const FTransform Transform, FMatrix& OutMatrix);
 
 
 };

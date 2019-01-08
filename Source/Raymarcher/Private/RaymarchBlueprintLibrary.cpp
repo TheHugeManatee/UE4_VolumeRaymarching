@@ -679,4 +679,9 @@ void URaymarchBlueprintLibrary::GetVolumeTextureDimensions(const UObject* WorldC
 	}
 }
 
+void URaymarchBlueprintLibrary::TransformToMatrix(const UObject* WorldContextObject, const FTransform Transform, FMatrix& OutMatrix)
+{
+	OutMatrix = Transform.ToMatrixNoScale();
+}
+
 #undef LOCTEXT_NAMESPACE
