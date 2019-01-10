@@ -26,9 +26,9 @@ void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRH
 	FIntVector localCenterIntCoords;
 	localCenterIntCoords.X = x; localCenterIntCoords.Y = y; localCenterIntCoords.Z = z;
 
-	FString kkt = "a " + localCenter.ToString() + ", local = " + FString::FromInt(x)+ " " + FString::FromInt(y) + " "+ FString::FromInt(z) + ", local intvec = " + localCenterIntCoords.ToString();
+	//FString kkt = "a " + localCenter.ToString() + ", local = " + FString::FromInt(x)+ " " + FString::FromInt(y) + " "+ FString::FromInt(z) + ", local intvec = " + localCenterIntCoords.ToString();
 
-	GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, kkt);
+	//GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, kkt);
 	
 	// Get shader ref from GlobalShaderMap
 	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);

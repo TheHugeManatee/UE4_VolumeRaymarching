@@ -486,7 +486,7 @@ void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
   // Don't need barriers on these - we only ever read/write to the same pixel from one thread -> no
   // race conditions But we definitely need to transition the resource to Compute-shader accessible,
   // otherwise the renderer might touch our textures while we're writing them.
-  RHICmdList.TransitionResources(EResourceTransitionAccess::ERWBarrier,
+  RHICmdList.TransitionResources(EResourceTransitionAccess::ERWNoBarrier,
                                  EResourceTransitionPipeline::EGfxToCompute, UAVs, 4);
 
   ComputeShader->SetResources(RHICmdList,
@@ -607,7 +607,7 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
   // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
   // no race conditions But we definitely need to transition the resource to Compute-shader
   // accessible, otherwise the renderer might touch our textures while we're writing them.
-  RHICmdList.TransitionResources(EResourceTransitionAccess::EWritable,
+  RHICmdList.TransitionResources(EResourceTransitionAccess::ERWNoBarrier,
                                  EResourceTransitionPipeline::EGfxToCompute, UAVs, 4);
 
   ComputeShader->SetResources(RHICmdList,
@@ -754,7 +754,7 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
     // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
     // no race conditions But we definitely need to transition the resource to Compute-shader
     // accessible, otherwise the renderer might touch our textures while we're writing them.
-    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier,
+    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
                                   EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
     ComputeShader->SetResources(
         RHICmdList, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(),
@@ -867,7 +867,7 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
     // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
     // no race conditions But we definitely need to transition the resource to Compute-shader
     // accessible, otherwise the renderer might touch our textures while we're writing them.
-    RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
+    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
                                   EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
 
     ComputeShader->SetResources(
@@ -960,12 +960,9 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
     // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
     // no race conditions But we definitely need to transition the resource to Compute-shader
     // accessible, otherwise the renderer might touch our textures while we're writing them.
-    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier,
+    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
                                   EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
-
-	FString log = "Cleared Z = " + ALightVolumeResource->GetSizeZ();
-	GEngine->AddOnScreenDebugMessage(0, 10.0, FColor::Red, log);
-
+	
 	ComputeShader->SetLightVolumeUAV(RHICmdList, AVolumeUAV);
 	ComputeShader->SetParameters(RHICmdList, ClearValues, ALightVolumeResource->GetSizeZ());
 
