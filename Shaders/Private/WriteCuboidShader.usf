@@ -2,17 +2,23 @@
 
 // Thx Temaran for original HLSL & usage example
 
-RWTexture3D<float> MarkedVolume;
+RWTexture3D<float4> MarkedVolume;
 
 int3 CuboidCenter;
 
 int3 CuboidSize;
 
-float WrittenValue;
+float4 WrittenValue;
 
 [numthreads(1, 1, 1)]
 void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 {
     int3 myPos = CuboidCenter - (CuboidSize / 2) + ThreadId;
-    MarkedVolume[myPos] = WrittenValue;
+    int3 myPosRelative = myPos - CuboidCenter;
+    float3 myPosLocal = myPosRelative / (float3) CuboidSize;
+    if (length(myPosLocal)   <= 0.5 ){
+        MarkedVolume[myPos] = WrittenValue;
+    }
+
+
 }

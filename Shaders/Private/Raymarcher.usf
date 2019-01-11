@@ -480,4 +480,25 @@ return float4(lightenergy, opacity);
 
 
 
+/// Packing
+
+uint r = 255;
+uint g = 0;
+uint b = 0;
+uint a = 255;
+
+float packed = 0;
+packed = packed | (r);
+packed = packed | (g << 8);
+packed = packed | (b << 16);
+packed = packed | (a << 24);
+
+uint rUnpacked = packed & 0x000000ff;
+uint gUnpacked = packed & 0x0000ff00;
+uint bUnpacked = packed & 0x00ff0000;
+uint aUnpacked = packed & 0xff000000;
+
+return float4(rUnpacked/255.0, gUnpacked/255.0, bUnpacked/255.0, aUnpacked/255.0)
+
+
 

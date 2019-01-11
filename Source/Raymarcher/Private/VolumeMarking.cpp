@@ -11,12 +11,15 @@
 IMPLEMENT_SHADER_TYPE(, FWriteCuboidToVolumeShader, TEXT("/Plugin/VolumeRaymarching/Private/WriteCuboidShader.usf"),
                       TEXT("MainComputeShader"), SF_Compute)
 
-void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRHITexture3D * MarkedVolume, const FVector BrushWorldCenter, const FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, float WrittenValue)
+void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRHITexture3D * MarkedVolume, const FVector BrushWorldCenter,const float SphereRadiusWorld, const FRaymarchWorldParameters WorldParameters, FLinearColor WrittenValue)
 {
 	// Get local center.
 	FVector localCenter = ((WorldParameters.VolumeTransform.InverseTransformPosition(BrushWorldCenter) /
 		(WorldParameters.MeshMaxBounds)) / 2.0) + 0.5;
 	// Get local center in integer space
+
+	float localSphereDiameter = ((WorldParameters.VolumeTransform.InverseTransformVector(FVector(SphereRadiusWorld, 0, 0)) /
+		(WorldParameters.MeshMaxBounds * 2))).Size() * 2;
 
 	int32 x = localCenter.X * MarkedVolume->GetSizeX();
 	int32 y = localCenter.Y * MarkedVolume->GetSizeY();
@@ -39,16 +42,17 @@ void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRH
 	FUnorderedAccessViewRHIRef MarkedVolumeUAV = RHICreateUnorderedAccessView(MarkedVolume);
 	
 	// Transfer from gfx to compute, otherwise the renderer might touch our textures while we're writing them.
-	RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier,
+	RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
 		EResourceTransitionPipeline::EGfxToCompute, MarkedVolumeUAV);
 
-	FIntVector brush = FIntVector(BrushWorldSize);
+	// Get brush size in texture space.
+	FIntVector brush = FIntVector(localSphereDiameter * MarkedVolume->GetSizeX(),localSphereDiameter * MarkedVolume->GetSizeY(),localSphereDiameter * MarkedVolume->GetSizeZ() );
 
 	FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
 	ComputeShader->SetMarkedVolumeUAV(RHICmdList, cs, MarkedVolumeUAV);
 	ComputeShader->SetParameters(RHICmdList, cs, localCenterIntCoords, brush, WrittenValue);
 
-	DispatchComputeShader(RHICmdList, *ComputeShader, BrushWorldSize.X, BrushWorldSize.Y, BrushWorldSize.Z);
+	DispatchComputeShader(RHICmdList, *ComputeShader, brush.X, brush.Y, brush.Z);
 	
 	ComputeShader->UnbindMarkedVolumeUAV(RHICmdList, cs);
 
@@ -63,9 +67,9 @@ void UVolumeMarkingLibrary::CreateMarkingVolume(FIntVector Dimensions, FString A
 	uint8* dummy = (uint8*)FMemory::Malloc(TotalSize);
 	FMemory::Memset(dummy, 0, TotalSize);
 
-	if (CreateVolumeTextureAsset(AssetName, PF_R32_FLOAT, Dimensions, dummy, false, true, &OutTexture))
+	if (CreateVolumeTextureAsset(AssetName, PF_B8G8R8A8, Dimensions, dummy, false, true, &OutTexture))
 	{
-		GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, "Marking volume created succesfuly");
+		GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, "Marking volume created successfuly");
 	}
 	else {
 		GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, "Failed creating the marking volume.");
@@ -74,13 +78,13 @@ void UVolumeMarkingLibrary::CreateMarkingVolume(FIntVector Dimensions, FString A
 	FMemory::Free(dummy);
 }
 
-void UVolumeMarkingLibrary::MarkCuboidInVolumeWorld(UVolumeTexture* MarkedVolume, const FVector BrushWorldCenter, const FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, const float WrittenValue)
+void UVolumeMarkingLibrary::MarkCuboidInVolumeWorld(UVolumeTexture* MarkedVolume, const FVector BrushWorldCenter, const float SphereRadiusWorld, const FRaymarchWorldParameters WorldParameters, const FLinearColor WrittenValue)
 {
 	if (MarkedVolume->Resource == NULL) return;
 	// Call the actual rendering code on RenderThread.
 	ENQUEUE_RENDER_COMMAND(CaptureCommand)
 		([=](FRHICommandListImmediate& RHICmdList) {
-		WriteCuboidToVolume_RenderThread(RHICmdList, MarkedVolume->Resource->TextureRHI->GetTexture3D(), BrushWorldCenter, BrushWorldSize, WorldParameters, WrittenValue);
+		WriteCuboidToVolume_RenderThread(RHICmdList, MarkedVolume->Resource->TextureRHI->GetTexture3D(), BrushWorldCenter, SphereRadiusWorld, WorldParameters, WrittenValue);
 	});
 }
 
