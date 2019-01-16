@@ -29,7 +29,7 @@ public:
             meta = (WorldContext = "WorldContextObject"))
   static void AddDirLightToVolumes(	  
 	  const UObject* WorldContextObject,
-	  const FBasicRaymarchRenderingResources Resources,
+	  FBasicRaymarchRenderingResources Resources,
 	  const FColorVolumesResources ColorResources,
       const FDirLightParameters LightParameters, 
 	  const bool Added, 
@@ -41,7 +41,7 @@ public:
             meta = (WorldContext = "WorldContextObject"))
   static void ChangeDirLightInLightVolumes(
 	  const UObject* WorldContextObject,
-	  const FBasicRaymarchRenderingResources Resources,
+	  FBasicRaymarchRenderingResources Resources,
 	  const FColorVolumesResources ColorResources,
       const FDirLightParameters OldLightParameters, 
       const FDirLightParameters NewLightParameters, 
@@ -78,7 +78,7 @@ public:
             meta = (WorldContext = "WorldContextObject"))
   static void AddDirLightToSingleVolume(
 	  const UObject* WorldContextObject,
-	  const FBasicRaymarchRenderingResources Resources,
+	  FBasicRaymarchRenderingResources Resources,
       const FDirLightParameters LightParameters, const bool Added, 
 	  const FRaymarchWorldParameters WorldParameters,
 	   bool& LightAdded, FVector& LocalLightDir);
@@ -87,7 +87,7 @@ public:
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void ChangeDirLightInSingleVolume(const UObject* WorldContextObject,
-                                           const FBasicRaymarchRenderingResources Resources,
+                                           FBasicRaymarchRenderingResources Resources,
                                            const FDirLightParameters OldLightParameters, 
 										   const FDirLightParameters NewLightParameters,
                                            const FRaymarchWorldParameters WorldParameters,
@@ -102,7 +102,7 @@ public:
   /** Clears a light volume. */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
 	  meta = (WorldContext = "WorldContextObject"))
-	  static void ClearResourceLightVolumes(const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources, float ClearValue);
+	  static void ClearResourceLightVolumes(const UObject* WorldContextObject, FBasicRaymarchRenderingResources Resources, float ClearValue);
 
 
   /** Creates a Float32 volume texture asset and fills it with all-zeros. If an asset with the same

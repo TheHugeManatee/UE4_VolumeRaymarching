@@ -118,6 +118,67 @@ float2 GetPixOffset(float3 LightPosition, uint Axis)
 }
 
 
+int3 GetPosNew(uint2 threadId, uint3 VolumeSize, uint Loop, uint Axis)
+{
+    switch (Axis)
+    {
+        case 0:
+            return int3(Loop, threadId.x, threadId.y);
+        case 1:
+            return int3(Loop, threadId.x, threadId.y);
+        case 2:
+            return int3(threadId.x, Loop, threadId.y);
+        case 3:
+            return int3(threadId.x, Loop, threadId.y);
+        case 4:
+            return int3(threadId.x, threadId.y, Loop);
+        case 5:
+            return int3(threadId.x, threadId.y, Loop);
+        default:
+            return int3(0, 0, 0);
+    }
+}
+
+
+float2 GetPixOffsetNew(float3 LightPosition, uint Axis)
+{
+    float3 normLightPosition = LightPosition;
+	// Normalize the light position to get the major axis to be one. The other 2 components are then an offset to apply to current pos
+	// to read from our read buffer texture.
+    switch (Axis)
+    {
+        case 0:
+            normLightPosition /= normLightPosition.x;
+            return normLightPosition.yz;
+        case 1:
+            normLightPosition /= -normLightPosition.x;
+            return float2(normLightPosition.y, normLightPosition.z);
+        case 2:
+            normLightPosition /= normLightPosition.y;
+            return float2(normLightPosition.x, normLightPosition.z);
+        case 3:
+            normLightPosition /= -normLightPosition.y;
+            return normLightPosition.xz;
+        case 4:
+            normLightPosition /= normLightPosition.z;
+            return normLightPosition.xy;
+        case 5:
+            normLightPosition /= -normLightPosition.z;
+            return float2(normLightPosition.x, normLightPosition.y);
+        default:
+            return float2(0, 0);
+    }
+}
+
+
+float2 GetUVNew(float2 pos, float2 texSize, float3 LightPosition, uint Axis)
+{
+    float2 offset = GetPixOffsetNew(LightPosition, Axis);
+    return (pos + float2(0.5, 0.5) + offset) / texSize;
+}
+
+
+
 float2 GetUV(float2 pos, float2 texSize, float3 LightPosition, uint Axis) {
     float2 offset = GetPixOffset(LightPosition, Axis);
     return (pos + float2(0.5, 0.5) + offset) / texSize;

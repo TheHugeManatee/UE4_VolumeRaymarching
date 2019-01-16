@@ -12,7 +12,7 @@ RWTexture3D<float> ALightVolume;
 RWTexture2D<float> WriteBuffer;
 Texture2D ReadBuffer;
 
-uint Loop;
+int Loop;
 
 Texture3D Volume;
 
@@ -25,7 +25,6 @@ float LightIntensity;
 int bAdded;
 
 float3 LocalClippingCenter;
-
 float3 LocalClippingDirection;
 
 // Going from
@@ -36,13 +35,19 @@ float Weight;
 
 float2 TFIntensityDomain;
 
+float2 pixOffset;
+
+uint3 VolumeSize;
+
+float3x3 PermutationMatrix;
+
+
 // The shader code is common for all axes and always 2D in X and Y space
 // If going along X - threadgroup X = Volume Y dimension, threadgroup Y = Volume Z dimension
 // If going along Y - threadgroup X = Volume X dimension, threadgroup Y = Volume Z dimension
 // If going along Z - threadgroup X = Volume X dimension, threadgroup Y = Volume Y dimension (the simple case)
 
 SamplerState TransferFuncSampler;
-
 
 SamplerState VolumeSampler;
 
@@ -51,69 +56,43 @@ SamplerState VolumeSampler;
 SamplerState ReadBufferSampler;
 
 [numthreads(32, 32, 1)]
-void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
+void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
 {
-	//Set up some variables we are going to need
-    float sizeX, sizeY, sizeZ;
-    ALightVolume.GetDimensions(sizeX, sizeY, sizeZ);
-    uint3 uResolution = uint3(sizeX, sizeY, sizeZ);
+    //int3 pos = GetPosNew(pixelLoc, VolumeSize, Loop, Axis);
+    
+    int3 pos = mul(int3(PixelLoc.x, PixelLoc.y, Loop), PermutationMatrix);
 
-	// Todo keep whole float4, not just alpha
-    float2 pixelLoc = ThreadId.xy;
-    int3 pos = GetPos(pixelLoc, uResolution, Loop, Axis);
-    float oldAlpha = ALightVolume[pos];
+    float texSizeX, texSizeY;
+    WriteBuffer.GetDimensions(texSizeX, texSizeY);
 
-    if (Loop == 0)
+    float3 uvw = GetUVW(pos, VolumeSize);
+        
+    float cursample = 0;
+    float colorsample = 0;
+
+    float2 prevUV = (PixelLoc + pixOffset) / float2(texSizeX, texSizeY);
+    float previousLightAlpha = ReadBuffer.SampleLevel(ReadBufferSampler, prevUV, 0);
+	
+    float CurrentLightAlpha;
+    // Ignore clipped regions.
+    if (dot(uvw - LocalClippingCenter, LocalClippingDirection) < 0)
     {
-        // float4 color = float4(LightColor, Weight * LightIntensity);
-        // The (-1,-1) sample is here just to make sure that the border color is set properly.
-        // If the border color wasn't good, this would fuck up the whole first layer.
-        float color = ReadBuffer.SampleLevel(ReadBufferSampler, float2(-1, -1), 0);
-
-        // If we're super sure about the border color, we can go back to the following line
-        // float color = Weight * LightIntensity;
-
-        WriteBuffer[pixelLoc] = color;
-        color *= bAdded;
-        ALightVolume[pos] = oldAlpha + color;
+        // Avoid calculations that would be unnecessary. Just propagate previous light unchanged and add it to volume.
+        CurrentLightAlpha = previousLightAlpha;
     }
     else
     {
-        float texSizeX, texSizeY;
-        WriteBuffer.GetDimensions(texSizeX, texSizeY);
-        
-        float cursample = 0;
-        float colorsample = 0;
-
-		// TODO! Set pix offset as a uniform. EVEN better : Save it in UV offset!
-		// + (0.5, 0.5) to sample the centers of pixels!
-        float2 prevXY = pixelLoc + float2(0.5, 0.5) + GetPixOffset(LightPosition, Axis);
-        float2 prevUV = (prevXY) / float2(texSizeX, texSizeY);
-        float previousLightColor = ReadBuffer.SampleLevel(ReadBufferSampler, prevUV, 0);
-	
-        float3 iResolution = float3(sizeX, sizeY, sizeZ);
-        float3 uvw = GetUVW(pos, iResolution);
-
-        // Ignore clipped.
-        if (dot(uvw - LocalClippingCenter, LocalClippingDirection) < 0)
-        {
-            colorsample = 0;
-        }
-        else
-        {
-            cursample = Volume.SampleLevel(VolumeSampler, uvw, 0);
-            cursample = RemapIntensity(cursample, TFIntensityDomain);
-            // Get Color&alpha from intensity
-            colorsample = TransferFunc.SampleLevel(TransferFuncSampler, float2(cursample, 0.5f), 0).a;
-        }
-
-        float currentlightalpha = previousLightColor * (1 - (colorsample));
-
-		// The read/write buffers have always positive alpha
-        WriteBuffer[pixelLoc] = currentlightalpha;
-		// Adding Color to the volume depends on if we're adding or removing.
-        // if we're removing a light, multiply initial alpha by -1.
-        currentlightalpha *= bAdded;
-        ALightVolume[pos] = oldAlpha + currentlightalpha;
+        cursample = Volume.SampleLevel(VolumeSampler, uvw, 0);
+        cursample = RemapIntensity(cursample, TFIntensityDomain);
+        // Get Color&alpha from intensity
+        colorsample = TransferFunc.SampleLevel(TransferFuncSampler, float2(cursample, 0.5f), 0).a;
+        CurrentLightAlpha = previousLightAlpha * (1 - (colorsample));
     }
+
+
+	// The read/write buffers have always positive alpha
+    WriteBuffer[PixelLoc] = CurrentLightAlpha;
+	// Adding Color to the volume depends on if we're adding or removing.
+    // if we're removing a light, multiply initial alpha by -1.
+    ALightVolume[pos] = ALightVolume[pos] + (CurrentLightAlpha * bAdded);
 }

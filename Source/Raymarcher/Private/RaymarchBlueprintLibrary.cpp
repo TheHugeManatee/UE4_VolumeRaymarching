@@ -23,7 +23,7 @@
 bool dooone = false;
 
 void URaymarchBlueprintLibrary::AddDirLightToVolumes(
-    const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources,
+    const UObject* WorldContextObject, FBasicRaymarchRenderingResources Resources,
     const FColorVolumesResources ColorResources, const FDirLightParameters LightParameters,
     const bool Added, const FRaymarchWorldParameters WorldParameters, bool& LightAdded) {
   if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
@@ -54,7 +54,7 @@ void URaymarchBlueprintLibrary::AddDirLightToVolumes(
 
 /** Changes a light in the light volumes.	 */
 void URaymarchBlueprintLibrary::ChangeDirLightInLightVolumes(
-    const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources,
+    const UObject* WorldContextObject, FBasicRaymarchRenderingResources Resources,
     const FColorVolumesResources ColorResources, const FDirLightParameters OldLightParameters,
     const FDirLightParameters NewLightParameters, const FRaymarchWorldParameters WorldParameters,
     bool& LightAdded) {
@@ -234,7 +234,7 @@ void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
   if (!LightVolume->PlatformData) {
     LightVolume->PlatformData = new FTexturePlatformData();
   }
-  LightVolume->PlatformData->PixelFormat = PF_R32_FLOAT;
+  LightVolume->PlatformData->PixelFormat = PF_R16F;
   LightVolume->PlatformData->SizeX = Dimensions.X;
   LightVolume->PlatformData->SizeY = Dimensions.Y;
   LightVolume->PlatformData->NumSlices = Dimensions.Z;
@@ -264,7 +264,7 @@ void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
 }
 
 void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
-    const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources,
+    const UObject* WorldContextObject, FBasicRaymarchRenderingResources Resources,
     const FDirLightParameters LightParameters, const bool Added,
     const FRaymarchWorldParameters WorldParameters, bool& LightAdded, FVector& LocalLightDir) {
   if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
@@ -293,7 +293,7 @@ void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
 }
 
 void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
-    const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources,
+    const UObject* WorldContextObject, FBasicRaymarchRenderingResources Resources,
     const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
     const FRaymarchWorldParameters WorldParameters, bool& LightAdded, FVector& LocalLightDir) {
   if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
@@ -337,7 +337,7 @@ void URaymarchBlueprintLibrary::ClearSingleLightVolume(const UObject* WorldConte
 }
 
 
-void URaymarchBlueprintLibrary::ClearResourceLightVolumes(const UObject* WorldContextObject, const FBasicRaymarchRenderingResources Resources, float ClearValue) 
+void URaymarchBlueprintLibrary::ClearResourceLightVolumes(const UObject* WorldContextObject, FBasicRaymarchRenderingResources Resources, float ClearValue) 
 {
 	ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
 
@@ -604,7 +604,7 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
   FIntPoint ZBufferSize = FIntPoint(X, Y);
 
   // Make buffers fully colored if we need to support colored lights.
-  EPixelFormat PixelFormat = (ColoredLightSupport ? PF_A32B32G32R32F : PF_R32_FLOAT);
+  EPixelFormat PixelFormat = (ColoredLightSupport ? PF_A32B32G32R32F : PF_R16F);
 
   CreateBufferTexturesAndUAVs(XBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[0]);
   CreateBufferTexturesAndUAVs(YBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[1]);

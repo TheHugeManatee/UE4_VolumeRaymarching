@@ -609,7 +609,7 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat);
 
 void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                           const FBasicRaymarchRenderingResources Resources,
+                                           FBasicRaymarchRenderingResources Resources,
                                            const FColorVolumesResources ColorResources,
                                            const FDirLightParameters LightParameters,
                                            const bool Added,
@@ -617,7 +617,7 @@ void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                            ERHIFeatureLevel::Type FeatureLevel);
 
 void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                              const FBasicRaymarchRenderingResources Resources,
+                                              FBasicRaymarchRenderingResources Resources,
                                               const FColorVolumesResources ColorResources,
                                               const FDirLightParameters OldLightParameters,
                                               const FDirLightParameters NewLightParameters,
@@ -632,14 +632,14 @@ void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
                                     ERHIFeatureLevel::Type FeatureLevel);
 
 void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                                 const FBasicRaymarchRenderingResources Resources,
+                                                 FBasicRaymarchRenderingResources Resources,
                                                  const FDirLightParameters LightParameters,
                                                  const bool Added,
                                                  const FRaymarchWorldParameters WorldParameters,
                                                  ERHIFeatureLevel::Type FeatureLevel);
 
 void ChangeDirLightInSingleLightVolume_RenderThread(
-    FRHICommandListImmediate& RHICmdList, const FBasicRaymarchRenderingResources Resources,
+    FRHICommandListImmediate& RHICmdList, FBasicRaymarchRenderingResources Resources,
     const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
     const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel);
 
@@ -801,7 +801,7 @@ public:
   }
 
   // Sets loop-dependent uniforms in the pipeline.
-  void SetLoop(FRHICommandListImmediate& RHICmdList, const unsigned loopIndex,
+  void SetLoop(FRHICommandListImmediate& RHICmdList, const int loopIndex,
                const FTexture2DRHIRef pReadBuffer, const FSamplerStateRHIRef pReadBuffSampler,
                const FUnorderedAccessViewRHIRef pWriteBuffer) {
     FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
@@ -904,17 +904,24 @@ public:
   FAddOrRemoveDirLightSingleVolumeShader(
       const ShaderMetaType::CompiledShaderInitializerType& Initializer)
     : FDirLightSingleVolumeParentShader(Initializer) {
-    bAddedParam.Bind(Initializer.ParameterMap, TEXT("bAdded"));
+	  bAddedParam.Bind(Initializer.ParameterMap, TEXT("bAdded"));
+	  pixOffsetParam.Bind(Initializer.ParameterMap, TEXT("pixOffset"));
+	  VolumeSize.Bind(Initializer.ParameterMap, TEXT("VolumeSize"));
+	  PermutationMatrix.Bind(Initializer.ParameterMap, TEXT("PermutationMatrix"));
   }
 
   virtual void SetParameters(FRHICommandListImmediate& RHICmdList,
                              const FDirLightParameters LocalLightParams, bool LightAdded,
                              const FClippingPlaneParameters LocalClippingParams,
-                             const FMajorAxes MajorAxes, unsigned AxisIndex, FVector2D TFDomain) {
+                             const FMajorAxes MajorAxes, unsigned AxisIndex, FVector2D TFDomain, FVector2D PixelOffset, FIntVector pVolumeSize, FMatrix pPermutationMat) {
     FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
 
     SetShaderValue(RHICmdList, ShaderRHI, bAddedParam, LightAdded ? 1 : -1);
+	SetShaderValue(RHICmdList, ShaderRHI, pixOffsetParam, PixelOffset);
 
+	SetShaderValue(RHICmdList, ShaderRHI, VolumeSize, pVolumeSize);
+	SetShaderValue(RHICmdList, ShaderRHI, PermutationMatrix, pPermutationMat);
+		
     FDirLightSingleVolumeParentShader::SetParameters(RHICmdList, ShaderRHI, LocalLightParams,
                                                      LocalClippingParams, MajorAxes, AxisIndex,
                                                      TFDomain);
@@ -922,13 +929,21 @@ public:
 
   virtual bool Serialize(FArchive& Ar) override {
     bool bShaderHasOutdatedParameters = FDirLightSingleVolumeParentShader::Serialize(Ar);
-    Ar << bAddedParam;
+    Ar << bAddedParam << pixOffsetParam << VolumeSize << PermutationMatrix;
     return bShaderHasOutdatedParameters;
   }
 
 private:
   // Whether the light is to be added or removed.
   FShaderParameter bAddedParam;
+  // Pixel offset
+  FShaderParameter pixOffsetParam;
+  
+  FShaderParameter VolumeSize;
+  FShaderParameter PermutationMatrix;
+
+
+
 };
 
 // Shader optimized for changing a light. It will only go through if the major axes of the light
@@ -1009,6 +1024,58 @@ private:
   // New light's weight along the axis
   FShaderParameter NewWeight;
 };
+
+// Declare compute shader for clearing a single-channel float UAV texture
+class FClearFloatRWTextureCS : public FGlobalShader{
+	DECLARE_SHADER_TYPE(FClearFloatRWTextureCS, Global);
+public:
+	FClearFloatRWTextureCS() {}
+	FClearFloatRWTextureCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FGlobalShader(Initializer)
+	{
+		ClearValue.Bind(Initializer.ParameterMap, TEXT("ClearValue"), SPF_Mandatory);
+		ClearTexture2DRW.Bind(Initializer.ParameterMap, TEXT("ClearTextureRW"), SPF_Mandatory);
+	}
+
+	// FShader interface.
+	virtual bool Serialize(FArchive& Ar) override
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << ClearValue << ClearTexture2DRW;
+		return bShaderHasOutdatedParameters;
+	}
+
+	void SetParameters(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIParamRef TextureRW, float Value) 
+	{
+		SetUAVParameter(RHICmdList, GetComputeShader(), ClearTexture2DRW, TextureRW);
+		SetShaderValue(RHICmdList, GetComputeShader(), ClearValue, Value);
+	}
+
+	void UnbindUAV(FRHICommandList& RHICmdList) {
+		SetUAVParameter(RHICmdList, GetComputeShader(), ClearTexture2DRW, FUnorderedAccessViewRHIParamRef());
+	}
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+	
+	const FShaderParameter& GetClearColorParameter()
+	{
+		return ClearValue;
+	}
+
+	const FShaderResourceParameter& GetClearTextureRWParameter()
+	{
+		return ClearTexture2DRW;
+	}
+
+protected:
+	FShaderParameter ClearValue;
+	FShaderResourceParameter ClearTexture2DRW;
+};
+
+
 
 static void CreateBasicRaymarchingResources_RenderThread(
     FRHICommandListImmediate& RHICmdList, struct FBasicRaymarchRenderingResources& InParams,
