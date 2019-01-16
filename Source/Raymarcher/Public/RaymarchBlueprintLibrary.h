@@ -3,10 +3,10 @@
 
 #pragma once
 
+#include "CoreMinimal.h"
 #include "Curves/CurveLinearColor.h"
 #include "Engine/VolumeTexture.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "CoreMinimal.h"
 #include "RHI.h"
 #include "RHIResources.h"
 #include "RaymarchRendering.h"
@@ -27,26 +27,24 @@ public:
   /** Adds a light to light volumes.	 */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
             meta = (WorldContext = "WorldContextObject"))
-  static void AddDirLightToVolumes(	  
-	  const UObject* WorldContextObject,
-	  FBasicRaymarchRenderingResources Resources,
-	  const FColorVolumesResources ColorResources,
-      const FDirLightParameters LightParameters, 
-	  const bool Added, 
-	  const FRaymarchWorldParameters WorldParameters,
-	  bool& LightAdded);
+
+  static void AddDirLightToVolumes(const UObject* WorldContextObject,
+                                   const FBasicRaymarchRenderingResources Resources,
+                                   const FColorVolumesResources ColorResources,
+                                   const FDirLightParameters LightParameters, const bool Added,
+                                   const FRaymarchWorldParameters WorldParameters,
+                                   bool& LightAdded);
 
   /** Changes a light in the light volumes.	 */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
             meta = (WorldContext = "WorldContextObject"))
-  static void ChangeDirLightInLightVolumes(
-	  const UObject* WorldContextObject,
-	  FBasicRaymarchRenderingResources Resources,
-	  const FColorVolumesResources ColorResources,
-      const FDirLightParameters OldLightParameters, 
-      const FDirLightParameters NewLightParameters, 
-	  const FRaymarchWorldParameters WorldParameters,
-	  bool& LightAdded);
+  static void ChangeDirLightInLightVolumes(const UObject* WorldContextObject,
+                                           const FBasicRaymarchRenderingResources Resources,
+                                           const FColorVolumesResources ColorResources,
+                                           const FDirLightParameters OldLightParameters,
+                                           const FDirLightParameters NewLightParameters,
+                                           const FRaymarchWorldParameters WorldParameters,
+                                           bool& LightAdded);
 
   /** Clear all light volumes.	 */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
@@ -76,12 +74,11 @@ public:
   /** Adds a light to light volume.	 */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
             meta = (WorldContext = "WorldContextObject"))
-  static void AddDirLightToSingleVolume(
-	  const UObject* WorldContextObject,
-	  FBasicRaymarchRenderingResources Resources,
-      const FDirLightParameters LightParameters, const bool Added, 
-	  const FRaymarchWorldParameters WorldParameters,
-	   bool& LightAdded, FVector& LocalLightDir);
+  static void AddDirLightToSingleVolume(const UObject* WorldContextObject,
+                                        const FBasicRaymarchRenderingResources Resources,
+                                        const FDirLightParameters LightParameters, const bool Added,
+                                        const FRaymarchWorldParameters WorldParameters,
+                                        bool& LightAdded, FVector& LocalLightDir);
 
   /** Changes a light in the light volume.	 */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
@@ -95,15 +92,16 @@ public:
 
   /** Clears a light volume. */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
-	  meta = (WorldContext = "WorldContextObject"))
-	  static void ClearSingleLightVolume(const UObject* WorldContextObject,
-		  UVolumeTexture* ALightVolume, float ClearValue);
+            meta = (WorldContext = "WorldContextObject"))
+  static void ClearSingleLightVolume(const UObject* WorldContextObject,
+                                     UVolumeTexture* ALightVolume, float ClearValue);
 
   /** Clears a light volume. */
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
-	  meta = (WorldContext = "WorldContextObject"))
-	  static void ClearResourceLightVolumes(const UObject* WorldContextObject, FBasicRaymarchRenderingResources Resources, float ClearValue);
-
+            meta = (WorldContext = "WorldContextObject"))
+  static void ClearResourceLightVolumes(const UObject* WorldContextObject,
+                                        FBasicRaymarchRenderingResources Resources,
+                                        float ClearValue);
 
   /** Creates a Float32 volume texture asset and fills it with all-zeros. If an asset with the same
    * name already exists, overwrites it.*/
@@ -126,7 +124,10 @@ public:
                                              FIntVector Dimensions, UVolumeTexture* inTexture);
 
   /** Loads a RAW file into a newly created Volume Texture Asset. Will output error log messages
-   * and return if unsuccessful */
+   * and return if unsuccessful.
+   * @param FileName is supposed to be the absolute path of where the raw file can be found.
+   *
+   */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void LoadRawVolumeIntoVolumeTextureAsset(const UObject* WorldContextObject,
@@ -169,12 +170,11 @@ public:
 
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
             meta = (WorldContext = "WorldContextObject"))
-  static void CreateBasicRaymarchingResources(const UObject* WorldContextObject,
-                                              UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
-                                              UTexture2D* TransferFunction,
-                                              FTransferFunctionRangeParameters TFRangeParams,
-											  const bool ColoredLightSupport,
-                                              struct FBasicRaymarchRenderingResources& OutParameters);  //
+  static void CreateBasicRaymarchingResources(
+      const UObject* WorldContextObject, UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
+      UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFRangeParams,
+      const bool ColoredLightSupport,
+      struct FBasicRaymarchRenderingResources& OutParameters);  //
 
   /** Loads a RAW 3D texture into this classes FRHITexture3D member. Will output error log messages
    * and return if unsuccessful */
@@ -195,20 +195,17 @@ public:
 
   /** Logs a string to the on-screen debug messages */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
-	  meta = (WorldContext = "WorldContextObject"))
-	  static void CustomLog(const UObject* WorldContextObject, FString LoggedString, float Duration);
-
+            meta = (WorldContext = "WorldContextObject"))
+  static void CustomLog(const UObject* WorldContextObject, FString LoggedString, float Duration);
 
   /** Dets volume texture dimension. */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
-	  meta = (WorldContext = "WorldContextObject"))
-	  static void GetVolumeTextureDimensions(const UObject* WorldContextObject, UVolumeTexture* Texture, FIntVector& Dimensions);
-
+            meta = (WorldContext = "WorldContextObject"))
+  static void GetVolumeTextureDimensions(const UObject* WorldContextObject, UVolumeTexture* Texture,
+                                         FIntVector& Dimensions);
 
   /** Transforms a transform to a matrix. */
-  UFUNCTION(BlueprintPure, Category = "Raymarcher",
-	  meta = (WorldContext = "WorldContextObject"))
-	  static void TransformToMatrix(const UObject* WorldContextObject, const FTransform Transform, FMatrix& OutMatrix);
-
-
+  UFUNCTION(BlueprintPure, Category = "Raymarcher", meta = (WorldContext = "WorldContextObject"))
+  static void TransformToMatrix(const UObject* WorldContextObject, const FTransform Transform,
+                                FMatrix& OutMatrix);
 };
