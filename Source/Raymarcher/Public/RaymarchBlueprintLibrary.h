@@ -85,8 +85,8 @@ public:
             meta = (WorldContext = "WorldContextObject"))
   static void ChangeDirLightInSingleVolume(const UObject* WorldContextObject,
                                            FBasicRaymarchRenderingResources Resources,
-                                           const FDirLightParameters OldLightParameters, 
-										   const FDirLightParameters NewLightParameters,
+                                           const FDirLightParameters OldLightParameters,
+                                           const FDirLightParameters NewLightParameters,
                                            const FRaymarchWorldParameters WorldParameters,
                                            bool& LightAdded, FVector& LocalLightDir);
 
@@ -126,13 +126,13 @@ public:
   /** Loads a RAW file into a newly created Volume Texture Asset. Will output error log messages
    * and return if unsuccessful.
    * @param FileName is supposed to be the absolute path of where the raw file can be found.
-   *
+   * @param SaveAsset whether to save the asset to disk right away
    */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void LoadRawVolumeIntoVolumeTextureAsset(const UObject* WorldContextObject,
                                                   FString FileName, FIntVector Dimensions,
-                                                  FString TextureName,
+                                                  FString TextureName, bool SaveAsset,
                                                   UVolumeTexture*& LoadedTexture);
 
   /** Loads a MHD file into a newly created Volume Texture Asset. Returns the loaded texture, it's
@@ -140,7 +140,8 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void LoadMhdFileIntoVolumeTextureAsset(const UObject* WorldContextObject, FString FileName,
-                                                FString TextureName, FIntVector& TextureDimensions,
+                                                FString TextureName, bool SaveAsset,
+                                                FIntVector& TextureDimensions,
                                                 FVector& WorldDimensions,
                                                 UVolumeTexture*& LoadedTexture);
   //

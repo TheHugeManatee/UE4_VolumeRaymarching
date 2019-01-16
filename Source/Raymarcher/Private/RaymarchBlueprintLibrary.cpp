@@ -353,7 +353,7 @@ void URaymarchBlueprintLibrary::ClearResourceLightVolumes(
 
 void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
     const UObject* WorldContextObject, FString FileName, FIntVector Dimensions, FString TextureName,
-    UVolumeTexture*& LoadedTexture) {
+    bool SaveAsset, UVolumeTexture*& LoadedTexture) {
   const int TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
 
   IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
@@ -381,8 +381,8 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
 
   // Actually create the asset.
   UVolumeTexture* OutTexture = nullptr;
-  bool Success = CreateVolumeTextureAsset(TextureName, PF_G8, Dimensions, TempArray, false, false,
-                                          &OutTexture);
+  bool Success = CreateVolumeTextureAsset(TextureName, PF_G8, Dimensions, TempArray, SaveAsset,
+                                          false, &OutTexture);
   if (Success) {
     MY_LOG("Asset created and saved successfuly.")
   }
@@ -396,7 +396,7 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
 }
 
 void URaymarchBlueprintLibrary::LoadMhdFileIntoVolumeTextureAsset(
-    const UObject* WorldContextObject, FString FileName, FString TextureName,
+    const UObject* WorldContextObject, FString FileName, FString TextureName, bool SaveAsset,
     FIntVector& TextureDimensions, FVector& WorldDimensions, UVolumeTexture*& LoadedTexture) {
   FString FileContent;
   // First, try to read as absolute path
@@ -413,6 +413,11 @@ void URaymarchBlueprintLibrary::LoadMhdFileIntoVolumeTextureAsset(
   }
 
   FMhdInfo info = FMhdParser::ParseString(FileContent);
+
+  if (!info.ParseSuccessful) {
+    MY_LOG("MHD Parsing failed!");
+    return;
+  }
 
   WorldDimensions.X = info.Dimensions.X * info.Spacing.X;
   WorldDimensions.Y = info.Dimensions.Y * info.Spacing.Y;
@@ -432,7 +437,7 @@ void URaymarchBlueprintLibrary::LoadMhdFileIntoVolumeTextureAsset(
 
   LoadRawVolumeIntoVolumeTextureAsset(WorldContextObject,
                                       FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions,
-                                      TextureName, LoadedTexture);
+                                      TextureName, SaveAsset, LoadedTexture);
 
   return;
 }
@@ -575,6 +580,10 @@ void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(
 
 void CreateBufferTexturesAndUAVs(FIntPoint Size, EPixelFormat PixelFormat,
                                  OneAxisReadWriteBufferResources& RWBuffers) {
+  if (Size.X == 0 || Size.Y == 0) {
+    UE_LOG(LogTemp, Error, TEXT("Error: Creating Buffer Textures: Size is Zero!"), 3);
+    return;
+  }
   FRHIResourceCreateInfo CreateInfo(FClearValueBinding::Transparent);
   for (int i = 0; i < 4; i++) {
     RWBuffers.Buffers[i] = RHICreateTexture2D(Size.X, Size.Y, PixelFormat, 1, 1,
