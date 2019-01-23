@@ -234,7 +234,7 @@ void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
   if (!LightVolume->PlatformData) {
     LightVolume->PlatformData = new FTexturePlatformData();
   }
-  LightVolume->PlatformData->PixelFormat = PF_R16F;
+  LightVolume->PlatformData->PixelFormat = PF_G16;
   LightVolume->PlatformData->SizeX = Dimensions.X;
   LightVolume->PlatformData->SizeY = Dimensions.Y;
   LightVolume->PlatformData->NumSlices = Dimensions.Z;
@@ -604,7 +604,7 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
   FIntPoint ZBufferSize = FIntPoint(X, Y);
 
   // Make buffers fully colored if we need to support colored lights.
-  EPixelFormat PixelFormat = (ColoredLightSupport ? PF_A32B32G32R32F : PF_R16F);
+  EPixelFormat PixelFormat = (ColoredLightSupport ? PF_A32B32G32R32F : PF_G16);
 
   CreateBufferTexturesAndUAVs(XBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[0]);
   CreateBufferTexturesAndUAVs(YBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[1]);
@@ -625,7 +625,7 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
 void URaymarchBlueprintLibrary::CreateLightVolumeAsset(const UObject* WorldContextObject,
                                                        FString TextureName, FIntVector Dimensions,
                                                        UVolumeTexture*& CreatedVolume) {
-  EPixelFormat PixelFormat = PF_R16F;
+  EPixelFormat PixelFormat = PF_G16;
   const unsigned TotalElements =
       Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].NumComponents;
   const unsigned TotalSize = TotalElements * 2;
