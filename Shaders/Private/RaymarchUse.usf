@@ -1,92 +1,3 @@
-
-
-float3 localcamvec = normalize(mul(Parameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
-
-float3 lightenergy = 0;
-float opacity = 0;
-
-int3 randpos = int3(Parameters.SvPosition.xy, View.StateFrameIndexMod8);
-float rand = float(Rand3DPCG16(randpos).x) / 0xffff;
-CurPos += localcamvec * rand.x * Jitter;
-
-//float3 LightVectorWS = normalize(mul(LightVector, Primitive.LocalToWorld));
-float3 LightVectorWS = float3(1, 1, 1);
-
-float4 colorsample = 0;
-float lightAlpha = 0;
-
-
-
-for (int i = 0;i < MaxSteps; i++)
-{
-    // Labels not affected by clipping!
-    if(LabelVolumeEnabled) {
-        float4 labelValue = SampleLabelVolume(CurPos, StepSize, LabelVolume, LabelVolumeSampler);
-        AddLightAndOpacity(lightenergy, opacity, labelValue);
-    }
-
-	// Anything that is clipped by the clipping plane shall be ignored.
-	if (IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection)) {
-		CurPos -= localcamvec;
-		continue;
-	}
-	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
-    colorsample = SampleDataVolume(CurPos, StepSize, Tex, TexSampler, TF, TFSampler, TFIntensityDomain);
-
-	// Only care if the sample has at least some alpha.
-	if (colorsample.a > 0.01)
-	{
-		// Get lighting information from illumination volume for current position.
-		// Take the lighting information a little bit closer to the viewer, so that illuminated surfaces don't self-shadow themselves
-		lightAlpha = ALightVolume.SampleLevel(ALightVolumeSampler, saturate(CurPos), 0);
-        float dfShadow = GetDFShadow(CurPos, DFSteps, LightTangent, LightVectorWS, Parameters);
-		// Multiply sampled color with ligth color and adjust intensity according to light strength.
-		colorsample.rgb = colorsample.rgb * lightAlpha * (dfShadow);
-        AddLightAndOpacity(lightenergy, opacity, colorsample);
-	}
-
-	CurPos -= localcamvec;
-	if (opacity > 0.99) {
-		opacity = 1;
-		break;
-	};
-}
-
-// Handle FinalStep (only if we went through all the previous steps and there is a final step)
-if (i == MaxSteps && FinalStep > 0) {
-    StepSize *= FinalStep;
-    CurPos -= localcamvec * (FinalStep);
-    // Labels not affected by clipping!
-   if(LabelVolumeEnabled) {
-        float4 labelValue = SampleLabelVolume(CurPos, StepSize, LabelVolume, LabelVolumeSampler);
-        AddLightAndOpacity(lightenergy, opacity, labelValue);
-   }
-	// If the final step is clipped, just return.
-	if (IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection)) {
-        return float4(lightenergy, opacity);
-	}
-
-	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
-    colorsample = SampleDataVolume(CurPos, StepSize, Tex, TexSampler, TF, TFSampler, TFIntensityDomain);
-
-	// Only care if the sample has at least some alpha.
-	if (colorsample.a > 0.01)
-	{
-		// Get lighting information from illumination volume for current position.
-		// Take the lighting information a little bit closer to the viewer, so that illuminated surfaces don't self-shadow themselves
-		lightAlpha = ALightVolume.SampleLevel(ALightVolumeSampler, saturate(CurPos), 0);
-
-		// Multiply sampled color with ligth color and adjust intensity according to light strength.
-		colorsample.rgb = colorsample.rgb * lightAlpha;//* (dfshadow);
-        AddLightAndOpacity(lightenergy, opacity, colorsample);
-	}
-}
-return float4(lightenergy, opacity);
-
-
-
-
-
 // Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
 
 /**
@@ -107,15 +18,15 @@ return float4(lightenergy, opacity);
     #include "/Engine/Private/SpeedTreeCommon.ush"
 #endif
 
-#define NUM_MATERIAL_TEXCOORDS_VERTEX 1
-#define NUM_MATERIAL_TEXCOORDS 1
+#define NUM_MATERIAL_TEXCOORDS_VERTEX 0
+#define NUM_MATERIAL_TEXCOORDS 0
 #define NUM_CUSTOM_VERTEX_INTERPOLATORS 0
-#define NUM_TEX_COORD_INTERPOLATORS 1
+#define NUM_TEX_COORD_INTERPOLATORS 0
 
-#ifdef MIN_MATERIAL_TEXCOORDS
+#ifdef MIN_MATERIAL_TEXCOORDS 
     #include "/Engine/Private/MinMaterialTexCoords.ush"
 #endif
-
+ 
 #if MATERIAL_ATMOSPHERIC_FOG
     #include "/Engine/Private/AtmosphereCommon.ush"
 #endif
@@ -227,7 +138,7 @@ float4 GetDynamicParameter(FMaterialParticleParameters Parameters, float4 Defaul
     {
         return Parameters.DynamicParameter2;
     }
-#endif
+#endif    
 #if (DYNAMIC_PARAMETERS_MASK & 8)
     else if(ParameterIndex == 3)
     {
@@ -245,7 +156,7 @@ float4 GetDynamicParameter(FMaterialParticleParameters Parameters, float4 Defaul
 #endif
 }
 
-/**
+/** 
  * Parameters calculated from the pixel material inputs.
  */
 struct FPixelMaterialInputs
@@ -265,7 +176,7 @@ struct FPixelMaterialInputs
 
 };
 
-/**
+/** 
  * Parameters needed by pixel shader material inputs, related to Geometry.
  * These are independent of vertex factory.
  */
@@ -296,7 +207,7 @@ struct FMaterialPixelParameters
      * Note: this is not relative to the current viewport.  RelativePixelPosition = MaterialParameters.SvPosition.xy - View.ViewRectMin.xy;
      */
     float4 SvPosition;
-
+        
     /** Post projection position reconstructed from SvPosition, before the divide by W. left..top -1..1, bottom..top -1..1  within the viewport, W is the SceneDepth */
     float4 ScreenPosition;
 
@@ -315,24 +226,24 @@ struct FMaterialPixelParameters
     half3 WorldVertexNormal_Center;
 #endif
 
-    /**
+    /** 
      * Interpolated worldspace position of this pixel
      * todo: Make this TranslatedWorldPosition and also rename the VS/DS/HS WorldPosition to be TranslatedWorldPosition
      */
     float3 AbsoluteWorldPosition;
 
-    /**
+    /** 
      * Interpolated worldspace position of this pixel, centered around the camera
      */
     float3 WorldPosition_CamRelative;
 
-    /**
+    /** 
      * Interpolated worldspace position of this pixel, not including any world position offset or displacement.
      * Only valid if shader is compiled with NEEDS_WORLD_POSITION_EXCLUDING_SHADER_OFFSETS, otherwise just contains 0
      */
     float3 WorldPosition_NoOffsets;
 
-    /**
+    /** 
      * Interpolated worldspace position of this pixel, not including any world position offset or displacement.
      * Only valid if shader is compiled with NEEDS_WORLD_POSITION_EXCLUDING_SHADER_OFFSETS, otherwise just contains 0
      */
@@ -385,13 +296,13 @@ FMaterialPixelParameters MakeInitializedMaterialPixelParameters()
     return MPP;
 }
 
-/**
+/** 
  * Parameters needed by domain shader material inputs.
  * These are independent of vertex factory.
  */
 struct FMaterialTessellationParameters
 {
-    // Note: Customized UVs are only evaluated in the vertex shader, which is not really what you want with tessellation, but keeps the code simpler
+    // Note: Customized UVs are only evaluated in the vertex shader, which is not really what you want with tessellation, but keeps the code simpler 
     // (tessellation texcoords are the same as pixels shader texcoords)
 #if NUM_TEX_COORD_INTERPOLATORS
     float2 TexCoords[NUM_TEX_COORD_INTERPOLATORS];
@@ -405,7 +316,7 @@ struct FMaterialTessellationParameters
     float3x3 TangentToWorld;
 };
 
-/**
+/** 
  * Parameters needed by vertex shader material inputs.
  * These are independent of vertex factory.
  */
@@ -422,7 +333,7 @@ struct FMaterialVertexParameters
     float4x4 InstanceLocalToWorld;
     float3 InstanceLocalPosition;
     float4 PerInstanceParams;
-#elif IS_MESHPARTICLE_FACTORY
+#elif IS_MESHPARTICLE_FACTORY 
     /** Per-particle properties. */
     float4x4 InstanceLocalToWorld;
 #endif
@@ -716,7 +627,7 @@ MaterialFloat2 GetDefaultSceneTextureUV(FMaterialPixelParameters Parameters, con
 
         /*
          * So we have two diff on the X axis, we want the one that has the smallest length
-         * to avoid the 2x2 pixels mipmap artefacts on the edges.
+         * to avoid the 2x2 pixels mipmap artefacts on the edges. 
          */
         return dot(UvDiffX0, UvDiffX0) < dot(UvDiffX1, UvDiffX1) ? UvDiffX0 : UvDiffX1;
     }
@@ -745,7 +656,7 @@ MaterialFloat2 GetDefaultSceneTextureUV(FMaterialPixelParameters Parameters, con
     {
         return 0.0f;
     }
-
+    
     float2 ComputeDecalDDY(FMaterialPixelParameters Parameters)
     {
         return 0.0f;
@@ -768,7 +679,7 @@ MaterialFloat2 GetDefaultSceneTextureUV(FMaterialPixelParameters Parameters, con
     {
         return DecalToWorld[3].xyz;
     }
-
+    
     float3 GetObjectOrientation()
     {
         return DecalOrientation.xyz;
@@ -778,7 +689,7 @@ MaterialFloat2 GetDefaultSceneTextureUV(FMaterialPixelParameters Parameters, con
     {
         return Primitive.ActorWorldPosition;
     }
-
+    
     float3 GetObjectOrientation()
     {
         return Primitive.ObjectOrientation.xyz;
@@ -800,9 +711,9 @@ MaterialFloat2 GetDefaultSceneTextureUV(FMaterialPixelParameters Parameters, con
 /** Transforms a vector from tangent space to world space, prescaling by an amount calculated previously */
 MaterialFloat3 TransformTangentVectorToWorld_PreScaled(FMaterialTessellationParameters Parameters, MaterialFloat3 InTangentVector)
 {
-#if FEATURE_LEVEL >= FEATURE_LEVEL_SM5
+#if FEATURE_LEVEL >= FEATURE_LEVEL_SM5 
     // used optionally to scale up the vector prior to conversion
-    InTangentVector *= abs( Parameters.TangentToWorldPreScale );
+    InTangentVector *= abs( Parameters.TangentToWorldPreScale );    
 
     // Transform directly to world space
     // The vector transform is optimized for this case, only one vector-matrix multiply is needed
@@ -937,7 +848,7 @@ float GetPerInstanceFadeAmount(FMaterialVertexParameters Parameters)
     return float(1.0);
 #endif
 }
-
+ 
 MaterialFloat GetDistanceCullFade()
 {
     return saturate( ResolvedView.RealTime * PrimitiveFade.FadeTimeScaleBias.x + PrimitiveFade.FadeTimeScaleBias.y );
@@ -1077,7 +988,7 @@ MaterialFloat2 UnMirrorUV( MaterialFloat2 UV, FMaterialPixelParameters Parameter
     return MaterialFloat2(UnMirror(UV.x, Parameters), UnMirror(UV.y, Parameters));
 }
 
-/**
+/** 
  * Transforms screen space positions into UVs with [.5, .5] centered on ObjectPostProjectionPosition,
  * And [1, 1] at ObjectPostProjectionPosition + (ObjectRadius, ObjectRadius).
  */
@@ -1098,9 +1009,9 @@ MaterialFloat4 ProcessMaterialColorTextureLookup(MaterialFloat4 TextureValue)
     #endif
     // sRGB read approximation (in highp if possible)
     float3 LinRGB = TextureValue.rgb;
-    LinRGB *= LinRGB;
+    LinRGB *= LinRGB; 
     return MaterialFloat4(LinRGB, TextureValue.a);
-#endif
+#endif 
     return TextureValue;
 }
 
@@ -1123,7 +1034,7 @@ MaterialFloat ProcessMaterialGreyscaleTextureLookup(MaterialFloat TextureValue)
     float LinValue = TextureValue;
     LinValue *= LinValue;
     return MaterialFloat(LinValue);
-#endif
+#endif 
     return TextureValue;
 }
 
@@ -1138,7 +1049,7 @@ SamplerState GetMaterialSharedSampler(SamplerState TextureSampler, SamplerState 
 #if SUPPORTS_INDEPENDENT_SAMPLERS
     return SharedSampler;
 #else
-    // Note: to match behavior on platforms that don't support SUPPORTS_INDEPENDENT_SAMPLERS,
+    // Note: to match behavior on platforms that don't support SUPPORTS_INDEPENDENT_SAMPLERS, 
     // TextureSampler should have been set to the same sampler.  This is not currently done.
     return TextureSampler;
 #endif
@@ -1159,8 +1070,8 @@ MaterialFloat3 ReflectionAboutCustomWorldNormal(FMaterialPixelParameters Paramet
 #define SPHERICAL_OPACITY_FOR_SHADOW_DEPTHS 0
 #endif
 
-/**
- * Calculates opacity for a billboard particle as if it were a sphere.
+/** 
+ * Calculates opacity for a billboard particle as if it were a sphere. 
  * Note: Calling this function requires the vertex factory to have been compiled with SPHERICAL_PARTICLE_OPACITY set to 1
  */
 float GetSphericalParticleOpacity(FMaterialPixelParameters Parameters, float Density)
@@ -1190,7 +1101,7 @@ float GetSphericalParticleOpacity(FMaterialPixelParameters Parameters, float Den
     float DistanceToParticle = length(Parameters.WorldPosition_NoOffsets_CamRelative - ParticleTranslatedWorldPosition);
 
     FLATTEN
-    if (DistanceToParticle < ParticleRadius)
+    if (DistanceToParticle < ParticleRadius) 
     {
         // Distance from point being shaded to the point on the sphere along the view direction
         float HemisphericalDistance = sqrt(ParticleRadius * ParticleRadius - DistanceToParticle * DistanceToParticle);
@@ -1232,7 +1143,7 @@ float2 RotateScaleOffsetTexCoords(float2 InTexCoords, float4 InRotationScale, fl
 #if USES_SPEEDTREE
 
 /** Vertex offset for SpeedTree wind and LOD */
-float3 GetSpeedTreeVertexOffsetInner(FMaterialVertexParameters Parameters, int GeometryType, int WindType, int LODType, float BillboardThreshold, bool bExtraBend, float3 ExtraBend, FSpeedTreeData STData)
+float3 GetSpeedTreeVertexOffsetInner(FMaterialVertexParameters Parameters, int GeometryType, int WindType, int LODType, float BillboardThreshold, bool bExtraBend, float3 ExtraBend, FSpeedTreeData STData) 
 {
     #if (NUM_MATERIAL_TEXCOORDS_VERTEX < 6) || IS_MESHPARTICLE_FACTORY
         return float4(0,0,0);
@@ -1257,7 +1168,7 @@ float3 GetSpeedTreeVertexOffsetInner(FMaterialVertexParameters Parameters, int G
     // compute LOD by finding screen space size
     float LodInterp = 1.0;
 #if !USE_INSTANCING || !USE_DITHERED_LOD_TRANSITION
-    if (LODType == SPEEDTREE_LOD_TYPE_SMOOTH)
+    if (LODType == SPEEDTREE_LOD_TYPE_SMOOTH) 
     {
         const float Dist = length(TreePos - ResolvedView.WorldCameraOrigin);
         const float ScreenMultiple = 0.5 * max(ResolvedView.ViewToClip[0][0], ResolvedView.ViewToClip[1][1]);
@@ -1279,7 +1190,7 @@ float3 GetSpeedTreeVertexOffsetInner(FMaterialVertexParameters Parameters, int G
     OriginalPosition = mul(OriginalPosition, LocalToWorld) / TreeScale;
 
     float3 FinalPosition = OriginalPosition;
-
+    
     if (GeometryType == SPEEDTREE_GEOMETRY_TYPE_BILLBOARD)
     {
         if (BillboardThreshold < 1.0)
@@ -1300,11 +1211,11 @@ float3 GetSpeedTreeVertexOffsetInner(FMaterialVertexParameters Parameters, int G
         float3 Normal = Parameters.TangentToWorld[2];
 
         // branches and fronds
-        if (GeometryType == SPEEDTREE_GEOMETRY_TYPE_BRANCH || GeometryType == SPEEDTREE_GEOMETRY_TYPE_FROND)
+        if (GeometryType == SPEEDTREE_GEOMETRY_TYPE_BRANCH || GeometryType == SPEEDTREE_GEOMETRY_TYPE_FROND) 
         {
             // smooth LOD
             #if !USE_INSTANCING
-                if (LODType == SPEEDTREE_LOD_TYPE_SMOOTH)
+                if (LODType == SPEEDTREE_LOD_TYPE_SMOOTH) 
                 {
                     float3 LODPos = float3(Parameters.TexCoords[3].x, Parameters.TexCoords[3].y, Parameters.TexCoords[4].x);
                     LODPos = mul(LODPos, LocalToWorld) / TreeScale;
@@ -1322,25 +1233,25 @@ float3 GetSpeedTreeVertexOffsetInner(FMaterialVertexParameters Parameters, int G
         }
 
         // leaves and facing leaves
-        if (GeometryType == SPEEDTREE_GEOMETRY_TYPE_FACINGLEAF ||
-                (GeometryType == SPEEDTREE_GEOMETRY_TYPE_LEAF &&
+        if (GeometryType == SPEEDTREE_GEOMETRY_TYPE_FACINGLEAF || 
+                (GeometryType == SPEEDTREE_GEOMETRY_TYPE_LEAF && 
                 (LODType == SPEEDTREE_LOD_TYPE_SMOOTH || (WindType > SPEEDTREE_WIND_TYPE_FASTEST && WindType != SPEEDTREE_WIND_TYPE_PALM))))
         {
             // remove anchor pos from vertex position
             float3 Anchor = float3(Parameters.TexCoords[4].y, Parameters.TexCoords[5].x, Parameters.TexCoords[5].y);
 
             // face camera-facing leaves to the camera, if needed
-            if (GeometryType == SPEEDTREE_GEOMETRY_TYPE_FACINGLEAF)
+            if (GeometryType == SPEEDTREE_GEOMETRY_TYPE_FACINGLEAF) 
             {
                 // have to rotate the view into local space
                 FinalPosition = LocalPosition - Anchor;
-                FinalPosition = FinalPosition.x * ResolvedView.ViewRight +
-                                FinalPosition.y * ResolvedView.ViewUp +
+                FinalPosition = FinalPosition.x * ResolvedView.ViewRight + 
+                                FinalPosition.y * ResolvedView.ViewUp + 
                                 FinalPosition.z * ResolvedView.ViewForward;
             }
-
+            
             Anchor = (mul(Anchor, LocalToWorld)) / TreeScale;
-
+            
             if (GeometryType == SPEEDTREE_GEOMETRY_TYPE_LEAF)
             {
                 FinalPosition -= Anchor;
@@ -1348,7 +1259,7 @@ float3 GetSpeedTreeVertexOffsetInner(FMaterialVertexParameters Parameters, int G
 
             // smooth LOD
             #if !USE_INSTANCING
-                if (LODType == SPEEDTREE_LOD_TYPE_SMOOTH)
+                if (LODType == SPEEDTREE_LOD_TYPE_SMOOTH) 
                 {
                     if (GeometryType == SPEEDTREE_GEOMETRY_TYPE_LEAF)
                     {
@@ -1365,13 +1276,13 @@ float3 GetSpeedTreeVertexOffsetInner(FMaterialVertexParameters Parameters, int G
             #endif
 
             // leaf wind
-            if (WindType > SPEEDTREE_WIND_TYPE_FASTEST && WindType != SPEEDTREE_WIND_TYPE_PALM)
+            if (WindType > SPEEDTREE_WIND_TYPE_FASTEST && WindType != SPEEDTREE_WIND_TYPE_PALM) 
             {
                 float4 WindExtra = float4(Parameters.TexCoords[6].x, Parameters.TexCoords[6].y, Parameters.TexCoords[7].x, Parameters.TexCoords[7].y);
                 float LeafWindTrigOffset = Anchor.x + Anchor.y;
                 FinalPosition = LeafWind(STData, WindExtra.w > 0.0, FinalPosition, Normal, WindExtra.x, float3(0,0,0), WindExtra.y, WindExtra.z, LeafWindTrigOffset, WindType);
             }
-
+                
             // move leaf back to anchor
             FinalPosition += Anchor;
         }
@@ -1381,7 +1292,7 @@ float3 GetSpeedTreeVertexOffsetInner(FMaterialVertexParameters Parameters, int G
             // branch wind (applies to all geometry)
             float2 VertBranchWind = Parameters.TexCoords[2];
             FinalPosition = BranchWind(STData, FinalPosition, TreePos, float4(VertBranchWind, 0, 0), WindType);
-        }
+        }    
     }
 
     // global wind can apply to the whole tree, even billboards
@@ -1396,7 +1307,7 @@ float3 GetSpeedTreeVertexOffsetInner(FMaterialVertexParameters Parameters, int G
 }
 
 /** Vertex offset for SpeedTree wind and LOD */
-float3 GetSpeedTreeVertexOffset(FMaterialVertexParameters Parameters, int GeometryType, int WindType, int LODType, float BillboardThreshold, bool bUsePreviousFrame, bool bExtraBend, float3 ExtraBend)
+float3 GetSpeedTreeVertexOffset(FMaterialVertexParameters Parameters, int GeometryType, int WindType, int LODType, float BillboardThreshold, bool bUsePreviousFrame, bool bExtraBend, float3 ExtraBend) 
 {
 #if VF_SUPPORTS_SPEEDTREE_WIND
     if (bUsePreviousFrame)
@@ -1459,7 +1370,7 @@ float4 GetPostProcessInputMinMax(uint Index)
 MaterialFloat4 MobileSceneTextureLookup(inout FMaterialPixelParameters Parameters, int SceneTextureId, float2 UV)
 {
 #if (FEATURE_LEVEL <= FEATURE_LEVEL_ES3_1)
-
+    
     //PPI_SceneDepth
     if (SceneTextureId == 1)
     {
@@ -1475,10 +1386,10 @@ MaterialFloat4 MobileSceneTextureLookup(inout FMaterialPixelParameters Parameter
     // PPI_PostprocessInput
     else if (SceneTextureId == 14)
     {
-#if POST_PROCESS_MATERIAL
+#if POST_PROCESS_MATERIAL    
         // SceneColor was transformed to OpenGL coordinates during tonemapping
         #if !POST_PROCESS_MATERIAL_BEFORE_TONEMAP && (COMPILER_GLSL_ES2 || COMPILER_GLSL_ES3_1)
-        UV.y = 1.0 - UV.y;
+        UV.y = 1.0 - UV.y; 
         #endif
 
         MaterialFloat4 Input0 = Texture2DSample(PostprocessInput0, PostprocessInput0Sampler, UV);
@@ -1488,7 +1399,7 @@ MaterialFloat4 MobileSceneTextureLookup(inout FMaterialPixelParameters Parameter
         // We need to preserve original SceneColor Alpha as it's used by tonemaper on mobile
         Parameters.BackupSceneColorAlpha = Input0.a;
         return Input0;
-#endif// POST_PROCESS_MATERIAL
+#endif// POST_PROCESS_MATERIAL    
     }
     // PPI_CustomStencil
     else if (SceneTextureId == 24)
@@ -1605,16 +1516,212 @@ float3 DecodeSceneColorForMaterialNode(float2 ScreenUV)
 #endif // SHADING_PATH_DEFERRED
 
 // Uniform material expressions.
-MaterialFloat3 CustomExpression0(FMaterialPixelParameters Parameters,MaterialFloat3 Dummy)
+MaterialFloat4 CustomExpression0(FMaterialPixelParameters Parameters,MaterialFloat PlaneAlignment,MaterialFloat MaxSteps)
 {
-return Dummy * float3(0,1,2);}
+
+// Get scene depth at this pixel.
+float localscenedepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(Parameters)));
+
+float3 camerafwd = mul(float3(0.00000000, 0.00000000, 1.00000000), ResolvedView.ViewToTranslatedWorld);
+
+float maxBound = max(max(Primitive.LocalObjectBoundsMax.x, Primitive.LocalObjectBoundsMax.y), Primitive.LocalObjectBoundsMax.z);
+
+// Get world space vector going from camera center to current scene depth.
+float3 worldDepthVec = normalize(Parameters.CameraVector) * localscenedepth;
+
+// Transform this vector into the box's local space
+worldDepthVec = mul(worldDepthVec, Primitive.WorldToLocal);
+
+// Get actual depth in local space, account for mesh bounds
+localscenedepth = length(worldDepthVec);
+localscenedepth /= (Primitive.LocalObjectBoundsMax.x * 2);
+
+// Account for difference between camera center vector and camera-to-pixel depth
+localscenedepth /= abs( dot( camerafwd, Parameters.CameraVector ) );
+
+// Get cam pos and vector into local space too.
+float3 localcampos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), (Primitive.WorldToLocal)).xyz;
+float3 localcamvec = -normalize(mul(Parameters.CameraVector, Primitive.WorldToLocal));
+
+//make camera position 0-1
+localcampos = (localcampos / (Primitive.LocalObjectBoundsMax * 2)) + 0.5;
+
+float3 invraydir = 1 / localcamvec;
+
+// Get intersections
+float3 firstintersections = (0 - localcampos) * invraydir;
+float3 secondintersections = (1 - localcampos) * invraydir;
+// Find closest and furthest intersections
+float3 closest = min(firstintersections, secondintersections);
+float3 furthest = max(firstintersections, secondintersections);
+
+// T0 (entry) = the farthest of the closest intersections
+float t0 = max(closest.x, max(closest.y, closest.z));
+// T1 (exit) = the closest of the furthest intersections
+float t1 = min(furthest.x, min(furthest.y, furthest.z));
+
+// TODO understand this:
+float planeoffset = 1 - frac((t0 - length(localcampos - 0.5)) * MaxSteps);
+
+// Make the entry point not be behind the camera
+t0 += (planeoffset / MaxSteps) * PlaneAlignment;
+t0 = max(0, t0);
+
+// Make the exit point not be behind other scene geometry.
+t1 = min(t1, localscenedepth);
+
+// Calculate box thickness in local space.
+float boxthickness = max(0, t1 - t0);
+
+// Get entry position in local space.
+float3 entrypos = localcampos + (max(0, t0) * localcamvec);
+
+return float4(entrypos, boxthickness);
+}
+
+
+MaterialFloat4 CustomExpression1(FMaterialPixelParameters Parameters,MaterialFloat4 dummyParam)
+{
+return dummyParam * float4(1,1,1,1);}
 #include "/Plugin/VolumeRaymarching/Private/RaymarchInclude.usf"
 }
 
 
-MaterialFloat3 CustomExpression1(FMaterialPixelParameters Parameters,MaterialFloat3 Dummy)
+MaterialFloat4 CustomExpression2(FMaterialPixelParameters Parameters,Texture3D Tex, SamplerState TexSampler ,Texture2D TF, SamplerState TFSampler ,MaterialFloat StepSize,MaterialFloat MaxSteps,MaterialFloat FinalStep,MaterialFloat3 CurPos,MaterialFloat Jitter,Texture3D ALightVolume, SamplerState ALightVolumeSampler ,MaterialFloat DFSteps,MaterialFloat LightTangent,MaterialFloat DF,MaterialFloat3 ClippingCenter,MaterialFloat3 ClippingDirection,MaterialFloat3 TFIntensityDomain,Texture3D LabelVolume, SamplerState LabelVolumeSampler ,MaterialFloat LabelVolumeEnabled,MaterialFloat LightVolumeEnabled)
 {
-return WhiteReturnColor();
+
+
+float transmittance = 1;
+float opacity = 0;
+
+float3 localcamvec = normalize(mul(Parameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+
+float3 lightenergy = 0;
+
+int3 randpos = int3(Parameters.SvPosition.xy, View.StateFrameIndexMod8);
+float rand = float(Rand3DPCG16(randpos).x) / 0xffff;
+CurPos += localcamvec * rand.x * Jitter;
+
+//float3 LightVectorWS = normalize(mul(LightVector, Primitive.LocalToWorld));
+float3 LightVectorWS = float3(0, 0, 1);
+
+float cursample = 0;
+
+float4 colorsample = 0;
+float lightAlpha = 0;
+
+float4 lightedColor = 0;
+
+for (int i = 0;i <MaxSteps; i++)
+{
+    // Labels not affected by clipping!
+    if(LabelVolumeEnabled) {
+        float4 labelValue = SampleLabelVolume(CurPos, StepSize, LabelVolume, LabelVolumeSampler);
+        AddLightAndOpacity(lightenergy, opacity, labelValue);
+    }
+
+    // Anything that is clipped by the clipping plane shall be ignored.
+    if (IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection)) {
+        CurPos -= localcamvec;
+        continue;
+    }
+    // Sample intensity from the volume and get corresponding color-opacity from transfer function.
+    colorsample = SampleDataVolume(CurPos, StepSize, Tex, TexSampler, TF, TFSampler, TFIntensityDomain);
+
+    // Only care if the sample has at least some alpha.
+    if (colorsample.a > 0.01)
+    {
+        // Get lighting information from illumination volume for current position.
+        // Take the lighting information a little bit closer to the viewer, so that illuminated surfaces don't self-shadow themselves
+        lightAlpha = ALightVolume.SampleLevel(ALightVolumeSampler, saturate(CurPos), 0);
+
+        // Multiply sampled color with ligth color and adjust intensity according to light strength.
+        colorsample.rgb = colorsample.rgb * lightAlpha;//* (dfshadow);
+        AddLightAndOpacity(lightenergy, opacity, colorsample);
+    }
+
+
+    CurPos -=
+localcamvec;
+    if (opacity > 0.99) {
+        opacity = 1;
+        break;
+    };
+}
+
+// Handle FinalStep (only if we went through all the previous steps and there is a final step)
+if (i == MaxSteps && FinalStep > 0) {
+CurPos -= localcamvec * (FinalStep);
+// Labels not affected by clipping!
+   if(LabelVolumeEnabled) {
+    float4 labelValue = LabelVolume.SampleLevel(LabelVolumeSampler, saturate(CurPos), 0);
+    labelValue.a = 1.0 - pow(1.0 - labelValue.a, (StepSize) * 200);
+    lightenergy = lightenergy + labelValue.rgb * labelValue.a * (1.0 - opacity);
+    opacity = opacity + (1.0 - opacity) * labelValue.a;
+   }
+    // Anything that is clipped by the clipping plane shall be ignored.
+    if (dot(CurPos - ClippingCenter, ClippingDirection) < 0) {
+
+return float4(lightenergy, opacity);
+    }
+
+    // Sample intensity from the volume and get corresponding color-opacity from transfer function.
+    cursample = Tex.SampleLevel(TexSampler, saturate(CurPos), 0).
+r;
+
+    // Get the sample into the intensity domain.
+
+    cursample = clamp((cursample - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
+
+    colorsample = TF.SampleLevel(TFSampler, float2(cursample, 0.5), 0);
+
+    colorsample.a = 1.0 - pow(1.0 - colorsample.a, 1.0/512.0 * 200.0);
+
+    // Only care if the sample has at least some alpha.
+    if (colorsample.a > 0.01)
+    {
+        // Get lighting information from illumination volume for current position.
+        // Take the lighting information a little bit closer to the viewer, so that illuminated surfaces don't self-shadow themselves
+        lightAlpha = ALightVolume.SampleLevel(ALightVolumeSampler, saturate(CurPos + localcamvec), 0);
+
+float3 dfpos = 2 * (CurPos - 0.5) * Primitive.LocalObjectBoundsMax.x;
+        dfpos = TransformLocalPositionToWorld(Parameters, dfpos).
+xyz;
+float dftracedist = 1;
+float dfshadow = 1;
+float curdist = 0;
+float DistanceAlongCone = 0;
+        for (
+int d = 0;d <
+DFSteps; d++)
+        {
+            DistanceAlongCone +=
+curdist;
+            curdist = GetDistanceToNearestSurfaceGlobal(dfpos.xyz);
+
+float SphereSize = DistanceAlongCone * LightTangent;
+            dfshadow = min( saturate(curdist / SphereSize) , dfshadow);
+
+            dfpos.xyz += LightVectorWS * dftracedist *
+curdist;
+            dftracedist*= 1.0001;
+        }
+
+        // Multiply sampled color with ligth color and adjust intensity according to light strength.
+        lightedColor = colorsample.rgb *
+lightAlpha;//* (dfshadow);
+
+        // Alpha blend front to back.
+            lightenergy = lightenergy + lightedColor * colorsample.a * (1.0 - opacity);
+            opacity = opacity + (1.0 - opacity) * colorsample.
+a;
+
+
+    }
+}
+
+return float4(lightenergy, opacity);
+
 }
 
 
@@ -1631,7 +1738,7 @@ half3 GetMaterialNormal(FMaterialPixelParameters Parameters, FPixelMaterialInput
     half3 RetNormal;
 
     RetNormal = GetMaterialNormalRaw(PixelMaterialInputs);
-
+        
     #if (USE_EDITOR_SHADERS && !(ES2_PROFILE || ES3_1_PROFILE || ESDEFERRED_PROFILE)) || MOBILE_EMULATION
     {
         // this feature is only needed for development/editor - we can compile it out for a shipping build (see r.CompileShadersForDevelopment cvar help)
@@ -1713,7 +1820,7 @@ half GetMaterialRoughness(FPixelMaterialInputs PixelMaterialInputs)
     // Therefore to prevent division by zero on devices that do not support denormals, Roughness^4
     // must be >= 6.1e-5. We will clamp to 0.09 because 0.09^4 = 6.5e-5.
     //
-    // Note that we also clamp to 1.0 to match the deferred renderer on PC where the roughness is
+    // Note that we also clamp to 1.0 to match the deferred renderer on PC where the roughness is 
     // stored in an 8-bit value and thus automatically clamped at 1.0.
 
     half Roughness = GetMaterialRoughnessRaw(PixelMaterialInputs);
@@ -1729,14 +1836,14 @@ half GetMaterialRoughness(FPixelMaterialInputs PixelMaterialInputs)
     return clamp( Roughness, 0.12, 1.0 );
 #else
     half Roughness = saturate(GetMaterialRoughnessRaw(PixelMaterialInputs));
-
+    
     #if (USE_EDITOR_SHADERS && !ESDEFERRED_PROFILE)
     {
         // this feature is only needed for development/editor - we can compile it out for a shipping build (see r.CompileShadersForDevelopment cvar help)
         Roughness = Roughness * ResolvedView.RoughnessOverrideParameter.y + ResolvedView.RoughnessOverrideParameter.x;
     }
     #endif
-
+    
     return Roughness;
 #endif
 }
@@ -1900,7 +2007,6 @@ half2 GetMaterialRefraction(FPixelMaterialInputs PixelMaterialInputs)
 #if NUM_TEX_COORD_INTERPOLATORS
 void GetMaterialCustomizedUVs(FMaterialVertexParameters Parameters, inout float2 OutTexCoords[NUM_TEX_COORD_INTERPOLATORS])
 {
-    OutTexCoords[0] = Parameters.TexCoords[0].xy;
 
 }
 
@@ -1927,11 +2033,11 @@ float3 TransformTangentNormalToWorld(MaterialFloat3x3 TangentToWorld, float3 Tan
                             length2(DecalToWorld._m20_m21_m22) };
 
     float3 scale = rsqrt(lengthSqr);
-
+                
     // Pre-multiply by the inverse of the non-uniform scale in DecalToWorld
     float4 ScaledNormal = float4(-TangentNormal.z * scale.x, TangentNormal.y * scale.y, TangentNormal.x * scale.z, 0.f);
 
-    // Compute the normal
+    // Compute the normal 
     return normalize(mul(ScaledNormal, DecalToWorld).xyz);
 }
 
@@ -1987,14 +2093,18 @@ void CalcPixelMaterialInputs(in out FMaterialPixelParameters Parameters, in out 
 #endif // !PARTICLE_SPRITE_FACTORY
 
     // Now the rest of the inputs
-    MaterialFloat4 Local0 = ProcessMaterialColorTextureLookup(Texture2DSampleBias(Material.Texture2D_0,Material.Texture2D_0Sampler,Parameters.TexCoords[0].xy,View.MaterialTextureMipBias));
-    MaterialFloat3 Local1 = CustomExpression0(Parameters,Local0.rgb);
-    MaterialFloat3 Local2 = (Material.ScalarExpressions[0].x * Local1);
-    MaterialFloat3 Local3 = CustomExpression1(Parameters,Local2);
-    MaterialFloat3 Local4 = (Local3 + Material.VectorExpressions[1].rgb);
+    MaterialFloat4 Local0 = CustomExpression0(Parameters,Material.ScalarExpressions[0].y,Material.ScalarExpressions[0].x);
+    MaterialFloat4 Local1 = CustomExpression1(Parameters,Local0);
+    MaterialFloat Local2 = (Local1.a * Material.ScalarExpressions[0].x);
+    MaterialFloat Local3 = floor(Local2);
+    MaterialFloat Local4 = frac(Local2);
+    MaterialFloat3 Local5 = (Local0.rgb * 1.00000000);
+    MaterialFloat Local6 = GetDistanceToNearestSurfaceGlobal(Material.ScalarExpressions[0].z);
+    MaterialFloat4 Local7 = CustomExpression2(Parameters,Material.VolumeTexture_0,Material.VolumeTexture_0Sampler,Material.Texture2D_0,Material.Texture2D_0Sampler,Material.ScalarExpressions[0].w,Local3,Local4,Local5,Material.ScalarExpressions[1].x,Material.VolumeTexture_1,Material.VolumeTexture_1Sampler,Material.ScalarExpressions[1].y,Material.ScalarExpressions[1].z,Local6,Material.VectorExpressions[4].rgb,Material.VectorExpressions[5].rgb,Material.VectorExpressions[6].rgb,Material.VolumeTexture_2,Material.VolumeTexture_2Sampler,Material.ScalarExpressions[1].w,Material.ScalarExpressions[2].x);
+    MaterialFloat3 Local8 = (Local7.rgb + Material.VectorExpressions[7].rgb);
 
-    PixelMaterialInputs.EmissiveColor = Local4;
-    PixelMaterialInputs.Opacity = 1.00000000;
+    PixelMaterialInputs.EmissiveColor = Local8;
+    PixelMaterialInputs.Opacity = Local7.a;
     PixelMaterialInputs.OpacityMask = 1.00000000;
     PixelMaterialInputs.BaseColor = MaterialFloat3(0.00000000,0.00000000,0.00000000);
     PixelMaterialInputs.Metallic = 0.00000000;
@@ -2002,7 +2112,7 @@ void CalcPixelMaterialInputs(in out FMaterialPixelParameters Parameters, in out 
     PixelMaterialInputs.Roughness = 0.50000000;
     PixelMaterialInputs.Subsurface = 0;
     PixelMaterialInputs.AmbientOcclusion = 1.00000000;
-    PixelMaterialInputs.Refraction = MaterialFloat2(MaterialFloat2(MaterialFloat2(1.00000000,0.00000000).r,0).r,Material.ScalarExpressions[0].y);
+    PixelMaterialInputs.Refraction = MaterialFloat2(MaterialFloat2(MaterialFloat2(1.00000000,0.00000000).r,0).r,Material.ScalarExpressions[2].y);
     PixelMaterialInputs.PixelDepthOffset = 0.00000000;
 
 }
@@ -2080,7 +2190,7 @@ void GetMaterialClippingVelocity(FMaterialPixelParameters Parameters, FPixelMate
     #if MATERIALBLENDING_MASKED && MATERIAL_DITHER_OPACITY_MASK
         clip(GetMaterialMaskInputRaw(PixelMaterialInputs) - 1.0f / 255.0f);
     #elif MATERIALBLENDING_MASKED
-        clip(GetMaterialMask(PixelMaterialInputs));
+        clip(GetMaterialMask(PixelMaterialInputs)); 
     #elif MATERIALBLENDING_TRANSLUCENT
         clip(GetMaterialOpacity(PixelMaterialInputs) - 1.0f / 255.0f);
     #endif
@@ -2100,7 +2210,7 @@ void GetMaterialCoverageAndClipping(FMaterialPixelParameters Parameters, FPixelM
         401
         */
         float2 Pos = Parameters.SvPosition.xy;
-
+        
         float2 DepthGrad = {
             ddx( Parameters.SvPosition.z ),
             ddy( Parameters.SvPosition.z )
@@ -2181,7 +2291,7 @@ void CalcMaterialParametersEx(
     Parameters.WorldPosition_CamRelative = TranslatedWorldPosition.xyz;
     Parameters.AbsoluteWorldPosition = TranslatedWorldPosition.xyz - ResolvedView.PreViewTranslation.xyz;
 
-    // If the material uses any non-offset world position expressions, calculate those parameters. If not,
+    // If the material uses any non-offset world position expressions, calculate those parameters. If not, 
     // the variables will have been initialised to 0 earlier.
 #if USE_WORLD_POSITION_EXCLUDING_SHADER_OFFSETS
     Parameters.WorldPosition_NoOffsets_CamRelative = TranslatedWorldPositionExcludingShaderOffsets;
@@ -2261,7 +2371,7 @@ half3x3 AssembleTangentToWorld( half3 TangentToWorld0, half4 TangentToWorld2 )
 // Whether to use the hidden d3d11 feature that supports depth writes with ZCull by only pushing into the screen
 //@todo - use for other SM5 platforms
 #define SUPPORTS_CONSERVATIVE_DEPTH_WRITES ((COMPILER_HLSL && FEATURE_LEVEL >= FEATURE_LEVEL_SM5) || (PS4_PROFILE) || (COMPILER_METAL && FEATURE_LEVEL >= FEATURE_LEVEL_SM5))
-#define USE_CONSERVATIVE_DEPTH_WRITES (OUTPUT_PIXEL_DEPTH_OFFSET && SUPPORTS_CONSERVATIVE_DEPTH_WRITES)
+#define USE_CONSERVATIVE_DEPTH_WRITES (OUTPUT_PIXEL_DEPTH_OFFSET && SUPPORTS_CONSERVATIVE_DEPTH_WRITES) 
 
 #if USE_CONSERVATIVE_DEPTH_WRITES
 
@@ -2281,7 +2391,7 @@ half3x3 AssembleTangentToWorld( half3 TangentToWorld0, half4 TangentToWorld2 )
 #endif
 
 #else
-    #define INPUT_POSITION_QUALIFIERS
+    #define INPUT_POSITION_QUALIFIERS 
     #define DEPTH_WRITE_SEMANTIC SV_DEPTH
 #endif
 
