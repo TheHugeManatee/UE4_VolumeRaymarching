@@ -5,11 +5,35 @@
 // The multiplier to use with the SQRT_3_HALF to get values fitting to a range of 0-1.
 #define ONE_OVER_SQRT_3 0.57735026919f
 
+#define RAYMARCH_MAGIC_NUMBER 200.0
+
 
 float RemapIntensity(float intensity, float2 TFIntensityDomain)
 {
     return clamp((intensity - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
 }
+
+float3 GetUVW(uint3 pos, float3 dimensions)
+{
+	// Sample centers of data points.
+    return (pos + float3(0.5, 0.5, 0.5)) / dimensions;
+}
+
+// Samples a Data volume, transforms it to fit the TF Intensity domain and thand transforms it by the TF. Corrects the opacity to account for StepSize and volume size.
+float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
+{
+    float CurSample = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
+    CurSample = clamp((CurSample - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
+    float4 ColorSample = TF.SampleLevel(TFSampler, float2(CurSample, 0.5), 0);
+
+    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize * RAYMARCH_MAGIC_NUMBER);
+    return ColorSample;
+}
+
+///
+/// Possibly obsolete functions for multicolored lights.
+///
+
 
 void RemoveAndAddColor(int3 pos, float4 removedColor, float4 addedColor, float4 oldColor,
 RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<float> BLightVolume, RWTexture3D<float> ALightVolume)
@@ -42,16 +66,16 @@ RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<fl
 	// Optimize this!
 }
 
-void AddColor(int3 pos, float4 addedColor, float4 oldColor, 
+void AddColor(int3 pos, float4 addedColor, float4 oldColor,
 RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<float> BLightVolume, RWTexture3D<float> ALightVolume)
 {
     float totalAlpha = oldColor.a + addedColor.a;
 
-    float currentRed   = oldColor.r * oldColor.a;
+    float currentRed = oldColor.r * oldColor.a;
     float currentGreen = oldColor.g * oldColor.a;
-    float currentBlue  = oldColor.b * oldColor.a;
+    float currentBlue = oldColor.b * oldColor.a;
 
-	ALightVolume[pos] = totalAlpha;
+    ALightVolume[pos] = totalAlpha;
 
     if (totalAlpha == 0)
     {
@@ -60,9 +84,9 @@ RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<fl
         return;
     }
 
-    RLightVolume[pos] = (currentRed   + (addedColor.r * addedColor.a)) / totalAlpha;
+    RLightVolume[pos] = (currentRed + (addedColor.r * addedColor.a)) / totalAlpha;
     GLightVolume[pos] = (currentGreen + (addedColor.g * addedColor.a)) / totalAlpha;
-    BLightVolume[pos] = (currentBlue  + (addedColor.b * addedColor.a)) / totalAlpha;
+    BLightVolume[pos] = (currentBlue + (addedColor.b * addedColor.a)) / totalAlpha;
     // Todo? LERP instead of explicit?
 }
 
@@ -70,129 +94,4 @@ RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<fl
 float4 GetColor(int3 pos, RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<float> BLightVolume, RWTexture3D<float> ALightVolume)
 {
     return float4(RLightVolume[pos], GLightVolume[pos], BLightVolume[pos], ALightVolume[pos]);
-}
-
-int3 GetPos(uint2 threadId, uint3 VolumeSize, uint Loop, uint Axis)
-{
-    switch (Axis)
-    {
-        case 0:
-            return int3(VolumeSize.x - 1 - Loop, threadId.x, threadId.y);
-        case 1:
-            return int3(Loop, VolumeSize.y - 1 - threadId.x, threadId.y);
-        case 2:
-            return int3(VolumeSize.x - 1 - threadId.x, VolumeSize.y - 1 - Loop, threadId.y);
-        case 3:
-            return int3(threadId.x, Loop, threadId.y);
-        case 4:
-            return int3(threadId.x, threadId.y, VolumeSize.z - 1 - Loop);
-        case 5:
-            return int3(threadId.x, VolumeSize.y - 1 - threadId.y, Loop);
-        default:
-            return int3(0, 0, 0);
-    }
-}
-
-float2 GetPixOffset(float3 LightPosition, uint Axis)
-{
-    float3 normLightPosition = LightPosition;
-	// Normalize the light position to get the major axis to be one. The other 2 components are then an offset to apply to current pos
-	// to read from our read buffer texture.
-    switch (Axis)
-    {
-        case 0:
-            normLightPosition /= normLightPosition.x;
-            return normLightPosition.yz;
-        case 1:
-            normLightPosition /= -normLightPosition.x;
-            return float2(-normLightPosition.y, normLightPosition.z);
-        case 2:
-            normLightPosition /= normLightPosition.y;
-            return float2(-normLightPosition.x, normLightPosition.z);
-        case 3:
-            normLightPosition /= -normLightPosition.y;
-            return normLightPosition.xz;
-        case 4:
-            normLightPosition /= normLightPosition.z;
-            return normLightPosition.xy;
-        case 5:
-            normLightPosition /= -normLightPosition.z;
-            return float2(normLightPosition.x, -normLightPosition.y);
-        default:
-            return float2(0, 0);
-    }
-}
-
-
-int3 GetPosNew(uint2 threadId, uint3 VolumeSize, uint Loop, uint Axis)
-{
-    switch (Axis)
-    {
-        case 0:
-            return int3(Loop, threadId.x, threadId.y);
-        case 1:
-            return int3(Loop, threadId.x, threadId.y);
-        case 2:
-            return int3(threadId.x, Loop, threadId.y);
-        case 3:
-            return int3(threadId.x, Loop, threadId.y);
-        case 4:
-            return int3(threadId.x, threadId.y, Loop);
-        case 5:
-            return int3(threadId.x, threadId.y, Loop);
-        default:
-            return int3(0, 0, 0);
-    }
-}
-
-
-float2 GetPixOffsetNew(float3 LightPosition, uint Axis)
-{
-    float3 normLightPosition = LightPosition;
-	// Normalize the light position to get the major axis to be one. The other 2 components are then an offset to apply to current pos
-	// to read from our read buffer texture.
-    switch (Axis)
-    {
-        case 0:
-            normLightPosition /= normLightPosition.x;
-            return normLightPosition.yz;
-        case 1:
-            normLightPosition /= -normLightPosition.x;
-            return float2(normLightPosition.y, normLightPosition.z);
-        case 2:
-            normLightPosition /= normLightPosition.y;
-            return float2(normLightPosition.x, normLightPosition.z);
-        case 3:
-            normLightPosition /= -normLightPosition.y;
-            return normLightPosition.xz;
-        case 4:
-            normLightPosition /= normLightPosition.z;
-            return normLightPosition.xy;
-        case 5:
-            normLightPosition /= -normLightPosition.z;
-            return float2(normLightPosition.x, normLightPosition.y);
-        default:
-            return float2(0, 0);
-    }
-}
-
-
-float2 GetUVNew(float2 pos, float2 texSize, float3 LightPosition, uint Axis)
-{
-    float2 offset = GetPixOffsetNew(LightPosition, Axis);
-    return (pos + float2(0.5, 0.5) + offset) / texSize;
-}
-
-
-
-float2 GetUV(float2 pos, float2 texSize, float3 LightPosition, uint Axis) {
-    float2 offset = GetPixOffset(LightPosition, Axis);
-    return (pos + float2(0.5, 0.5) + offset) / texSize;
-}
-
-
-float3 GetUVW(uint3 pos, float3 dimensions)
-{
-	// Sample centers of data points.
-    return (pos + float3(0.5, 0.5, 0.5)) / dimensions;
 }

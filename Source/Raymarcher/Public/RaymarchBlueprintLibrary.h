@@ -173,7 +173,7 @@ public:
             meta = (WorldContext = "WorldContextObject"))
   static void CreateBasicRaymarchingResources(
       const UObject* WorldContextObject, UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
-      UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFRangeParams,
+      UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFRangeParams,  bool HalfResolution,
       const bool ColoredLightSupport,
       struct FBasicRaymarchRenderingResources& OutParameters);  //
 

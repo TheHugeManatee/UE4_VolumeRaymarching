@@ -578,7 +578,7 @@ void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(
   return;
 }
 
-void CreateBufferTexturesAndUAVs(FIntPoint Size, EPixelFormat PixelFormat,
+void CreateBufferTextures(FIntPoint Size, EPixelFormat PixelFormat,
                                  OneAxisReadWriteBufferResources& RWBuffers) {
   if (Size.X == 0 || Size.Y == 0) {
     UE_LOG(LogTemp, Error, TEXT("Error: Creating Buffer Textures: Size is Zero!"), 3);
@@ -593,15 +593,22 @@ void CreateBufferTexturesAndUAVs(FIntPoint Size, EPixelFormat PixelFormat,
 
 void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
     const UObject* WorldContextObject, UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
-    UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFRangeParams,
+    UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFRangeParams, bool HalfResolution,
     const bool ColoredLightSupport, struct FBasicRaymarchRenderingResources& OutParameters) {
   OutParameters.VolumeTextureRef = Volume;
   OutParameters.ALightVolumeRef = ALightVolume;
   OutParameters.TFTextureRef = TransferFunction;
 
-  unsigned X = Volume->GetSizeX();
-  unsigned Y = Volume->GetSizeY();
-  unsigned Z = Volume->GetSizeZ();
+  int X = Volume->GetSizeX();
+  int Y = Volume->GetSizeY();
+  int Z = Volume->GetSizeZ();
+
+  // If using half res, divide by two.
+  if (HalfResolution) {
+	  X = FMath::DivideAndRoundUp(X, 2);
+	  Y = FMath::DivideAndRoundUp(Y, 2);
+	  Z = FMath::DivideAndRoundUp(Z, 2);
+  }
 
   // Initialize the Alpha Light volume
   InitLightVolume(ALightVolume, FIntVector(X, Y, Z));
@@ -615,20 +622,13 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
   // Make buffers fully colored if we need to support colored lights.
   EPixelFormat PixelFormat = (ColoredLightSupport ? PF_A32B32G32R32F : PF_G16);
 
-  CreateBufferTexturesAndUAVs(XBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[0]);
-  CreateBufferTexturesAndUAVs(YBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[1]);
-  CreateBufferTexturesAndUAVs(ZBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[2]);
+  CreateBufferTextures(XBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[0]);
+  CreateBufferTextures(YBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[1]);
+  CreateBufferTextures(ZBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[2]);
 
   OutParameters.isInitialized = true;
   OutParameters.supportsColor = ColoredLightSupport;
 
-  // ERHIFeatureLevel::Type FeatureLevel = WorldContextObject->GetWorld()->Scene->GetFeatureLevel();
-
-  //// Call the actual rendering code on RenderThread.
-  // ENQUEUE_RENDER_COMMAND(CaptureCommand)
-  //([&OutParameters, FeatureLevel](FRHICommandListImmediate& RHICmdList) {
-  //  CreateBasicRaymarchingResources_RenderThread( RHICmdList, OutParameters, FeatureLevel);
-  //});
 }
 
 void URaymarchBlueprintLibrary::CreateLightVolumeAsset(const UObject* WorldContextObject,

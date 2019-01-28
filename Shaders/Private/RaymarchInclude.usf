@@ -1,6 +1,6 @@
 # pragma once
 
-#define RAYMARCH_MAGIC_NUMBER 200.0
+#include "DirLightCommon.usf"
 
 // Returns true if CurPos is clipped by the clipping plane defined by the center and direction.
 bool IsCurPosClipped(float3 CurPos, float3 ClippingCenter, float3 ClippingDirection) {
@@ -14,16 +14,6 @@ float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume, Sample
     return RetVal;
 }
 
-// Samples a Data volume, transforms it to fit the TF Intensity domain and thand transforms it by the TF. Corrects the opacity to account for StepSize and volume size.
-float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain) {
-    float CurSample =  Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
-    CurSample = clamp((CurSample - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
-	float4 ColorSample = TF.SampleLevel(TFSampler, float2(CurSample, 0.5), 0);
-
-	ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize * RAYMARCH_MAGIC_NUMBER);
-    return ColorSample;
-}
-
 // Adds current sampled light to the LightEnergy and Opacity
 void AddLightAndOpacity(inout float3 LightEnergy, inout float Opacity, in float4 CurrentSample) {
     LightEnergy = LightEnergy + (CurrentSample.rgb * CurrentSample.a * (1.0 - Opacity));
@@ -35,11 +25,11 @@ float GetDFShadow(float3 CurPos, int DFSteps, float LightTangent, float3 LightVe
     float3 DFPos = 2 * (CurPos - 0.5) * Primitive.LocalObjectBoundsMax.x;
     DFPos = TransformLocalPositionToWorld(MaterialParameters, DFPos).xyz;
 
-float dftracedist = 1;
+    float dftracedist = 1;
 
-float dfshadow = 1;
-float curdist = 0;
-float DistanceAlongCone = 0;
+    float dfshadow = 1;
+    float curdist = 0;
+    float DistanceAlongCone = 0;
 
 		for (int d = 0;d < DFSteps; d++)
 		{
@@ -52,8 +42,7 @@ float DistanceAlongCone = 0;
 			DFPos.xyz += LightVectorWS * dftracedist * curdist;
 			dftracedist*= 1.0001;
 		}
-return dfshadow;
-
+    return dfshadow;
 }
 //
 //void PerformRaymarchStep() {
@@ -62,4 +51,4 @@ return dfshadow;
 
 
 float4 BlackReturnColor() {return float4(0.0, 0.0, 0.0, 1.0);}
-float4 WhiteReturnColor() {return float4(1.0, 1.0, 1.0, 1.0); // You must NOT insert the last closing brace! It will be added by the material translator!
+float4 WhiteReturnColor() {return float4(1.0, 1.0, 1.0, 1.0);} //

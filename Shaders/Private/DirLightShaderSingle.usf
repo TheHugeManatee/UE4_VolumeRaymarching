@@ -82,10 +82,8 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
         // of a pixel cut away will decrease with the distance to the cutting plane.
         // If the distance of the center of the voxel to the cutting plane is  0, then exactly half is cut away.
         float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
-        float CurrentSample = Volume.SampleLevel(VolumeSampler, CurrentUVW, 0);
-        CurrentSample = RemapIntensity(CurrentSample, TFIntensityDomain);
-        // Get Color&alpha from intensity multiplied by AlphaWeight
-        CurrentSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurrentSample, 0.5f), 0).a * AlphaWeight;
+        float CurrentSample = SampleDataVolume(CurrentUVW, 0.01, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
+        CurrentSample *= AlphaWeight;
         CurrentLightAlpha = PreviousLightAlpha * (1 - (CurrentSample));
     }
     else if (DistanceToCuttingPlane < 0.0) // Case of being normally cut away.
@@ -95,10 +93,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     }
     else // Case of being not cut away at all.
     {
-        float CurrentSample = Volume.SampleLevel(VolumeSampler, CurrentUVW, 0);
-        CurrentSample = RemapIntensity(CurrentSample, TFIntensityDomain);
-    // Get Color&alpha from intensity
-        CurrentSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurrentSample, 0.5f), 0).a;
+        float CurrentSample = SampleDataVolume(CurrentUVW, 0.01, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         CurrentLightAlpha = PreviousLightAlpha * (1 - (CurrentSample));
     }
 

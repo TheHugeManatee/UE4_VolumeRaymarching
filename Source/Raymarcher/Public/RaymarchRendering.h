@@ -114,6 +114,8 @@ USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
   UVolumeTexture* ALightVolumeRef;
   UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources")
   FTransferFunctionRangeParameters TFRangeParameters;
+  UPROPERTY(BlueprintReadOnly, Category = "Basic Raymarch Rendering Resources") 
+  bool LightVolumeHalfResolution;
   // Not visible in BPs.
   FUnorderedAccessViewRHIParamRef ALightVolumeUAVRef;
   OneAxisReadWriteBufferResources XYZReadWriteBuffers[3];
@@ -529,8 +531,6 @@ protected:
 static void CreateBasicRaymarchingResources_RenderThread(
     FRHICommandListImmediate& RHICmdList, struct FBasicRaymarchRenderingResources& InParams,
     ERHIFeatureLevel::Type FeatureLevel);
-
-
 
 class FRaymarchVolumeShader : public FGlobalShader {
 
