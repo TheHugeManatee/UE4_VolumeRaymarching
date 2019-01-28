@@ -68,25 +68,53 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     
     float LightAlphaChange;
     float CurrentSample = 0;
+
     float DistanceToCuttingPlane = dot(CurrentUVW - LocalClippingCenter, LocalClippingDirection);
-    // Ignore clipped regions.
-    if (DistanceToCuttingPlane < 0)
+
+    // Calculate the distance of the current voxel from the cutting plane in voxel space 
+    float3 CuttingPlaneIntersectPoint = CurrentUVW + LocalClippingDirection * DistanceToCuttingPlane;
+    float3 CuttingPlaneOffset = CurrentUVW - CuttingPlaneIntersectPoint;
+    // Offset to cutting plane in voxel space.
+    float3 VoxelCuttingPlaneOffset = CuttingPlaneOffset * uResolution;
+    // Distance from cutting plane to voxel center in voxel space.
+    float VoxelDistance = length(VoxelCuttingPlaneOffset);
+
+    // Case when the voxel is very close to the cutting plane -> weight the alpha in the voxel by an
+    // aproximation of the part of the cube that's not cut away - this prevents noticeable clipping plane artifacts
+    // (even though it's not even close to being mathematically correct).
+    if (VoxelDistance < SQRT_3_HALF)
     {
-        // Avoid calculations that would be unnecessary. Just propagate previous light unchanged and add it to volume.
+        // Use signum of the DistanceToCuttingPlane, because the weight of a voxel, that's barely
+        // NOT cut away should icnrease with the distance to the cutting plane, but the weight
+        // of a pixel cut away will decrease with the distance to the cutting plane.
+        // If the distance of the center of the voxel to the cutting plane is  0, then exactly half is cut away.
+        float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
+        float CurrentSample = Volume.SampleLevel(VolumeSampler, CurrentUVW, 0);
+        CurrentSample = RemapIntensity(CurrentSample, TFIntensityDomain);
+        // Get Color&alpha from intensity multiplied by AlphaWeight
+        CurrentSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurrentSample, 0.5f), 0).a * AlphaWeight;
+
+        PreviousRemovedLightAlpha *= (1 - CurrentSample);
+        PreviousAddedLightAlpha *= (1 - CurrentSample);
         LightAlphaChange = PreviousAddedLightAlpha - PreviousRemovedLightAlpha;
     }
-    else
+    else if (DistanceToCuttingPlane < 0.0) // Case of being normally cut away.
     {
-        CurrentSample = Volume.SampleLevel(VolumeSampler, CurrentUVW, 0);
+        // Avoid reads that would be unnecessary. Just propagate previous light unchanged and add it to volume.
+        LightAlphaChange = PreviousAddedLightAlpha - PreviousRemovedLightAlpha;
+    }
+    else // Case of being not cut away at all.
+    {
+        float CurrentSample = Volume.SampleLevel(VolumeSampler, CurrentUVW, 0);
         CurrentSample = RemapIntensity(CurrentSample, TFIntensityDomain);
-        // Get Color&alpha from intensity
+    // Get Color&alpha from intensity
         CurrentSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurrentSample, 0.5f), 0).a;
 
         PreviousRemovedLightAlpha *= (1 - CurrentSample);
         PreviousAddedLightAlpha *= (1 - CurrentSample);
         LightAlphaChange = PreviousAddedLightAlpha - PreviousRemovedLightAlpha;
     }
-    
+            
     RemovedWriteBuffer[PixelLoc] = PreviousRemovedLightAlpha;
     WriteBuffer[PixelLoc] = PreviousAddedLightAlpha;
 

@@ -1,5 +1,11 @@
 #pragma once
 
+// The maximum distance when a voxel might be cut away partially by the cutting plane.
+#define SQRT_3_HALF 0.86602540378f
+// The multiplier to use with the SQRT_3_HALF to get values fitting to a range of 0-1.
+#define ONE_OVER_SQRT_3 0.57735026919f
+
+
 float RemapIntensity(float intensity, float2 TFIntensityDomain)
 {
     return clamp((intensity - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
