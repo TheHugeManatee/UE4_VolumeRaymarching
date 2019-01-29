@@ -548,6 +548,7 @@ public:
 		LocalClippingDirection.Bind(Initializer.ParameterMap, TEXT("LocalClippingDirection"));
 
 		TFIntensityDomain.Bind(Initializer.ParameterMap, TEXT("TFIntensityDomain"));
+		StepSize.Bind(Initializer.ParameterMap, TEXT("StepSize"));
 	}
 
 	void SetRaymarchResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, const FTexture3DRHIRef pVolume,
@@ -573,9 +574,16 @@ public:
 		SetShaderValue(RHICmdList, ShaderRHI, TFIntensityDomain, TFDomain);
 	}
 
+	void SetStepSize(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, float pStepSize) {
+	/*	FString debugMsg = "Setting StepSize = " + FString::SanitizeFloat(pStepSize);
+		GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, debugMsg); 
+	*/	SetShaderValue(RHICmdList, ShaderRHI, StepSize, pStepSize);
+	}
+
 	virtual bool Serialize(FArchive& Ar) override {
 		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << Volume << VolumeSampler << TransferFunc << TransferFuncSampler << LocalClippingCenter << LocalClippingDirection << TFIntensityDomain;
+		Ar << Volume << VolumeSampler << TransferFunc << TransferFuncSampler << LocalClippingCenter 
+			<< LocalClippingDirection << TFIntensityDomain << StepSize;
 		return bShaderHasOutdatedParameters;
 	}
 
@@ -590,6 +598,9 @@ protected:
 	FShaderParameter LocalClippingDirection;
 	// TF intensity Domain
 	FShaderParameter TFIntensityDomain;
+	// Step size taken each iteration
+	FShaderParameter StepSize;
+
 };
 
 class FLightPropagationShader : public FRaymarchVolumeShader {
@@ -718,6 +729,7 @@ public:
 		RemovedReadBuffer.Bind(Initializer.ParameterMap, TEXT("RemovedReadBuffer"), SPF_Mandatory);
 		RemovedReadBufferSampler.Bind(Initializer.ParameterMap, TEXT("RemovedReadBufferSampler"), SPF_Mandatory);
 		RemovedWriteBuffer.Bind(Initializer.ParameterMap, TEXT("RemovedWriteBuffer"), SPF_Mandatory);
+		RemovedStepSize.Bind(Initializer.ParameterMap, TEXT("RemovedStepSize"), SPF_Mandatory);
 	}
 
 	// Sets loop-dependent uniforms in the pipeline.
@@ -743,6 +755,18 @@ public:
 		SetShaderValue(RHICmdList, ShaderRHI, RemovedPrevPixelOffset, PixelOffset);
 	}
 
+	void SetPixelOffsets(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FVector2D RemovedPixelOffset, FVector2D AddedPixelOffset)
+	{
+		SetShaderValue(RHICmdList, ShaderRHI, RemovedPrevPixelOffset, RemovedPixelOffset);
+		SetShaderValue(RHICmdList, ShaderRHI, PrevPixelOffset, AddedPixelOffset);
+	}
+
+	void SetStepSizes(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, float pRemovedStepSize, float pAddedStepSize)
+	{
+		SetShaderValue(RHICmdList, ShaderRHI, RemovedStepSize, pRemovedStepSize);
+		SetShaderValue(RHICmdList, ShaderRHI, StepSize, pAddedStepSize);
+	}
+
 	virtual void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) override {
 		// Unbind parent and also our added parameters.
 		FDirLightPropagationShader::UnbindResources(RHICmdList, ShaderRHI);
@@ -752,7 +776,7 @@ public:
 
 	virtual bool Serialize(FArchive& Ar) override {
 		bool bShaderHasOutdatedParameters = FDirLightPropagationShader::Serialize(Ar);
-		Ar << RemovedPrevPixelOffset << RemovedReadBuffer << RemovedReadBufferSampler << RemovedWriteBuffer;
+		Ar << RemovedPrevPixelOffset << RemovedReadBuffer << RemovedReadBufferSampler << RemovedWriteBuffer << RemovedStepSize;
 		return bShaderHasOutdatedParameters;
 	}
 
@@ -766,6 +790,9 @@ protected:
 	FShaderResourceParameter RemovedReadBufferSampler;
 	// Write buffer UAV.
 	FShaderResourceParameter RemovedWriteBuffer;
+	// Removed light step size (is different than added one's)
+	FShaderParameter RemovedStepSize;
+
 };
 
 class FAddDirLightShaderSingle : public FAddDirLightShader {
@@ -782,11 +809,16 @@ class FAddDirLightShaderSingle : public FAddDirLightShader {
 		: FAddDirLightShader(Initializer) {
 		// Volume texture + Transfer function uniforms
 		ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"), SPF_Mandatory);
+		Signum.Bind(Initializer.ParameterMap, TEXT("Signum"), SPF_Mandatory);
 	}
 
 	void SetALightVolume(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FUnorderedAccessViewRHIRef pALightVolume) {
 		// Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
 		SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pALightVolume);
+	}
+
+	void SetSignum (FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, float pSignum) {
+		SetShaderValue(RHICmdList, ShaderRHI, Signum, pSignum);
 	}
 
 	virtual void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) override {
@@ -797,13 +829,14 @@ class FAddDirLightShaderSingle : public FAddDirLightShader {
 
 	virtual bool Serialize(FArchive& Ar) override {
 		bool bShaderHasOutdatedParameters = FAddDirLightShader::Serialize(Ar);
-		Ar << ALightVolume;
+		Ar << ALightVolume << Signum;
 		return bShaderHasOutdatedParameters;
 	}
 
 protected:
 	// Tells the shader the pixel offset for reading from the previous loop's buffer
 	FShaderResourceParameter ALightVolume;
+	FShaderParameter Signum;
 };
 
 

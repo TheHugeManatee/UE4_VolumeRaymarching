@@ -5,6 +5,7 @@
 // The multiplier to use with the SQRT_3_HALF to get values fitting to a range of 0-1.
 #define ONE_OVER_SQRT_3 0.57735026919f
 
+// A constant density setting determining how opaque a volume is. Higher means more opaque.
 #define RAYMARCH_MAGIC_NUMBER 200.0
 
 
@@ -19,6 +20,13 @@ float3 GetUVW(uint3 pos, float3 dimensions)
     return (pos + float3(0.5, 0.5, 0.5)) / dimensions;
 }
 
+
+float3 GetUVWFixed(float3 pos, float3 dimensions)
+{
+	// Sample centers of data points.
+    return pos / dimensions;
+}
+
 // Samples a Data volume, transforms it to fit the TF Intensity domain and thand transforms it by the TF. Corrects the opacity to account for StepSize and volume size.
 float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
 {
@@ -28,6 +36,19 @@ float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, Sampler
 
     ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize * RAYMARCH_MAGIC_NUMBER);
     return ColorSample;
+}
+
+// Samples a Data volume, transforms it to fit the TF Intensity domain and thand transforms it by the TF. Does not take into account the step size
+float4 SampleDataVolumeUniformStep(float3 CurPos, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
+{
+    float CurSample = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
+    CurSample = clamp((CurSample - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
+    return TF.SampleLevel(TFSampler, float2(CurSample, 0.5), 0);
+}
+
+float CorrectForStepSize(float Intensity, float StepSize)
+{
+    return 1.0 - pow(1.0 - Intensity, StepSize * RAYMARCH_MAGIC_NUMBER);
 }
 
 ///

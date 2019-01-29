@@ -183,6 +183,8 @@ public:
             meta = (WorldContext = "WorldContextObject"))
   static void ReadTransferFunctionFromFile(const UObject* WorldContextObject, FString TextFileName,
                                            UCurveLinearColor*& OutColorCurve);  //
+
+  //
   //
   // Experimental and utility functions follow.
   //

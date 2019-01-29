@@ -472,6 +472,23 @@ FMatrix GetPermutationMatrix(FMajorAxes MajorAxes, unsigned index) {
 	}
 	return retVal;
 }
+
+float GetStepSize(FVector2D PixelOffset, FIntVector TransposedDimensions) {
+	// Pixel offset is increased by 0.5 to point to the center of pixels from int coords -> decrease it by that so that the calculations are correct
+	PixelOffset = PixelOffset - 0.5;
+	// Get step to previous voxel in the volume (distance between two propagation layers).
+	float LayerThickness = 1.0f / (float)TransposedDimensions.Z;
+	// Get diagonal length if the step to previous pixel was one
+	float PixelOffsetSize = sqrt(1 + PixelOffset.Size() * PixelOffset.Size());
+	// Return the product.
+	FString debugMsg = "Layer thickness = " + FString::SanitizeFloat(LayerThickness) + ", Pix offset = " + PixelOffset.ToString() + ", diagonal = " + FString::SanitizeFloat(PixelOffsetSize) + ", final StepSize = " + FString::SanitizeFloat(PixelOffsetSize * LayerThickness);
+
+//	GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow,debugMsg);
+
+	return PixelOffsetSize * LayerThickness;
+
+}
+
 void GetLoopStartStopIndexes(int& OutStart, int& OutStop, int& OutAxisDirection, const FMajorAxes& MajorAxes, const unsigned& index, const int zDimension) {
 
 OutAxisDirection = GetAxisDirection(MajorAxes, index);
@@ -629,8 +646,12 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
 	  FVector2D PixelOffset = GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection);
 	  FMatrix PermutationMatrix = GetPermutationMatrix(LocalMajorAxes, i);
 
+	  ComputeShader->SetStepSize(RHICmdList, ShaderRHI, GetStepSize(PixelOffset, TransposedDimensions));
 	  ComputeShader->SetPixelOffset(RHICmdList, ShaderRHI, PixelOffset);
 	  ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, PermutationMatrix);
+
+	  //FString debugMsg = "Loops = " + FString::FromInt(TransposedDimensions.Z);
+	  //	  GEngine->AddOnScreenDebugMessage(-1, 100.0, FColor::Yellow, debugMsg);
 
       uint32 GroupSizeX =
           FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
@@ -639,6 +660,9 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
 
 	  int Start, Stop, AxisDirection;
 	  GetLoopStartStopIndexes(Start, Stop, AxisDirection, LocalMajorAxes, i, TransposedDimensions.Z);
+
+	  ComputeShader->SetSignum(RHICmdList, ShaderRHI, AxisDirection);
+
 
       for (int j = Start; j != Stop; j += AxisDirection) {
         // Switch read and write buffers each row.
@@ -755,14 +779,15 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
 	  FVector2D AddedPixOffset = GetPixOffset(AddedLocalMajorAxes.FaceWeight[i].first, -AddedLocalLightParams.LightDirection);
 	  FVector2D RemovedPixOffset = GetPixOffset(RemovedLocalMajorAxes.FaceWeight[i].first, -RemovedLocalLightParams.LightDirection);
 
-	  ComputeShader->SetPixelOffset(RHICmdList, ShaderRHI, AddedPixOffset);
-	  ComputeShader->SetRemovedPixelOffset(RHICmdList, ShaderRHI, RemovedPixOffset);
-
-	  FMatrix perm = GetPermutationMatrix(RemovedLocalMajorAxes, i);
-	  ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, perm);
 
 	  // TODO take these from buffers.
 	  FIntVector TransposedDimensions = GetTransposedDimensions(RemovedLocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
+
+	  ComputeShader->SetStepSizes(RHICmdList, ShaderRHI, GetStepSize(RemovedPixOffset, TransposedDimensions), GetStepSize(AddedPixOffset, TransposedDimensions));
+	  ComputeShader->SetPixelOffsets(RHICmdList, ShaderRHI, AddedPixOffset, RemovedPixOffset);
+
+	  FMatrix perm = GetPermutationMatrix(RemovedLocalMajorAxes, i);
+	  ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, perm);
 
       // Get group sizes for compute shader
       uint32 GroupSizeX =

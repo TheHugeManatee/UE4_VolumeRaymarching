@@ -42,12 +42,17 @@ SamplerState VolumeSampler;
 // sampling outside means full original light.
 SamplerState ReadBufferSampler;
 
+float StepSize;
+float Signum;
+
 [numthreads(32, 32, 1)]
 void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
 {
-    //int3 pos = GetPosNew(pixelLoc, VolumeSize, Loop, Axis);
-    
     int3 pos = mul(int3(PixelLoc.x, PixelLoc.y, Loop), PermutationMatrix);
+    
+    // Sample the volume between this voxel and the previous light voxel.
+    // float2 sampleSpot = float2(PixelLoc) + (0.5 * (PrevPixelOffset - 0.5)) + 0.5;
+    // float3 samplePos = mul(float3(sampleSpot.x, sampleSpot.y, Loop + (-Signum * 0.5)), PermutationMatrix);
 
     float texSizeX, texSizeY;
     WriteBuffer.GetDimensions(texSizeX, texSizeY);
@@ -82,7 +87,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
         // of a pixel cut away will decrease with the distance to the cutting plane.
         // If the distance of the center of the voxel to the cutting plane is  0, then exactly half is cut away.
         float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
-        float CurrentSample = SampleDataVolume(CurrentUVW, 0.01, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
+        float CurrentSample = SampleDataVolumeUniformStep(CurrentUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         CurrentSample *= AlphaWeight;
         CurrentLightAlpha = PreviousLightAlpha * (1 - (CurrentSample));
     }
@@ -93,7 +98,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     }
     else // Case of being not cut away at all.
     {
-        float CurrentSample = SampleDataVolume(CurrentUVW, 0.01, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
+        float CurrentSample = SampleDataVolumeUniformStep(CurrentUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         CurrentLightAlpha = PreviousLightAlpha * (1 - (CurrentSample));
     }
 

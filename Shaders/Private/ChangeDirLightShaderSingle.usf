@@ -44,6 +44,10 @@ SamplerState TransferFuncSampler;
 
 SamplerState VolumeSampler;
 
+float StepSize;
+
+float RemovedStepSize;
+
 [numthreads(32, 32, 1)]
 void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
 {
@@ -89,13 +93,10 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
         // of a pixel cut away will decrease with the distance to the cutting plane.
         // If the distance of the center of the voxel to the cutting plane is  0, then exactly half is cut away.
         float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
-        float CurrentSample = Volume.SampleLevel(VolumeSampler, CurrentUVW, 0);
-        CurrentSample = RemapIntensity(CurrentSample, TFIntensityDomain);
-        // Get Color&alpha from intensity multiplied by AlphaWeight
-        CurrentSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurrentSample, 0.5f), 0).a * AlphaWeight;
-
-        PreviousRemovedLightAlpha *= (1 - CurrentSample);
-        PreviousAddedLightAlpha *= (1 - CurrentSample);
+        float CurrentSample = SampleDataVolumeUniformStep(CurrentUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a * AlphaWeight;
+        // Both lights have different step sizes (because the direction of the light is different, but we're stepping uniformly layer by layer).
+        PreviousRemovedLightAlpha *= (1 - CorrectForStepSize(CurrentSample, RemovedStepSize));
+        PreviousAddedLightAlpha *= (1 - CorrectForStepSize(CurrentSample, StepSize));
         LightAlphaChange = PreviousAddedLightAlpha - PreviousRemovedLightAlpha;
     }
     else if (DistanceToCuttingPlane < 0.0) // Case of being normally cut away.
@@ -105,13 +106,10 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     }
     else // Case of being not cut away at all.
     {
-        float CurrentSample = Volume.SampleLevel(VolumeSampler, CurrentUVW, 0);
-        CurrentSample = RemapIntensity(CurrentSample, TFIntensityDomain);
-    // Get Color&alpha from intensity
-        CurrentSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurrentSample, 0.5f), 0).a;
-
-        PreviousRemovedLightAlpha *= (1 - CurrentSample);
-        PreviousAddedLightAlpha *= (1 - CurrentSample);
+        float CurrentSample = SampleDataVolumeUniformStep(CurrentUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
+        // Both lights have different step sizes (because the direction of the light is different, but we're stepping uniformly layer by layer).
+        PreviousRemovedLightAlpha *= (1 - CorrectForStepSize(CurrentSample, RemovedStepSize));
+        PreviousAddedLightAlpha *= (1 - CorrectForStepSize(CurrentSample, StepSize));
         LightAlphaChange = PreviousAddedLightAlpha - PreviousRemovedLightAlpha;
     }
             
