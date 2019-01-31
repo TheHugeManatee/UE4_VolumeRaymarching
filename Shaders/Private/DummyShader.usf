@@ -140,3 +140,75 @@ if (i == MaxSteps && FinalStep > 0 && dot(CurPos - ClippingCenter, ClippingDirec
 }
 
 return float4(lightenergy, opacity);
+
+
+
+
+///
+///
+/// Shadow visualization follows
+///
+///
+
+
+
+
+float3 localcamvec = normalize(mul(Parameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+
+float3 lightenergy = 0;
+float opacity = 0;
+
+int3 randpos = int3(Parameters.SvPosition.xy, View.StateFrameIndexMod8);
+float rand = float(Rand3DPCG16(randpos).x) / 0xffff;
+CurPos += localcamvec * rand.x * Jitter;
+
+float lightAlpha = 0;
+
+float Intensity = CorrectForStepSize(0.005, StepSize);
+
+int i = 0;
+for (i = 0;i < MaxSteps; i++)
+{
+
+	// Anything that is clipped by the clipping plane shall be ignored.
+	if (IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection)) {
+		CurPos -= localcamvec;
+		continue;
+	}
+
+    // Uniform density - like very thin fog
+    float CurSample = LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
+
+float4 ColorSample = float4(CurSample, CurSample, CurSample, Intensity);
+	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
+    AddLightAndOpacity(lightenergy, opacity, ColorSample);
+
+	if (opacity > 0.99) {
+		opacity = 1;
+		break;
+	};
+	CurPos -= localcamvec;
+}
+
+
+// Handle FinalStep (only if we went through all the previous steps and there is a final step)
+if (i == MaxSteps && FinalStep > 0) {
+    // Go back to the previous location, so we can perform final step.
+    CurPos += (1 - FinalStep) * localcamvec;
+    StepSize *= FinalStep;
+  
+  // If the final step is clipped, just return.
+	if (IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection)) {
+        return float4(lightenergy, opacity);
+	}
+
+        // Uniform density - like very thin fog
+    float CurSample = LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
+
+float4 ColorSample = float4(CurSample, CurSample, CurSample, Intensity);
+	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
+
+        AddLightAndOpacity(lightenergy, opacity, ColorSample);
+	
+}
+return float4(lightenergy, opacity);
