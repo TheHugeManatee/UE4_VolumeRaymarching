@@ -86,3 +86,57 @@ if (i == MaxSteps && FinalStep > 0) {
 	}
 }
 return float4(lightenergy, opacity);
+
+
+
+
+///
+///
+/// Pure Intensity follows
+///
+///
+
+float3 localcamvec = normalize(mul(Parameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+
+int3 randpos = int3(Parameters.SvPosition.xy, View.StateFrameIndexMod8);
+float rand = float(Rand3DPCG16(randpos).x) / 0xffff;
+CurPos += localcamvec * rand.x * Jitter;
+
+float cursample = 0;
+float4 colorsample = float4(0, 0, 0, 0);
+
+float3 lightenergy = 0;
+float opacity = 0;
+
+[loop] for (int i = 0;i < MaxSteps; i++)
+{
+    // Labels not affected by clipping!
+    if(LabelVolumeEnabled) {
+        float4 labelValue = SampleLabelVolume(CurPos, StepSize, LabelVolume, LabelVolumeSampler);
+        AddLightAndOpacity(lightenergy, opacity, labelValue);
+    }
+
+	// Anything that is clipped by the clipping plane shall be ignored.
+	if (IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection)) {
+		CurPos -= localcamvec;
+		continue;
+	}
+
+	// Sample first non-clipped intensity
+	cursample = Tex.SampleLevel(TexSampler, saturate(CurPos), 0).r;
+	colorsample = float4(cursample, cursample, cursample, 1);
+    AddLightAndOpacity(lightenergy, opacity, colorsample);
+    break;
+}
+
+// Handle FinalStep
+		CurPos -= localcamvec * (FinalStep);
+
+if (i == MaxSteps && FinalStep > 0 && dot(CurPos - ClippingCenter, ClippingDirection) >= 0) {
+
+    cursample = Tex.SampleLevel(TexSampler, saturate(CurPos), 0).r;
+	colorsample = float4(cursample, cursample, cursample, 1);
+    AddLightAndOpacity(lightenergy, opacity, colorsample);
+}
+
+return float4(lightenergy, opacity);

@@ -95,8 +95,8 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
         float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
         float CurrentSample = SampleDataVolumeUniformStep(CurrentUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a * AlphaWeight;
         // Both lights have different step sizes (because the direction of the light is different, but we're stepping uniformly layer by layer).
-        PreviousRemovedLightAlpha *= (1 - CorrectForStepSize(CurrentSample, RemovedStepSize));
-        PreviousAddedLightAlpha *= (1 - CorrectForStepSize(CurrentSample, StepSize));
+        PreviousRemovedLightAlpha *= (1 - CurrentSample);
+        PreviousAddedLightAlpha *= (1 - CurrentSample);
         LightAlphaChange = PreviousAddedLightAlpha - PreviousRemovedLightAlpha;
     }
     else if (DistanceToCuttingPlane < 0.0) // Case of being normally cut away.
@@ -108,8 +108,8 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     {
         float CurrentSample = SampleDataVolumeUniformStep(CurrentUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         // Both lights have different step sizes (because the direction of the light is different, but we're stepping uniformly layer by layer).
-        PreviousRemovedLightAlpha *= (1 - CorrectForStepSize(CurrentSample, RemovedStepSize));
-        PreviousAddedLightAlpha *= (1 - CorrectForStepSize(CurrentSample, StepSize));
+        PreviousRemovedLightAlpha *= (1 - CurrentSample);
+        PreviousAddedLightAlpha *= (1 - CurrentSample);
         LightAlphaChange = PreviousAddedLightAlpha - PreviousRemovedLightAlpha;
     }
             
