@@ -190,6 +190,20 @@ public:
   //
   //
 
+  /**
+   * Generates Volume texture higher mipmap levels. Directly uses values transformed by the transfer function and saves max value for each level.
+   */
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher",
+	  meta = (WorldContext = "WorldContextObject"))
+	  static void GenerateVolumeTextureMipLevels(const UObject* WorldContextObject, FIntVector Dimensions,
+		  UVolumeTexture* inTexture, UTexture2D* TransferFunction, bool& success);
+
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher",
+	  meta = (WorldContext = "WorldContextObject"))
+	  static void GenerateDistanceField(const UObject* WorldContextObject, FIntVector Dimensions,
+		  UVolumeTexture* inTexture, UTexture2D* TransferFunction, UVolumeTexture* SDFTexture, float localSphereDiameter, float threshold, bool& success);
+
+
   /** Will write pure white on the first layer (z = 0) of the texture */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
             meta = (WorldContext = "WorldContextObject"))

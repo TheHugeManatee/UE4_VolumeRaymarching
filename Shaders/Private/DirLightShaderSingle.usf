@@ -86,6 +86,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
         // NOT cut away should icnrease with the distance to the cutting plane, but the weight
         // of a pixel cut away will decrease with the distance to the cutting plane.
         // If the distance of the center of the voxel to the cutting plane is  0, then exactly half is cut away.
+
         float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
         float CurrentSample = SampleDataVolumeUniformStep(CurrentUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         CurrentSample *= AlphaWeight;

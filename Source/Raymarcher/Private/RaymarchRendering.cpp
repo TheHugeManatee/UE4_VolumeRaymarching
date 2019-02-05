@@ -32,10 +32,17 @@ IMPLEMENT_SHADER_TYPE(, FChangeDirLightShaderSingle,
 	TEXT("MainComputeShader"), SF_Compute)
 
 
-IMPLEMENT_SHADER_TYPE(, FClearFloatRWTextureCS, 
-	TEXT("/Plugin/VolumeRaymarching/Private/ClearTextureShader.usf"),
-	TEXT("MainComputeShader"), SF_Compute)
+	IMPLEMENT_SHADER_TYPE(, FClearFloatRWTextureCS,
+		TEXT("/Plugin/VolumeRaymarching/Private/ClearTextureShader.usf"),
+		TEXT("MainComputeShader"), SF_Compute)
 
+	IMPLEMENT_SHADER_TYPE(, FMakeMaxMipsShader,
+		TEXT("/Plugin/VolumeRaymarching/Private/CreateMaxMipsShader.usf"),
+		TEXT("MainComputeShader"), SF_Compute)
+
+
+	IMPLEMENT_SHADER_TYPE(, FMakeDistanceFieldShader, TEXT("/Plugin/VolumeRaymarching/Private/CreateDistanceFieldShader.usf"),
+		TEXT("MainComputeShader"), SF_Compute)
 
 #define NUM_THREADS_PER_GROUP_DIMENSION \
   32  // This has to be the same as in the compute shader's spec [X, X, 1]
@@ -98,7 +105,7 @@ void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVec
 
 bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntVector Dimensions,
                               uint8* BulkData, bool SaveNow, bool UAVCompatible,
-                              UVolumeTexture** pOutCreatedTexture) {
+                              UVolumeTexture** pOutCreatedTexture, int NumMips) {
   //ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
 
   //if (TextureSourceFormat == TSF_Invalid) {
@@ -123,12 +130,13 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
   NewTexture->PlatformData->NumSlices = Dimensions.Z;
   NewTexture->PlatformData->PixelFormat = PixelFormat;
 
-//  NewTexture->MipGenSettings = TMGS_LeaveExistingMips;
+  NewTexture->MipGenSettings = TMGS_LeaveExistingMips;
 
   // Set volume texture parameters.
   NewTexture->NeverStream = false;
   NewTexture->SRGB = false; 
 
+  // Create first mip.
   FTexture2DMipMap* Mip = new (NewTexture->PlatformData->Mips) FTexture2DMipMap();
   Mip->SizeX = Dimensions.X;
   Mip->SizeY = Dimensions.Y;
@@ -141,12 +149,40 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 
   Mip->BulkData.Unlock();
 
+  FIntVector MipDimensions = Dimensions;
+  int ActualMips = 1;
+
+  // Add mips for higher levels - these are empty and will be filled by compute shaders
+  while(ActualMips < NumMips) {
+  	  // Each mip level of a volume texture is 8x smaller (2^3)
+	  TotalSize /= 8;
+	  MipDimensions /= 2;
+	  if (MipDimensions.X == 0 || MipDimensions.Y == 0 || MipDimensions.Z == 0) {
+		  break;
+	  }
+
+	  FTexture2DMipMap* Mip = new FTexture2DMipMap();
+	  Mip->SizeX = MipDimensions.X;
+	  Mip->SizeY = MipDimensions.Y;
+	  Mip->SizeZ = MipDimensions.Z;
+
+	  Mip->BulkData.Lock(LOCK_READ_WRITE);
+
+	  uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
+	  FMemory::Memset(ByteArray, 0, TotalSize);
+
+	  Mip->BulkData.Unlock();
+	  NewTexture->PlatformData->Mips.Add(Mip);
+	  ActualMips++;
+  }
+
   NewTexture->bUAVCompatible = UAVCompatible;
 
 #if WITH_EDITORONLY_DATA
-//  NewTexture->Source.Init(Dimensions.X, Dimensions.Y, Dimensions.Z, 1, TextureSourceFormat,
-//                          ByteArray);
+  /*NewTexture->Source.Init(Dimensions.X, Dimensions.Y, Dimensions.Z, ActualMips, TextureSourceFormat,
+                          ByteArray);*/
 #endif
+
   NewTexture->UpdateResource();
   Package->MarkPackageDirty();
   FAssetRegistryModule::AssetCreated(NewTexture);
@@ -276,6 +312,97 @@ bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoi
 #endif
   Texture->UpdateResource();
   return true;
+}
+
+// For making statistics about GPU use.
+DECLARE_FLOAT_COUNTER_STAT(TEXT("GeneratingMIPs"), STAT_GPU_GeneratingMIPs, STATGROUP_GPU);
+DECLARE_GPU_STAT_NAMED(GPUGeneratingMIPs, TEXT("Generating Volume MIPs"));
+
+void GenerateVolumeTextureMipLevels_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Dimensions, FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc)
+{
+	check(IsInRenderingThread());
+
+	// For GPU profiling.
+	SCOPED_DRAW_EVENTF(RHICmdList, GenerateVolumeTextureMipLevels_RenderThread, TEXT("Generating MIPs"));
+	SCOPED_GPU_STAT(RHICmdList, GPUGeneratingMIPs);
+	// Get shader ref from GlobalShaderMap
+
+	// Find and set compute shader
+	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
+	TShaderMapRef<FMakeMaxMipsShader> ComputeShader(GlobalShaderMap);
+	FComputeShaderRHIParamRef ShaderRHI = ComputeShader->GetComputeShader();
+	RHICmdList.SetComputeShader(ShaderRHI);
+
+	RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier, VolumeResource);
+
+	FUnorderedAccessViewRHIRef VolumeUAVs[8];
+
+	for (uint8 i = 0; i < 8; i++) {
+		VolumeUAVs[i] = RHICreateUnorderedAccessView(VolumeResource, i);
+	}
+
+	for (uint8 i = 0; i < 7; i++) {
+		ComputeShader->SetResources(RHICmdList, ShaderRHI, VolumeUAVs[i], VolumeUAVs[i+1]);
+		Dimensions /= 2;
+		if (Dimensions.X == 0 || Dimensions.Y == 0 || Dimensions.Z == 0) {
+			GEngine->AddOnScreenDebugMessage(0, 10, FColor::Red, "Zero dimension mip detected! Aborting...");
+			break;
+		}
+		DispatchComputeShader(RHICmdList, *ComputeShader, Dimensions.X, Dimensions.Y, Dimensions.Z);
+	}
+
+	// Unbind UAVs.
+	ComputeShader->UnbindResources(RHICmdList, ShaderRHI);
+
+	// Transition resources back to the renderer.
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, VolumeResource);
+}
+
+void GenerateDistanceField_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
+	FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc, FRHITexture3D* DistanceFieldResource, float localSphereDiameter, float threshold)
+{
+	check(IsInRenderingThread());
+
+	// For GPU profiling.
+	SCOPED_DRAW_EVENTF(RHICmdList, GenerateDistanceField_RenderThread, TEXT("Generating MIPs"));
+	SCOPED_GPU_STAT(RHICmdList, GPUGeneratingMIPs);
+	// Get shader ref from GlobalShaderMap
+
+	// Find and set compute shader
+	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
+	TShaderMapRef<FMakeDistanceFieldShader> ComputeShader(GlobalShaderMap);
+	FComputeShaderRHIParamRef ShaderRHI = ComputeShader->GetComputeShader();
+	RHICmdList.SetComputeShader(ShaderRHI);
+
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, VolumeResource);
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, TransferFunc);
+	RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier, DistanceFieldResource);
+
+	FIntVector brush = FIntVector(localSphereDiameter * VolumeResource->GetSizeX(),
+		localSphereDiameter * VolumeResource->GetSizeY(), localSphereDiameter * VolumeResource->GetSizeZ());
+
+	//brush = FIntVector(9,9, 21);
+
+	FUnorderedAccessViewRHIRef DistanceFieldUAV = RHICreateUnorderedAccessView(DistanceFieldResource);
+
+	ComputeShader->SetResources(RHICmdList, ShaderRHI, DistanceFieldUAV, VolumeResource, TransferFunc, brush, threshold, localSphereDiameter/2);
+	
+	uint32 GroupSizeX =
+		FMath::DivideAndRoundUp(Dimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
+	uint32 GroupSizeY =
+		FMath::DivideAndRoundUp(Dimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
+	
+	// Separate into parts so that the GPU doesn't hang.
+	for (int i = 0; i < 10; i++) {
+			ComputeShader->SetZOffset(RHICmdList, ShaderRHI, i * (Dimensions.Z / 10));
+			DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, Dimensions.Z / 10);
+	}
+
+	// Unbind UAVs.
+	ComputeShader->UnbindResources(RHICmdList, ShaderRHI);
+
+	// Transition resources back to the renderer.
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, DistanceFieldResource);
 }
 
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat) {
@@ -615,6 +742,7 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
 	// LightVolumeResource);
 	FUnorderedAccessViewRHIRef AVolumeUAV =
 		RHICreateUnorderedAccessView(Resources.ALightVolumeRef->Resource->TextureRHI);
+	Resources.ALightVolumeRef->PlatformData->Mips[0];
 
 	// Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
 	// no race conditions But we definitely need to transition the resource to Compute-shader

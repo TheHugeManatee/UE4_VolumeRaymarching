@@ -1,0 +1,106 @@
+#include "DirLightCommon.usf"
+
+// This shader takes the lower mip UAV 2x2x2 neighborhood and saves the max value
+// into the higher level mip.
+
+Texture3D Volume;
+SamplerState VolumeSampler;
+
+Texture2D TransferFunc;
+SamplerState TransferFuncSampler;
+
+RWTexture3D<float> DistanceFieldVolume;
+
+int3 CuboidSize;
+
+float Threshold;
+float MaxDistance;
+
+uint ZOffset;
+
+[numthreads(32, 32, 1)]
+void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
+{
+    uint3 currentPos = uint3(ThreadId.x, ThreadId.y, ThreadId.z + ZOffset);
+    uint sizeX, sizeY, sizeZ;
+    Volume.GetDimensions(sizeX, sizeY, sizeZ);
+    uint3 uResolution = uint3(sizeX, sizeY, sizeZ);
+    float min = MaxDistance;
+
+    CuboidSize /= 2;
+
+    float3 CurPos = GetUVW(currentPos, uResolution);
+    float CurSample = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
+
+    // Very early exit if this very voxel is above Threshold.
+    if (CurSample > Threshold)
+    {
+        DistanceFieldVolume[currentPos] = 0.0;
+        return;
+    }
+    
+    // Try "right part" along X
+    for (int i = 0; i <= CuboidSize.x; i++)
+    {
+        for (int j = -CuboidSize.y; j <= CuboidSize.y; j++)
+        {
+            for (int k = -CuboidSize.z; k <= CuboidSize.z; k++)
+            {
+                int3 pos = currentPos + int3(i, j, k);
+                float distance = length(float3(i, j, k) / (float3) uResolution);
+
+                // Don't check if distance is above minimum already (get rid of reads)
+                if (distance > min)
+                    continue;
+
+                CurPos = GetUVW(pos, uResolution);
+                CurSample = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
+                CurSample = TransferFunc.SampleLevel(TransferFuncSampler, CurSample, 0).a;
+                //ColorSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurSample, 0.5), 0).r;
+
+                // If color sample is above threshould, check if it is the closest one yet. If it is, save the distance.
+                if (CurSample > Threshold)
+                {
+                    if (distance < min)
+                    {
+                        min = distance;
+                    }
+                }
+            }
+        }
+    }
+
+    // Try "left part" along X
+    for (int i = -CuboidSize.x; i < 0; i++)
+    {
+        for (int j = -CuboidSize.y; j <= CuboidSize.y; j++)
+        {
+            for (int k = -CuboidSize.z; k <= CuboidSize.z; k++)
+            {
+                int3 pos = currentPos + int3(i, j, k);
+                float distance = length(float3(i, j, k) / (float3) uResolution);
+
+                // Don't check if distance is above minimum already (get rid of reads)
+                if (distance > min)
+                    continue;
+
+                CurPos = GetUVW(pos, uResolution);
+                CurSample = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
+                CurSample = TransferFunc.SampleLevel(TransferFuncSampler, CurSample, 0).a;
+                //ColorSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurSample, 0.5), 0).r;
+
+                // If color sample is above threshould, check if it is the closest one yet. If it is, save the distance.
+                if (CurSample > Threshold)
+                {
+                    if (distance < min)
+                    {
+                        min = distance;
+                    }
+                }
+            }
+        }
+    }
+
+    
+    DistanceFieldVolume[currentPos] = min;
+}

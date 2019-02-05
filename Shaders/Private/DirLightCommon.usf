@@ -38,6 +38,24 @@ float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, Sampler
     return ColorSample;
 }
 
+
+// Samples a Data volume, transforms it to fit the TF Intensity domain and thand transforms it by the TF. Corrects the opacity to account for StepSize and volume size.
+float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain, float LOD)
+{
+    float CurSample = Volume.SampleLevel(VolumeSampler, saturate(CurPos), LOD).r;
+    CurSample = clamp((CurSample - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
+    float4 ColorSample = TF.SampleLevel(TFSampler, float2(CurSample, 0.5), 0);
+
+    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize * RAYMARCH_MAGIC_NUMBER);
+    return ColorSample;
+}
+
+// Samples a Data volume, transforms it to fit the TF Intensity domain and thand transforms it by the TF. Corrects the opacity to account for StepSize and volume size.
+float SampleDataIntensityLoded(float3 CurPos, Texture3D Volume, SamplerState VolumeSampler, float LOD)
+{
+    return Volume.SampleLevel(VolumeSampler, saturate(CurPos), LOD).r;
+}
+
 // Samples a Data volume, transforms it to fit the TF Intensity domain and thand transforms it by the TF. Does not take into account the step size
 float4 SampleDataVolumeUniformStep(float3 CurPos, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
 {

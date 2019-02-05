@@ -335,7 +335,7 @@ void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVec
 
 bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntVector Dimensions,
                               uint8* BulkData, bool SaveNow = false, bool UAVCompatible = false,
-                              UVolumeTexture** pOutCreatedTexture = nullptr);
+                              UVolumeTexture** pOutCreatedTexture = nullptr, int NumMips = 1);
 
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat);
 
@@ -385,6 +385,13 @@ bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint
 bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoint Dimensions,
                           uint8* BulkData, TextureAddress TilingX = TA_Clamp,
                           TextureAddress TilingY = TA_Clamp);
+
+
+void GenerateVolumeTextureMipLevels_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
+	FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc);
+
+void GenerateDistanceField_RenderThread (FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
+	FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc, FRHITexture3D* DistanceFieldResource,float localSphereDiameter, float threshold);
 
 //
 // Shaders for single (alpha) light volume follow.
@@ -876,3 +883,136 @@ protected:
 	// Tells the shader the pixel offset for reading from the previous loop's buffer
 	FShaderResourceParameter ALightVolume;
 };
+
+
+
+class FMakeMaxMipsShader : public FGlobalShader {
+	DECLARE_SHADER_TYPE(FMakeMaxMipsShader, Global)
+public:
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+
+	FMakeMaxMipsShader() : FGlobalShader() {}
+
+	FMakeMaxMipsShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FGlobalShader(Initializer) {
+		// Volume texture + Transfer function uniforms
+		VolumeLowMip.Bind(Initializer.ParameterMap, TEXT("VolumeLowMip"), SPF_Mandatory);
+		VolumeHighMip.Bind(Initializer.ParameterMap, TEXT("VolumeHighMip"), SPF_Mandatory);
+		TransferFunc.Bind(Initializer.ParameterMap, TEXT("TransferFunc"), SPF_Optional);
+		UsingTF.Bind(Initializer.ParameterMap, TEXT("UsingTF"), SPF_Mandatory);
+	}
+
+	void SetResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FUnorderedAccessViewRHIRef pVolumeLowMip,
+		FUnorderedAccessViewRHIRef pVolumeHighMip, const FTexture2DRHIRef pTransferFunc = nullptr) {
+		// Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
+		SetUAVParameter(RHICmdList, ShaderRHI, VolumeLowMip, pVolumeLowMip);
+		SetUAVParameter(RHICmdList, ShaderRHI, VolumeHighMip, pVolumeHighMip);
+
+		SetShaderValue(RHICmdList, ShaderRHI, UsingTF, pTransferFunc != nullptr);
+		if (pTransferFunc) {
+			SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, pTransferFunc);
+		}
+	}
+
+	void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) {
+		// Unbind parent and also our added parameter.
+		SetUAVParameter(RHICmdList, ShaderRHI, VolumeLowMip, FUnorderedAccessViewRHIParamRef());
+		SetUAVParameter(RHICmdList, ShaderRHI, VolumeHighMip, FUnorderedAccessViewRHIParamRef());
+		SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, FTexture2DRHIRef());
+	}
+
+	virtual bool Serialize(FArchive& Ar) override {
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << VolumeLowMip << VolumeHighMip << TransferFunc << UsingTF;
+		return bShaderHasOutdatedParameters;
+	}
+
+protected:
+	// Tells the shader the pixel offset for reading from the previous loop's buffer
+	FShaderResourceParameter VolumeLowMip;
+	FShaderResourceParameter VolumeHighMip;
+
+	FShaderResourceParameter TransferFunc;
+	FShaderParameter UsingTF;
+};
+
+
+class FMakeDistanceFieldShader : public FGlobalShader {
+	DECLARE_SHADER_TYPE(FMakeDistanceFieldShader, Global)
+public:
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+
+	FMakeDistanceFieldShader() : FGlobalShader() {}
+
+	FMakeDistanceFieldShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FGlobalShader(Initializer) {
+		// Volume texture + Transfer function uniforms
+		Volume.Bind(Initializer.ParameterMap, TEXT("Volume"), SPF_Mandatory);
+		VolumeSampler.Bind(Initializer.ParameterMap, TEXT("VolumeSampler"), SPF_Mandatory);
+		TransferFunc.Bind(Initializer.ParameterMap, TEXT("TransferFunc"), SPF_Mandatory);
+		TransferFuncSampler.Bind(Initializer.ParameterMap, TEXT("TransferFuncSampler"), SPF_Mandatory);
+		DistanceFieldVolume.Bind(Initializer.ParameterMap, TEXT("DistanceFieldVolume"), SPF_Mandatory);
+		CuboidSize.Bind(Initializer.ParameterMap, TEXT("CuboidSize"), SPF_Mandatory);
+		Threshold.Bind(Initializer.ParameterMap, TEXT("Threshold"), SPF_Mandatory);
+		MaxDistance.Bind(Initializer.ParameterMap, TEXT("MaxDistance"), SPF_Mandatory);
+		ZOffset.Bind(Initializer.ParameterMap, TEXT("ZOffset"), SPF_Mandatory);
+		
+	}
+
+	void SetResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, 
+		FUnorderedAccessViewRHIRef pDistanceFieldVolume, FTexture3DRHIRef pVolume, 
+	  FTexture2DRHIRef pTransferFunc, FIntVector pCuboidSize, float pThreshold, float pMaxDistance) {
+		// Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
+		SetUAVParameter(RHICmdList, ShaderRHI, DistanceFieldVolume, pDistanceFieldVolume);
+		
+		// Read the Volume and TF @ the closest point, do not interpolate
+		FSamplerStateRHIParamRef SamplerRef =
+			TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+		SetTextureParameter(RHICmdList, ShaderRHI, Volume, VolumeSampler, SamplerRef, pVolume);
+		SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, TransferFuncSampler, SamplerRef, pTransferFunc);
+		
+		SetShaderValue(RHICmdList, ShaderRHI, CuboidSize, pCuboidSize);
+		SetShaderValue(RHICmdList, ShaderRHI, Threshold, pThreshold);
+		SetShaderValue(RHICmdList, ShaderRHI, MaxDistance, pMaxDistance);
+
+	}
+
+	void SetZOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, unsigned pZOffset) {
+		SetShaderValue(RHICmdList, ShaderRHI, ZOffset, pZOffset);
+	}
+
+	void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) {
+		// Unbind parent and also our added parameter.
+		SetUAVParameter(RHICmdList, ShaderRHI, DistanceFieldVolume, FUnorderedAccessViewRHIParamRef());
+		SetTextureParameter(RHICmdList, ShaderRHI, Volume, FTexture2DRHIRef());
+		SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, FTexture2DRHIRef());
+	}
+
+	virtual bool Serialize(FArchive& Ar) override {
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << Volume << VolumeSampler << TransferFunc << TransferFuncSampler<< DistanceFieldVolume<< 
+			CuboidSize<< Threshold<< MaxDistance << ZOffset;
+		return bShaderHasOutdatedParameters;
+	}
+
+protected:
+	// Tells the shader the pixel offset for reading from the previous loop's buffer
+	FShaderResourceParameter Volume;
+	FShaderResourceParameter VolumeSampler;
+
+	FShaderResourceParameter TransferFunc;
+	FShaderResourceParameter TransferFuncSampler;
+
+	FShaderResourceParameter DistanceFieldVolume;
+
+	FShaderParameter CuboidSize;
+	FShaderParameter Threshold;
+	FShaderParameter MaxDistance;
+	FShaderParameter ZOffset;
+};
+
+

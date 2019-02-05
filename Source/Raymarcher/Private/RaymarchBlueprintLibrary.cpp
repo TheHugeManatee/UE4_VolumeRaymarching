@@ -382,7 +382,7 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
   // Actually create the asset.
   UVolumeTexture* OutTexture = nullptr;
   bool Success = CreateVolumeTextureAsset(TextureName, PF_G8, Dimensions, TempArray, SaveAsset,
-                                          false, &OutTexture);
+                                          true, &OutTexture, 8);
   if (Success) {
     MY_LOG("Asset created and saved successfuly.")
   }
@@ -405,7 +405,7 @@ void URaymarchBlueprintLibrary::LoadMhdFileIntoVolumeTextureAsset(
     FString RelativePath = FPaths::ProjectContentDir();
     FString FullPath =
         IFileManager::Get().ConvertToAbsolutePathForExternalAppForRead(*RelativePath) + FileName;
-
+		FileName = FullPath;
     if (!FFileHelper::LoadFileToString(/*out*/ FileContent, *FullPath)) {
       MY_LOG("Reading mhd file failed!");
       return;
@@ -670,6 +670,36 @@ void URaymarchBlueprintLibrary::ReadTransferFunctionFromFile(const UObject* Worl
   }
 
   OutColorCurve = NewObject<UCurveLinearColor>();
+}
+
+void URaymarchBlueprintLibrary::GenerateVolumeTextureMipLevels(const UObject* WorldContextObject, FIntVector Dimensions, UVolumeTexture* inTexture, UTexture2D* TransferFunction, bool& success)
+{
+	success = true;
+	if (!(inTexture->Resource && inTexture->Resource->TextureRHI && TransferFunction->Resource && TransferFunction->Resource->TextureRHI)) {
+		success = false;
+		return;
+	}
+
+	// Call the actual rendering code on RenderThread.
+	ENQUEUE_RENDER_COMMAND(CaptureCommand)
+		([=](FRHICommandListImmediate& RHICmdList) {
+		GenerateVolumeTextureMipLevels_RenderThread(RHICmdList, Dimensions, inTexture->Resource->TextureRHI->GetTexture3D(), TransferFunction->Resource->TextureRHI->GetTexture2D());
+	});
+}
+
+void URaymarchBlueprintLibrary::GenerateDistanceField(const UObject* WorldContextObject, FIntVector Dimensions, UVolumeTexture* inTexture, UTexture2D* TransferFunction, UVolumeTexture* SDFTexture, float localSphereDiameter, float threshold, bool& success)
+{
+	success = true;
+	if (!(inTexture->Resource && inTexture->Resource->TextureRHI && TransferFunction->Resource && TransferFunction->Resource->TextureRHI && SDFTexture->Resource && SDFTexture->Resource->TextureRHI)) {
+		success = false;
+		return;
+	}
+
+	// Call the actual rendering code on RenderThread.
+	ENQUEUE_RENDER_COMMAND(CaptureCommand)
+		([=](FRHICommandListImmediate& RHICmdList) {
+		GenerateDistanceField_RenderThread(RHICmdList, Dimensions, inTexture->Resource->TextureRHI->GetTexture3D(), TransferFunction->Resource->TextureRHI->GetTexture2D(), SDFTexture->Resource->TextureRHI->GetTexture3D(), localSphereDiameter, threshold);
+	});
 }
 
 void URaymarchBlueprintLibrary::CustomLog(const UObject* WorldContextObject, FString LoggedString,

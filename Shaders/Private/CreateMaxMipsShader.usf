@@ -1,0 +1,47 @@
+#include "/Engine/Private/Common.ush"
+
+// This shader takes the lower mip UAV 2x2x2 neighborhood and saves the max value
+// into the higher level mip.
+
+RWTexture3D<uint> VolumeLowMip;
+RWTexture3D<uint> VolumeHighMip;
+
+bool UsingTF;
+
+Texture2D TransferFunc;
+
+// The dimensions of the higher mip (so 2x smaller than LowMip)
+int3 HighMipDimensions;
+
+[numthreads(1, 1, 1)]
+void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
+{
+    uint current = 0;
+    uint max = 0;
+    for (int i = 0; i < 2; i++)
+    {
+        for (int j = 0; j < 2; j++)
+        {
+            for (int k = 0; k < 2; k++)
+            {
+                current = VolumeLowMip[(ThreadId * 2) + int3(i, j, k)];
+                // Search the lower mip for maximum and save it
+                if (current > max)
+                {
+                    max = current;
+                }
+            }
+        }
+    }
+
+    if (UsingTF)
+    {
+        // Todo transfer by TF
+        VolumeHighMip[ThreadId] = 0;
+    }
+    else
+    {
+        VolumeHighMip[ThreadId] = max;
+    }
+
+}
