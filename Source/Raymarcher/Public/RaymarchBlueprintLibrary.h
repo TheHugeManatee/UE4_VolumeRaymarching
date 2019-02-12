@@ -225,4 +225,8 @@ public:
   UFUNCTION(BlueprintPure, Category = "Raymarcher", meta = (WorldContext = "WorldContextObject"))
   static void TransformToMatrix(const UObject* WorldContextObject, const FTransform Transform,
                                 FMatrix& OutMatrix);
+
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher", meta = (WorldContext = "WorldContextObject"))
+  static void ChangeTFParametersInResources(const UObject* WorldContextObject,  FBasicRaymarchRenderingResources Resources, FTransferFunctionRangeParameters TFParameters, FBasicRaymarchRenderingResources& OutResources);
+
 };

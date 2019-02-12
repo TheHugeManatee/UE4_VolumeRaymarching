@@ -723,4 +723,10 @@ void URaymarchBlueprintLibrary::TransformToMatrix(const UObject* WorldContextObj
   OutMatrix = Transform.ToMatrixNoScale();
 }
 
+void URaymarchBlueprintLibrary::ChangeTFParametersInResources(const UObject* WorldContextObject,  FBasicRaymarchRenderingResources Resources, FTransferFunctionRangeParameters TFParameters, FBasicRaymarchRenderingResources& OutResources)
+{
+	Resources.TFRangeParameters = TFParameters;
+	OutResources = Resources;
+}
+
 #undef LOCTEXT_NAMESPACE
