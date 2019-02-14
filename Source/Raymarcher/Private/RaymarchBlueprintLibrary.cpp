@@ -380,13 +380,11 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
   MY_LOG("File was successfully read!");
 
   // Actually create the asset.
-  UVolumeTexture* OutTexture = nullptr;
-  bool Success = CreateVolumeTextureAsset(TextureName, PF_G8, Dimensions, TempArray, SaveAsset,
-                                          true, &OutTexture, 8);
+  bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions, TempArray, LoadedTexture, 
+                                          true, SaveAsset, false);
   if (Success) {
     MY_LOG("Asset created and saved successfuly.")
   }
-  LoadedTexture = OutTexture;
   // Close the RAW file and delete temp data.
 
   delete[] TempArray;
@@ -435,9 +433,11 @@ void URaymarchBlueprintLibrary::LoadMhdFileIntoVolumeTextureAsset(
       FString::SanitizeFloat(WorldDimensions.Z, 3);
   GEngine->AddOnScreenDebugMessage(-1, 20.f, FColor::Yellow, text);
 
-  LoadRawVolumeIntoVolumeTextureAsset(WorldContextObject,
-                                      FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions,
-                                      TextureName, SaveAsset, LoadedTexture);
+   LoadRawVolumeIntoVolumeTextureAsset(WorldContextObject, FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions, TextureName, false, LoadedTexture);
+
+  //LoadRawVolumeIntoVolumeTextureAsset2(WorldContextObject,
+  //                                    FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions.X, info.Dimensions.Y, info.Dimensions.Z ,
+  //                                    TextureName, LoadedTexture);
 
   return;
 }
@@ -492,6 +492,11 @@ void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(
     CustomLog(WorldContextObject,
               "Failed creating TF texture because of nonsense cutoff parameters.", 10);
     return;
+  }
+  if (!Curve || !Texture) {
+	  CustomLog(WorldContextObject,
+		  "Cannot create TF with missing curve/texture asset", 10);
+	  return;
   }
 
   // Sanity check
@@ -634,10 +639,10 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
 void URaymarchBlueprintLibrary::CreateLightVolumeAsset(const UObject* WorldContextObject,
                                                        FString TextureName, FIntVector Dimensions,
                                                        UVolumeTexture*& CreatedVolume) {
-  EPixelFormat PixelFormat = PF_G16;
+  EPixelFormat PixelFormat = PF_G8;
   const unsigned TotalElements =
-      Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].NumComponents;
-  const unsigned TotalSize = TotalElements * 2;
+      Dimensions.X * Dimensions.Y * Dimensions.Z ;
+  const unsigned TotalSize = TotalElements * GPixelFormats[PixelFormat].BlockBytes;
 
   FFloat16* InitMemory = new FFloat16[TotalElements];
 
@@ -647,13 +652,11 @@ void URaymarchBlueprintLibrary::CreateLightVolumeAsset(const UObject* WorldConte
   }
 
   // FMemory::Memset(InitMemory, 1, TotalSize);
-  UVolumeTexture* OutTexture = nullptr;
-  bool Success = CreateVolumeTextureAsset(TextureName, PixelFormat, Dimensions, (uint8*)InitMemory,
-                                          false, true, &OutTexture);
+  bool Success = CreateVolumeTextureAsset(TextureName, PixelFormat, Dimensions, (uint8*)InitMemory, CreatedVolume,
+                                          false, false, true);
   if (Success) {
     MY_LOG("Asset created and saved successfuly.")
   }
-  CreatedVolume = OutTexture;
 }
 
 void URaymarchBlueprintLibrary::ReadTransferFunctionFromFile(const UObject* WorldContextObject,
@@ -723,9 +726,10 @@ void URaymarchBlueprintLibrary::TransformToMatrix(const UObject* WorldContextObj
   OutMatrix = Transform.ToMatrixNoScale();
 }
 
-void URaymarchBlueprintLibrary::ChangeTFParametersInResources(const UObject* WorldContextObject,  FBasicRaymarchRenderingResources Resources, FTransferFunctionRangeParameters TFParameters, FBasicRaymarchRenderingResources& OutResources)
+void URaymarchBlueprintLibrary::ChangeTFInResources(const UObject* WorldContextObject,  FBasicRaymarchRenderingResources Resources,  UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFParameters, FBasicRaymarchRenderingResources& OutResources)
 {
 	Resources.TFRangeParameters = TFParameters;
+	Resources.TFTextureRef = TransferFunction;
 	OutResources = Resources;
 }
 

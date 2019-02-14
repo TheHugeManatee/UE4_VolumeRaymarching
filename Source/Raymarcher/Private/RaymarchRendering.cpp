@@ -104,104 +104,114 @@ void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVec
 }
 
 bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntVector Dimensions,
-                              uint8* BulkData, bool SaveNow, bool UAVCompatible,
-                              UVolumeTexture** pOutCreatedTexture, int NumMips) {
-  //ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
+                              uint8* BulkData,UVolumeTexture*& LoadedTexture, bool Persistent, bool SaveNow, bool UAVCompatible) {
 
-  //if (TextureSourceFormat == TSF_Invalid) {
-  //  return false;
+	FString PackageName = TEXT("/Game/GeneratedTextures/");
+	PackageName += AssetName;
+	UPackage* Package = CreatePackage(NULL, *PackageName);
+	Package->FullyLoad();
+	int PixelByteSize =	GPixelFormats[PixelFormat].BlockBytes;
+	const int TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * PixelByteSize;
+	// Create the texture with given name and location. This will overwrite any existing asset with that name.
+	UVolumeTexture* NewTexture = NewObject<UVolumeTexture>((UObject*)Package, FName(*AssetName), RF_Public | RF_Standalone | RF_MarkAsRootSet);
+	// Set basic properties.
+	NewTexture->AddToRoot();                // This line prevents garbage collection of the texture
+	NewTexture->PlatformData = new FTexturePlatformData();
+	NewTexture->PlatformData->SizeX = Dimensions.X;
+	NewTexture->PlatformData->SizeY = Dimensions.Y;
+	NewTexture->PlatformData->NumSlices = Dimensions.Z;
+	NewTexture->PlatformData->PixelFormat = PixelFormat;
+
+	NewTexture->SRGB = false;
+	NewTexture->NeverStream = true;
+	
+	// Create the one and only mip in this texture.
+	FTexture2DMipMap* mip = new FTexture2DMipMap();
+	mip->SizeX = Dimensions.X;
+	mip->SizeY = Dimensions.Y;
+	mip->SizeZ = Dimensions.Z;
+
+	// This probably doesn't need to be locked, since nobody else has the pointer to the mip as of now, but it's good manners...
+	mip->BulkData.Lock(LOCK_READ_WRITE);
+	// Allocate memory in the mip and copy the actual texture data inside
+	uint8* ByteArray = (uint8*)mip->BulkData.Realloc(TotalSize);
+	FMemory::Memcpy(ByteArray, BulkData, TotalSize);
+
+	mip->BulkData.Unlock();
+	// Add the new MIP to the list of mips.
+	NewTexture->PlatformData->Mips.Add(mip);
+
+	// Handle persistency only if we're in editor!
+#if WITH_EDITORONLY_DATA
+	// Todo - figure out how to tell the Texture Builder to REALLY LEAVE THE BLOODY MIPS ALONE
+	// when setting TMGS_LeaveExistingMips and being persistent. Until then, we simply don't support
+	// mips on generated textures. (We could support it on non-persistent textures, the code at the 
+	// bottom of this function shows how we could do that if needed.).
+	NewTexture->MipGenSettings = TMGS_NoMipmaps;
+
+	// CompressionNone assures the texture is actually saved as we want when it is made persistent and not in DXT1 format.
+	NewTexture->CompressionNone = true;
+
+	// If asset is to be persistent, handle creating the Source structure for it.
+	if (Persistent) {
+		// If using a format that's not supported as Source format, fail.
+		ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
+		if (TextureSourceFormat == TSF_Invalid) {
+			GEngine->AddOnScreenDebugMessage(0, 10, FColor::Red, "Trying to create persistent asset with unsupported pixel format!");
+			return false;
+		}
+		// Otherwise initialize the source struct with our size and bulk data.
+		NewTexture->Source.Init(Dimensions.X, Dimensions.Y, Dimensions.Z, 1, TextureSourceFormat, ByteArray);
+	}	
+#endif // WITH_EDITORONLY_DATA
+	
+	// Set the texture to be UAV Compatible if requested. Beware! Not all formats support this (notably anything compressed).
+	NewTexture->bUAVCompatible = UAVCompatible;
+	// Update resourc, mark that the folder needs to be rescan and notify editor about asset creation.
+	NewTexture->UpdateResource();
+	Package->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(NewTexture);
+	// Pass out the reference to our brand new texture.
+	LoadedTexture = NewTexture;
+
+	// Only save the asset if that is needed (as this is a disk operation and takes a long time)
+	// The texture does not need to be persistent to be saved, but if it's not, only a dummy 0x0x0 texture is saved.
+	if (SaveNow) {
+		FString PackageFileName = FPackageName::LongPackageNameToFilename(
+			PackageName, FPackageName::GetAssetPackageExtension());
+		return UPackage::SavePackage(Package, NewTexture,
+			EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
+			*PackageFileName, GError, nullptr, true, true, SAVE_NoError);
+	}
+	else {
+		return true;
+	}
+
+  // Let's put mip creation aside now, these wouldn't play nice with persistence as of now...
+  //// Add mips for higher levels - these are empty and will be filled by compute shaders
+  //while(ActualMips < NumMips) {
+  //	  // Each mip level of a volume texture is 8x smaller (2^3)
+	 // TotalSize /= 8;
+	 // MipDimensions /= 2;
+	 // if (MipDimensions.X == 0 || MipDimensions.Y == 0 || MipDimensions.Z == 0) {
+		//  break;
+	 // }
+
+	 // FTexture2DMipMap* Mip = new FTexture2DMipMap();
+	 // Mip->SizeX = MipDimensions.X;
+	 // Mip->SizeY = MipDimensions.Y;
+	 // Mip->SizeZ = MipDimensions.Z;
+
+	 // Mip->BulkData.Lock(LOCK_READ_WRITE);
+
+	 // uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
+	 // FMemory::Memset(ByteArray, 0, TotalSize);
+
+	 // Mip->BulkData.Unlock();
+	 // NewTexture->PlatformData->Mips.Add(Mip);
+	 // ActualMips++;
   //}
 
-  int TotalSize =
-      Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
-
-  FString PackageName = TEXT("/Game/GeneratedTextures/");
-  PackageName += AssetName;
-  UPackage* Package = CreatePackage(NULL, *PackageName);
-  Package->FullyLoad();
-
-  UVolumeTexture* NewTexture = NewObject<UVolumeTexture>(
-      (UObject*)Package, FName(*AssetName), RF_Public | RF_Standalone | RF_MarkAsRootSet);
-
-  NewTexture->AddToRoot();  // This line prevents garbage collection of the texture
-  NewTexture->PlatformData = new FTexturePlatformData();  // Then we initialize the PlatformData
-  NewTexture->PlatformData->SizeX = Dimensions.X;
-  NewTexture->PlatformData->SizeY = Dimensions.Y;
-  NewTexture->PlatformData->NumSlices = Dimensions.Z;
-  NewTexture->PlatformData->PixelFormat = PixelFormat;
-
-  NewTexture->MipGenSettings = TMGS_LeaveExistingMips;
-
-  // Set volume texture parameters.
-  NewTexture->NeverStream = false;
-  NewTexture->SRGB = false; 
-
-  // Create first mip.
-  FTexture2DMipMap* Mip = new (NewTexture->PlatformData->Mips) FTexture2DMipMap();
-  Mip->SizeX = Dimensions.X;
-  Mip->SizeY = Dimensions.Y;
-  Mip->SizeZ = Dimensions.Z;
-
-  Mip->BulkData.Lock(LOCK_READ_WRITE);
-
-  uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
-  FMemory::Memcpy(ByteArray, BulkData, TotalSize);
-
-  Mip->BulkData.Unlock();
-
-  FIntVector MipDimensions = Dimensions;
-  int ActualMips = 1;
-
-  // Add mips for higher levels - these are empty and will be filled by compute shaders
-  while(ActualMips < NumMips) {
-  	  // Each mip level of a volume texture is 8x smaller (2^3)
-	  TotalSize /= 8;
-	  MipDimensions /= 2;
-	  if (MipDimensions.X == 0 || MipDimensions.Y == 0 || MipDimensions.Z == 0) {
-		  break;
-	  }
-
-	  FTexture2DMipMap* Mip = new FTexture2DMipMap();
-	  Mip->SizeX = MipDimensions.X;
-	  Mip->SizeY = MipDimensions.Y;
-	  Mip->SizeZ = MipDimensions.Z;
-
-	  Mip->BulkData.Lock(LOCK_READ_WRITE);
-
-	  uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
-	  FMemory::Memset(ByteArray, 0, TotalSize);
-
-	  Mip->BulkData.Unlock();
-	  NewTexture->PlatformData->Mips.Add(Mip);
-	  ActualMips++;
-  }
-
-  NewTexture->bUAVCompatible = UAVCompatible;
-
-#if WITH_EDITORONLY_DATA
-  /*NewTexture->Source.Init(Dimensions.X, Dimensions.Y, Dimensions.Z, ActualMips, TextureSourceFormat,
-                          ByteArray);*/
-#endif
-
-  NewTexture->UpdateResource();
-  Package->MarkPackageDirty();
-  FAssetRegistryModule::AssetCreated(NewTexture);
-
-  // Pass the pointer out if requested.
-  if (pOutCreatedTexture != nullptr) {
-    *pOutCreatedTexture = NewTexture;
-  }
-
-  // Only save the asset if that is needed (as this is a disk operation and takes a long time)
-  if (SaveNow) {
-    FString PackageFileName = FPackageName::LongPackageNameToFilename(
-        PackageName, FPackageName::GetAssetPackageExtension());
-    return UPackage::SavePackage(Package, NewTexture,
-                                 EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
-                                 *PackageFileName, GError, nullptr, true, true, SAVE_NoError);
-  } else {
-    return true;
-  }
 }
 
 bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,

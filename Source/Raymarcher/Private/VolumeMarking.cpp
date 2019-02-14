@@ -67,7 +67,7 @@ void UVolumeMarkingLibrary::CreateMarkingVolume(FIntVector Dimensions, FString A
 	uint8* dummy = (uint8*)FMemory::Malloc(TotalSize);
 	FMemory::Memset(dummy, 0, TotalSize);
 
-	if (!CreateVolumeTextureAsset(AssetName, PF_B8G8R8A8, Dimensions, dummy, false, true, &OutTexture)) {
+	if (!CreateVolumeTextureAsset(AssetName, PF_B8G8R8A8, Dimensions, dummy, OutTexture, false, false, true)) {
 		GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, "Failed creating the marking volume.");
 	}
 

@@ -134,7 +134,7 @@ public:
                                                   FString FileName, FIntVector Dimensions,
                                                   FString TextureName, bool SaveAsset,
                                                   UVolumeTexture*& LoadedTexture);
-
+  
   /** Loads a MHD file into a newly created Volume Texture Asset. Returns the loaded texture, it's
   world dimensions and texture dimensions.  **/
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
@@ -226,7 +226,14 @@ public:
   static void TransformToMatrix(const UObject* WorldContextObject, const FTransform Transform,
                                 FMatrix& OutMatrix);
 
+  /** Changes the transfer function & parameters in the resources struct. This is needed because in blueprints, you cannot change a single 
+	  member of a struct and because of hidden members, creating a new struct also doesn't work (unless you'd recreate all the resources, 
+	  which would be a waste). Maybe solve this later by taking the TFRangeParameters out of the BasicRaymarchResources struct.
+  */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher", meta = (WorldContext = "WorldContextObject"))
-  static void ChangeTFParametersInResources(const UObject* WorldContextObject,  FBasicRaymarchRenderingResources Resources, FTransferFunctionRangeParameters TFParameters, FBasicRaymarchRenderingResources& OutResources);
+  static void ChangeTFInResources(const UObject* WorldContextObject,  FBasicRaymarchRenderingResources Resources, UTexture2D* TFTexture,  FTransferFunctionRangeParameters TFParameters, FBasicRaymarchRenderingResources& OutResources);
+
+
+
 
 };

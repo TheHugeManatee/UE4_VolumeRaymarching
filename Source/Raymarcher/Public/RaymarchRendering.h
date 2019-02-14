@@ -99,6 +99,8 @@ struct OneAxisReadWriteBufferResources {
   FUnorderedAccessViewRHIParamRef UAVs[4];
 };
 
+/** A structure holding all resources related to a single raymarchable volume - its texture ref, the TF texture ref and TF Range parameters,
+    light volume texture ref, and read-write buffers used for propagating along all axes. */
 USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
   GENERATED_BODY()
 
@@ -121,6 +123,9 @@ USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
   OneAxisReadWriteBufferResources XYZReadWriteBuffers[3];
 };
 
+/** Structure containing the world parameters required for light propagation shaders - these include
+	the volume's world transform, clipping plane parameters and bounds of the mesh
+*/
 USTRUCT(BlueprintType) struct FRaymarchWorldParameters {
   GENERATED_BODY()
 
@@ -166,8 +171,8 @@ const FVector FCubeFaceNormals[6] = {
     {0.0, 0.0, -1.0}   // bottom
 };
 
-// Struct corresponding to the 3 major axes to propagate a light-source along with their respective
-// weights.
+/** Structure corresponding to the 3 major axes to propagate a light-source along with their respective
+    weights. */
 struct FMajorAxes {
   // The 3 major axes indexes
   std::vector<std::pair<FCubeFace, float>> FaceWeight;
@@ -179,8 +184,8 @@ static bool SortDescendingWeights(const std::pair<FCubeFace, float>& a,
   return (a.second > b.second);
 };
 
-// Returns the weighted major axes to propagate along to add/remove a light to/from a lightvolume
-// (LightPos must be converted to object-space).
+/* Returns the weighted major axes to propagate along to add/remove a light to/from a lightvolume
+   (LightPos must be converted to object-space). */
 static FMajorAxes GetMajorAxes(FVector LightPos) {
   FMajorAxes RetVal;
   std::vector<std::pair<FCubeFace, float>> faceVector;
@@ -333,11 +338,26 @@ public:
 void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Size,
                                    UVolumeTexture* inTexture, ERHIFeatureLevel::Type FeatureLevel);
 
+/** Creates a Volume Texture asset with the given name, pixel format and dimensions and fills it 
+	with the bulk data provided. It can be set to be persistent and UAV compatible and can also
+	be immediately saved to disk.
+	Returns a reference to the created texture in the CreatedTexture param.
+*/
 bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntVector Dimensions,
-                              uint8* BulkData, bool SaveNow = false, bool UAVCompatible = false,
-                              UVolumeTexture** pOutCreatedTexture = nullptr, int NumMips = 1);
+                              uint8* BulkData, UVolumeTexture*& CreatedTexture, bool Persistent = false, 
+							  bool SaveNow = false, bool UAVCompatible = false);
 
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat);
+
+/** Creates a 2D Texture asset with the given name from the provided bulk data with the given format.*/
+bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
+	uint8* BulkData, bool SaveNow = false, TextureAddress TilingX = TA_Clamp,
+	TextureAddress TilingY = TA_Clamp);
+
+/** Updates the provided 2D Texture asset to have the provided format, dimensions and pixel data*/
+bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoint Dimensions,
+	uint8* BulkData, TextureAddress TilingX = TA_Clamp,
+	TextureAddress TilingY = TA_Clamp);
 
 void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                            FBasicRaymarchRenderingResources Resources,
@@ -378,20 +398,16 @@ void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                          FRHITexture3D* ALightVolumeResource, float ClearValue,
                                          ERHIFeatureLevel::Type FeatureLevel);
 
-bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
-                          uint8* BulkData, bool SaveNow = false, TextureAddress TilingX = TA_Clamp,
-                          TextureAddress TilingY = TA_Clamp);
-
-bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoint Dimensions,
-                          uint8* BulkData, TextureAddress TilingX = TA_Clamp,
-                          TextureAddress TilingY = TA_Clamp);
-
-
 void GenerateVolumeTextureMipLevels_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
 	FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc);
 
 void GenerateDistanceField_RenderThread (FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
 	FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc, FRHITexture3D* DistanceFieldResource,float localSphereDiameter, float threshold);
+
+static void CreateBasicRaymarchingResources_RenderThread(
+	FRHICommandListImmediate& RHICmdList, struct FBasicRaymarchRenderingResources& InParams,
+	ERHIFeatureLevel::Type FeatureLevel);
+
 
 //
 // Shaders for single (alpha) light volume follow.
@@ -533,11 +549,6 @@ protected:
 	FShaderResourceParameter ClearTexture2DRW;
 };
 
-
-
-static void CreateBasicRaymarchingResources_RenderThread(
-    FRHICommandListImmediate& RHICmdList, struct FBasicRaymarchRenderingResources& InParams,
-    ERHIFeatureLevel::Type FeatureLevel);
 
 class FRaymarchVolumeShader : public FGlobalShader {
 
