@@ -269,7 +269,7 @@ void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
     const FRaymarchWorldParameters WorldParameters, bool& LightAdded, FVector& LocalLightDir) {
   if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
       !Resources.ALightVolumeRef->Resource || !Resources.VolumeTextureRef->Resource->TextureRHI ||
-      !Resources.TFTextureRef->Resource->TextureRHI ||
+	      !Resources.TFTextureRef->Resource->TextureRHI ||
       !Resources.ALightVolumeRef->Resource->TextureRHI) {
     LightAdded = false;
     return;

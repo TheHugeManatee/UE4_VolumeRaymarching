@@ -153,13 +153,26 @@ USTRUCT(BlueprintType) struct FColorVolumesResources {
 
 // Enum for indexes for cube faces - used to discern axes for light propagation shader.
 enum FCubeFace : int {
-  Right = 1,  // +X
-  Left = 2,   // -X
-  Front = 3,  // +Y
-  Back = 4,   // -Y
-  Top = 5,    // +Z
-  Bottom = 6  // -Z
+  Right = 0,  // +X
+  Left = 1,   // -X
+  Front = 2,  // +Y
+  Back = 3,   // -Y
+  Top = 4,    // +Z
+  Bottom = 5  // -Z
 };
+
+static FString GetDirectionName(FCubeFace face) {
+	switch (face) {
+	case Right :  return FString("+X");
+	case Left : return FString("-X");
+	case Front :return FString("+Y");
+	case Back : return FString("-Y");
+	case Top : return FString("+Z");
+	case Bottom : return FString("-Z");
+	default : return FString("Something went wrong here!");
+	}
+
+}
 
 // Normals of corresponding cube faces in object-space.
 const FVector FCubeFaceNormals[6] = {

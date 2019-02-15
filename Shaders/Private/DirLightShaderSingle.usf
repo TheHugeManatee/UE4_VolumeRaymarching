@@ -49,10 +49,6 @@ float Signum;
 void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
 {
     int3 pos = mul(int3(PixelLoc.x, PixelLoc.y, Loop), PermutationMatrix);
-    
-    // Sample the volume between this voxel and the previous light voxel.
-    // float2 sampleSpot = float2(PixelLoc) + (0.5 * (PrevPixelOffset - 0.5)) + 0.5;
-    // float3 samplePos = mul(float3(sampleSpot.x, sampleSpot.y, Loop + (-Signum * 0.5)), PermutationMatrix);
 
     float texSizeX, texSizeY;
     WriteBuffer.GetDimensions(texSizeX, texSizeY);
@@ -60,10 +56,20 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     uint sizeX, sizeY, sizeZ;
     ALightVolume.GetDimensions(sizeX, sizeY, sizeZ);
     uint3 uResolution = uint3(sizeX, sizeY, sizeZ);
+        
+    //// Sample the volume intensity halfway between current voxel and previous voxel.
+    //float2 sampleSpot = float2(PixelLoc) + (float2((PrevPixelOffset.x - 0.5) * -Signum, PrevPixelOffset.y - 0.5) * 0.5);
+    //// When going from positive axis (negative signum) we need to switch the pixel offsets (because these are flipped) 
+    //float3 samplePos = mul(float3(sampleSpot.x, sampleSpot.y, Loop + (Signum * 0.5)), PermutationMatrix);
+    //float3 sampleUVW = GetUVW(samplePos, uResolution);
 
+
+    float3 SampleUVWOffset = mul(float3(PrevPixelOffset.x, PrevPixelOffset.y, Signum), PermutationMatrix);
+   
     float3 CurrentUVW = GetUVW(pos, uResolution);
+    float3 SampleUVW = CurrentUVW + SampleUVWOffset;
 
-    float2 PreviousUV = (PixelLoc + PrevPixelOffset) / float2(texSizeX, texSizeY);
+    float2 PreviousUV = ((PixelLoc + float2(0.5, 0.5)) / float2(texSizeX, texSizeY)) + PrevPixelOffset;
     float PreviousLightAlpha = ReadBuffer.SampleLevel(ReadBufferSampler, PreviousUV, 0);
     float CurrentLightAlpha;
 
@@ -88,7 +94,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
         // If the distance of the center of the voxel to the cutting plane is  0, then exactly half is cut away.
 
         float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
-        float CurrentSample = SampleDataVolumeUniformStep(CurrentUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
+        float CurrentSample = SampleDataVolumeUniformStep(SampleUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         CurrentSample *= AlphaWeight;
         CurrentLightAlpha = PreviousLightAlpha * (1 - (CurrentSample));
     }
@@ -99,7 +105,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     }
     else // Case of being not cut away at all.
     {
-        float CurrentSample = SampleDataVolumeUniformStep(CurrentUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
+        float CurrentSample = SampleDataVolumeUniformStep(SampleUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         CurrentLightAlpha = PreviousLightAlpha * (1 - (CurrentSample));
     }
 

@@ -23,7 +23,6 @@ float3 GetUVW(uint3 pos, float3 dimensions)
 
 float3 GetUVWFixed(float3 pos, float3 dimensions)
 {
-	// Sample centers of data points.
     return pos / dimensions;
 }
 

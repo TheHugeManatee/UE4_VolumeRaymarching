@@ -478,32 +478,50 @@ void ClearFloatTextureRW(FRHICommandListImmediate & RHICmdList, FUnorderedAccess
 	ComputeShader->UnbindUAV(RHICmdList);
 }
 
-FVector2D GetPixOffset(int Axis, FVector LightPosition) {
-  FVector normLightPosition = LightPosition;
-  // Normalize the light position to get the major axis to be one. The other 2 components are then
-  // an offset to apply to current pos to read from our read buffer texture.
-  switch (Axis) {
-    case 0:
-      normLightPosition /= normLightPosition.X;
-      return FVector2D(normLightPosition.Y, normLightPosition.Z) + 0.5;
-    case 1:
-      normLightPosition /= -normLightPosition.X;
-      return FVector2D(normLightPosition.Y, normLightPosition.Z) + 0.5;
-    case 2:
-      normLightPosition /= normLightPosition.Y;
-      return FVector2D(normLightPosition.X, normLightPosition.Z) + 0.5;
-    case 3:
-      normLightPosition /= -normLightPosition.Y;
-      return FVector2D(normLightPosition.X, normLightPosition.Z) + 0.5;
-    case 4:
-      normLightPosition /= normLightPosition.Z;
-      return FVector2D(normLightPosition.X, normLightPosition.Y) + 0.5;
-    case 5:
-      normLightPosition /= -normLightPosition.Z;
-      return FVector2D(normLightPosition.X, normLightPosition.Y) + 0.5;
-    default: return FVector2D(0, 0);
-  }
+FVector2D GetPixOffset(int Axis, FVector LightPosition, FIntVector TransposedDimensions) {
+	FVector normLightPosition = LightPosition;
+	// Normalize the light position to get the major axis to be one. The other 2 components are then
+	// an offset to apply to current pos to read from our read buffer texture.
+	FVector2D RetVal;
+	switch (Axis) {
+	case 0:
+		normLightPosition /= normLightPosition.X;
+		RetVal = FVector2D(normLightPosition.Y, normLightPosition.Z);
+		break;
+	case 1:
+		normLightPosition /= -normLightPosition.X;
+		RetVal = FVector2D(normLightPosition.Y, normLightPosition.Z);
+		break;
+	case 2:
+		normLightPosition /= normLightPosition.Y;
+		RetVal = FVector2D(normLightPosition.X, normLightPosition.Z);
+		break;
+	case 3:
+		normLightPosition /= -normLightPosition.Y;
+		RetVal = FVector2D(normLightPosition.X, normLightPosition.Z);
+		break;
+	case 4:
+		normLightPosition /= normLightPosition.Z;
+		RetVal = FVector2D(normLightPosition.X, normLightPosition.Y);
+		break;
+	case 5:
+		normLightPosition /= -normLightPosition.Z;
+		RetVal = FVector2D(normLightPosition.X, normLightPosition.Y);
+		break;
+	default: {check(false); return FVector2D(0, 0); };
+	}
+
+	// Now normalize for different voxel sizes. Because we have Transposed Dimensions as input, we know
+	// that we're propagating along TD.Z, The X-size of the buffer is in TD.X and Y-size of the buffer is in TD.Y
+	//// Divide by length of step
+	RetVal /= TransposedDimensions.Z;
+	// Want to sample centers of pixels (the offset is from the pixel int coordinates, not the center)
+	FString loggg = "Pixel offset is " + (RetVal).ToString();
+	GEngine->AddOnScreenDebugMessage(10, 2, FColor::Yellow, loggg);
+
+	return RetVal;// + 0.5;
 }
+
 
 void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
                                 const FTransform& VolumeTransform,
@@ -714,15 +732,15 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
     // Calculate local Light parameters and corresponding axes.
     GetLocalLightParamsAndAxes(LightParameters, WorldParameters.VolumeTransform, LocalLightParams,
                                LocalMajorAxes);
-
+	
     // Transform clipping parameters into local space.
     FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
 
     // For GPU profiling.
     SCOPED_DRAW_EVENTF(RHICmdList, AddDirLightToSingleLightVolume_RenderThread, TEXT("Adding Lights"));
     SCOPED_GPU_STAT(RHICmdList, GPUAddingLights);
-    // Get shader ref from GlobalShaderMap
-   
+
+	// TODO create structure with 2 sets of buffers so we don't have to look for them again in the actual shader loop!
 	// Clear buffers for the two axes we will be using.
 	for (unsigned i = 0; i < 2; i++) {
 		// Break if the main axis weight == 1
@@ -774,6 +792,9 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
       }
 	  OneAxisReadWriteBufferResources& Buffers = GetBuffers(LocalMajorAxes, i, Resources);
 
+	  FString loggg = "Now propagating from " + GetDirectionName(LocalMajorAxes.FaceWeight[i].first);
+	  GEngine->AddOnScreenDebugMessage(0, 1, FColor::Yellow, loggg);
+
 	  uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
 	  FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
 
@@ -781,9 +802,15 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
       FIntVector TransposedDimensions = GetTransposedDimensions(
           LocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
 
-	  FVector2D PixelOffset = GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection);
+	  FVector2D PixelOffset = GetPixOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection, TransposedDimensions);
+/*
+	  loggg = "new offset " + PixelOffset.ToString() + ", orig offset " + PixelOffset2.ToString();
+	  GEngine->AddOnScreenDebugMessage(100, 2, FColor::Yellow, loggg);
+*/
 	  FMatrix PermutationMatrix = GetPermutationMatrix(LocalMajorAxes, i);
 
+
+	  // TODO stepsize should be in world space!
 	  ComputeShader->SetStepSize(RHICmdList, ShaderRHI, GetStepSize(PixelOffset, TransposedDimensions));
 	  ComputeShader->SetPixelOffset(RHICmdList, ShaderRHI, PixelOffset);
 	  ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, PermutationMatrix);
@@ -799,9 +826,9 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
 	  int Start, Stop, AxisDirection;
 	  GetLoopStartStopIndexes(Start, Stop, AxisDirection, LocalMajorAxes, i, TransposedDimensions.Z);
 
-	  ComputeShader->SetSignum(RHICmdList, ShaderRHI, AxisDirection);
-
-
+	  float layerThickness = -AxisDirection * (1.0f / TransposedDimensions.Z);
+	  ComputeShader->SetSignum(RHICmdList, ShaderRHI, layerThickness);
+	  
       for (int j = Start; j != Stop; j += AxisDirection) {
         // Switch read and write buffers each row.
         if (j % 2 == 0) {
@@ -913,13 +940,11 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
       FSamplerStateRHIRef AddedReadBuffSampler = GetBufferSamplerRef(AddedColorInt);
 
       OneAxisReadWriteBufferResources& Buffers = GetBuffers(RemovedLocalMajorAxes, i, Resources);
-	  
-	  FVector2D AddedPixOffset = GetPixOffset(AddedLocalMajorAxes.FaceWeight[i].first, -AddedLocalLightParams.LightDirection);
-	  FVector2D RemovedPixOffset = GetPixOffset(RemovedLocalMajorAxes.FaceWeight[i].first, -RemovedLocalLightParams.LightDirection);
-
-
 	  // TODO take these from buffers.
 	  FIntVector TransposedDimensions = GetTransposedDimensions(RemovedLocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
+	  
+	  FVector2D AddedPixOffset = GetPixOffset(AddedLocalMajorAxes.FaceWeight[i].first, -AddedLocalLightParams.LightDirection, TransposedDimensions);
+	  FVector2D RemovedPixOffset = GetPixOffset(RemovedLocalMajorAxes.FaceWeight[i].first, -RemovedLocalLightParams.LightDirection, TransposedDimensions);
 
 	  ComputeShader->SetStepSizes(RHICmdList, ShaderRHI, GetStepSize(RemovedPixOffset, TransposedDimensions), GetStepSize(AddedPixOffset, TransposedDimensions));
 	  ComputeShader->SetPixelOffsets(RHICmdList, ShaderRHI, AddedPixOffset, RemovedPixOffset);
