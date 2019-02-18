@@ -114,7 +114,7 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTexture(const UObject* Wo
                                                                FString textureName,
                                                                FIntVector Dimensions,
                                                                UVolumeTexture* inTexture) {
-  const int TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
+  const long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
 
   IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 
@@ -218,7 +218,7 @@ void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
                                                 FIntVector Dimensions) {
   if (!LightVolume) return;
 
-  const int TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * 4;
+  const long long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * 2;
 
   // todo remove?
 #if WITH_EDITORONLY_DATA
@@ -269,7 +269,7 @@ void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
     const FRaymarchWorldParameters WorldParameters, bool& LightAdded, FVector& LocalLightDir) {
   if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
       !Resources.ALightVolumeRef->Resource || !Resources.VolumeTextureRef->Resource->TextureRHI ||
-	      !Resources.TFTextureRef->Resource->TextureRHI ||
+	  !Resources.TFTextureRef->Resource->TextureRHI ||
       !Resources.ALightVolumeRef->Resource->TextureRHI) {
     LightAdded = false;
     return;
@@ -353,8 +353,8 @@ void URaymarchBlueprintLibrary::ClearResourceLightVolumes(
 
 void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
     const UObject* WorldContextObject, FString FileName, FIntVector Dimensions, FString TextureName,
-    bool SaveAsset, UVolumeTexture*& LoadedTexture) {
-  const int TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
+    bool Persistent, UVolumeTexture*& LoadedTexture) {
+  const long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
 
   IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 
@@ -381,7 +381,7 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
 
   // Actually create the asset.
   bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions, TempArray, LoadedTexture, 
-                                          true, SaveAsset, false);
+                                          Persistent, false, false);
   if (Success) {
     MY_LOG("Asset created and saved successfuly.")
   }
@@ -394,7 +394,7 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
 }
 
 void URaymarchBlueprintLibrary::LoadMhdFileIntoVolumeTextureAsset(
-    const UObject* WorldContextObject, FString FileName, FString TextureName, bool SaveAsset,
+    const UObject* WorldContextObject, FString FileName, FString TextureName, bool Persistent,
     FIntVector& TextureDimensions, FVector& WorldDimensions, UVolumeTexture*& LoadedTexture) {
   FString FileContent;
   // First, try to read as absolute path
@@ -640,14 +640,14 @@ void URaymarchBlueprintLibrary::CreateLightVolumeAsset(const UObject* WorldConte
                                                        FString TextureName, FIntVector Dimensions,
                                                        UVolumeTexture*& CreatedVolume) {
   EPixelFormat PixelFormat = PF_G8;
-  const unsigned TotalElements =
+  const long TotalElements =
       Dimensions.X * Dimensions.Y * Dimensions.Z ;
-  const unsigned TotalSize = TotalElements * GPixelFormats[PixelFormat].BlockBytes;
+  const long TotalSize = TotalElements * GPixelFormats[PixelFormat].BlockBytes;
 
   FFloat16* InitMemory = new FFloat16[TotalElements];
 
   FFloat16 num = 0.0f;
-  for (unsigned i = 0; i < TotalElements; i++) {
+  for (long i = 0; i < TotalElements; i++) {
     InitMemory[i] = num;
   }
 

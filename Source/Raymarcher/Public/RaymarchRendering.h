@@ -705,7 +705,7 @@ public:
 		PrevPixelOffset.Bind(Initializer.ParameterMap, TEXT("PrevPixelOffset"), SPF_Mandatory);
 	}
 
-	void SetPixelOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FVector2D PixelOffset) {
+	void SetUVOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FVector2D PixelOffset) {
 		SetShaderValue(RHICmdList, ShaderRHI, PrevPixelOffset, PixelOffset);
 	}
 
@@ -840,7 +840,7 @@ class FAddDirLightShaderSingle : public FAddDirLightShader {
 		: FAddDirLightShader(Initializer) {
 		// Volume texture + Transfer function uniforms
 		ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"), SPF_Mandatory);
-		Signum.Bind(Initializer.ParameterMap, TEXT("Signum"), SPF_Mandatory);
+		UVWOffset.Bind(Initializer.ParameterMap, TEXT("UVWOffset"), SPF_Mandatory);
 	}
 
 	void SetALightVolume(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FUnorderedAccessViewRHIRef pALightVolume) {
@@ -848,8 +848,8 @@ class FAddDirLightShaderSingle : public FAddDirLightShader {
 		SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pALightVolume);
 	}
 
-	void SetSignum (FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, float pSignum) {
-		SetShaderValue(RHICmdList, ShaderRHI, Signum, pSignum);
+	void SetUVWOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FVector pUVWOffset) {
+		SetShaderValue(RHICmdList, ShaderRHI, UVWOffset, pUVWOffset);
 	}
 
 	virtual void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) override {
@@ -860,14 +860,14 @@ class FAddDirLightShaderSingle : public FAddDirLightShader {
 
 	virtual bool Serialize(FArchive& Ar) override {
 		bool bShaderHasOutdatedParameters = FAddDirLightShader::Serialize(Ar);
-		Ar << ALightVolume << Signum;
+		Ar << ALightVolume << UVWOffset;
 		return bShaderHasOutdatedParameters;
 	}
 
 protected:
 	// Tells the shader the pixel offset for reading from the previous loop's buffer
 	FShaderResourceParameter ALightVolume;
-	FShaderParameter Signum;
+	FShaderParameter UVWOffset;
 };
 
 

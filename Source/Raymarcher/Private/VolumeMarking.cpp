@@ -63,7 +63,7 @@ void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRH
 
 void UVolumeMarkingLibrary::CreateMarkingVolume(FIntVector Dimensions, FString AssetName, UVolumeTexture*& OutTexture)
 {
-	int TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * 4;
+	unsigned TotalSize = (long)Dimensions.X * (long)Dimensions.Y * (long)Dimensions.Z * 4;
 	uint8* dummy = (uint8*)FMemory::Malloc(TotalSize);
 	FMemory::Memset(dummy, 0, TotalSize);
 

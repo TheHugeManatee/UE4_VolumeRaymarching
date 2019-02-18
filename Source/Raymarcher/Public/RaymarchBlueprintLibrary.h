@@ -140,7 +140,7 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Raymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void LoadMhdFileIntoVolumeTextureAsset(const UObject* WorldContextObject, FString FileName,
-                                                FString TextureName, bool SaveAsset,
+                                                FString TextureName, bool Persistent,
                                                 FIntVector& TextureDimensions,
                                                 FVector& WorldDimensions,
                                                 UVolumeTexture*& LoadedTexture);
