@@ -42,10 +42,9 @@ for (i = 0;i < MaxSteps; i++)
     colorsample = SampleDataVolume(CurPos, StepSize, Tex, TexSampler, TF, TFSampler, TFIntensityDomain, 0);
 
 	// Get lighting information from illumination volume for current position.
-	// Take the lighting information a little bit closer to the viewer, so that illuminated surfaces don't self-shadow themselves
 	lightAlpha = ALightVolume.SampleLevel(ALightVolumeSampler, saturate(CurPos), 0);
     // float dfShadow = GetDFShadow(CurPos, DFSteps, LightTangent, LightVectorWS, Parameters);
-	// Multiply sampled color with ligth color and adjust intensity according to light strength.
+	// Multiply sampled color with light color and adjust intensity according to light strength.
 	colorsample.rgb = colorsample.rgb * lightAlpha;// * (dfShadow);
     AddLightAndOpacity(lightenergy, opacity, colorsample);
 
@@ -74,7 +73,6 @@ if (i == MaxSteps && FinalStep > 0) {
     colorsample = SampleDataVolume(CurPos, StepSize, Tex, TexSampler, TF, TFSampler, TFIntensityDomain, 0);
 
     // Get lighting information from illumination volume for current position.
-	// Take the lighting information a little bit closer to the viewer, so that illuminated surfaces don't self-shadow themselves
 	lightAlpha = ALightVolume.SampleLevel(ALightVolumeSampler, saturate(CurPos), 0);
 
 	// Multiply sampled color with ligth color and adjust intensity according to light strength.

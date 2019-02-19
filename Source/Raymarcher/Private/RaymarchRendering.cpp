@@ -523,7 +523,7 @@ FVector2D GetUVOffset(int Axis, FVector LightPosition, FIntVector TransposedDime
 }
 
 
-void GetStepSizeAndUVWOffset(int Axis, FVector LightPosition, FIntVector TransposedDimensions, FTransform VolumeTransform, float& OutStepSize, FVector& OutUVWOffset) {
+void GetStepSizeAndUVWOffset(int Axis, FVector LightPosition, FIntVector TransposedDimensions, const FRaymarchWorldParameters WorldParameters, float& OutStepSize, FVector& OutUVWOffset) {
 	OutUVWOffset = LightPosition;
 	// Since we don't care about the direction, just the size, ignore signs.
 	switch (Axis) {
@@ -541,12 +541,13 @@ void GetStepSizeAndUVWOffset(int Axis, FVector LightPosition, FIntVector Transpo
 		break;
 	default: check(false);;
 	}
-/*
-	FString loggg = "step size is " + FString::SanitizeFloat(VolumeTransform.InverseTransformVector(OutUVWOffset).Size());
-	GEngine->AddOnScreenDebugMessage(10, 2, FColor::Yellow, loggg);
-*/
 
-	OutStepSize = VolumeTransform.InverseTransformVector(OutUVWOffset).Size();
+	// Transform local vector to world space.
+	FVector WorldVec = WorldParameters.VolumeTransform.TransformVector(OutUVWOffset * WorldParameters.MeshMaxBounds * 2);
+	FString loggg = "OutUVWOffset = " + OutUVWOffset.ToString() + "World vec = " + WorldVec.ToString() + ", size in world = " + FString::SanitizeFloat(WorldVec.Size()) + " Transposed Dims = " + TransposedDimensions.ToString();
+	GEngine->AddOnScreenDebugMessage(10, 20, FColor::Yellow, loggg);
+
+	OutStepSize = WorldVec.Size();
 }
 
 
@@ -559,7 +560,7 @@ void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
 
   // Transform light directions into local space.
   OutLocalLightParameters.LightDirection =
-      VolumeTransform.InverseTransformVectorNoScale(LightParameters.LightDirection);
+      VolumeTransform.InverseTransformVector(LightParameters.LightDirection);
   // Normalize Light Direction to get unit length.
   OutLocalLightParameters.LightDirection.Normalize();
 
@@ -571,6 +572,9 @@ void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
   // the light is the opposite of the direction) e.g. Directional light with direction (1, 0, 0) is
   // assumed to be shining from (-1, 0, 0)
   OutLocalMajorAxes = GetMajorAxes(-OutLocalLightParameters.LightDirection);
+  if (OutLocalMajorAxes.FaceWeight[0].second > 0.99f) {
+	  OutLocalMajorAxes.FaceWeight[0].second = 1.0f;
+  }
 
   // Set second axis weight to (1 - (first axis weight))
   OutLocalMajorAxes.FaceWeight[1].second = 1 - OutLocalMajorAxes.FaceWeight[0].second;
@@ -611,18 +615,18 @@ FClippingPlaneParameters GetLocalClippingParameters(
 
 FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt) {
   // Return a sampler for RW buffers - bordered by specified color.
-  return RHICreateSamplerState(FSamplerStateInitializerRHI(SF_Trilinear, AM_Border, AM_Border,
-                                                           AM_Border, 0, 0, 0, 0, BorderColorInt));
+  return RHICreateSamplerState(FSamplerStateInitializerRHI(SF_Bilinear, AM_Border, AM_Border,
+                                                           AM_Border, 0, 0, 0, 1, BorderColorInt));
 }
 
 // Returns the color int required for the given light color and major axis (single channel)
 uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes MajorAxes,
-                               unsigned index) {
-  // Set alpha channel to the texture's red channel (when reading single-channel, only red component
-  // is read)
-  FLinearColor LightColor =
-      FLinearColor(LightParams.LightIntensity * MajorAxes.FaceWeight[index].second, 0.0, 0.0, 0.0);
-  return LightColor.ToFColor(true).ToPackedARGB();
+	unsigned index) {
+	// Set alpha channel to the texture's red channel (when reading single-channel, only red component
+	// is read)
+	FLinearColor LightColor =
+		FLinearColor(LightParams.LightIntensity * MajorAxes.FaceWeight[index].second, 0.0, 0.0, 0.0);
+	return LightColor.ToFColor(true).ToPackedARGB();
 }
 
 // Returns the light's alpha at this major axis and weight (single channel)
@@ -821,8 +825,8 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
       }
 	  OneAxisReadWriteBufferResources& Buffers = GetBuffers(LocalMajorAxes, i, Resources);
 
-	  //FString loggg = "Now propagating from " + GetDirectionName(LocalMajorAxes.FaceWeight[i].first);
-	  //GEngine->AddOnScreenDebugMessage(0, 1, FColor::Yellow, loggg);
+	  FString loggg = "Now propagating from " + GetDirectionName(LocalMajorAxes.FaceWeight[i].first);
+	  GEngine->AddOnScreenDebugMessage(-230, 10, FColor::Yellow, loggg);
 
 	  uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
 	  FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
@@ -832,30 +836,18 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
           LocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
 
 	  FVector2D UVOffset = GetUVOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection, TransposedDimensions);
-/*
-	  loggg = "new offset " + PixelOffset.ToString() + ", orig offset " + PixelOffset2.ToString();
-	  GEngine->AddOnScreenDebugMessage(100, 2, FColor::Yellow, loggg);
-*/
 	  FMatrix PermutationMatrix = GetPermutationMatrix(LocalMajorAxes, i);
 
 	  FIntVector LightVolumeSize = FIntVector( Resources.ALightVolumeRef->GetSizeX(), Resources.ALightVolumeRef->GetSizeY(), Resources.ALightVolumeRef->GetSizeZ()); 
 
 	  FVector UVWOffset;
 	  float StepSize;
-	  GetStepSizeAndUVWOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection, LightVolumeSize, WorldParameters.VolumeTransform, StepSize, UVWOffset);
-	  
-	  // Sample a fixed distance from the current position towards the light to avoid artifacts from self shadowing.
-	  // Todo figure out why a distance based on current step doesn't work very well.
-	  UVWOffset.Normalize();
-	  UVWOffset*= 0.01;
+	  GetStepSizeAndUVWOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection, TransposedDimensions, WorldParameters, StepSize, UVWOffset);
 
 	  ComputeShader->SetStepSize(RHICmdList, ShaderRHI, StepSize);
 	  ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, PermutationMatrix);
 	  ComputeShader->SetUVOffset(RHICmdList, ShaderRHI, UVOffset);
 	  ComputeShader->SetUVWOffset(RHICmdList, ShaderRHI, UVWOffset);
-
-	  //FString debugMsg = "Loops = " + FString::FromInt(TransposedDimensions.Z);
-	  //	  GEngine->AddOnScreenDebugMessage(-1, 100.0, FColor::Yellow, debugMsg);
 
       uint32 GroupSizeX =
           FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);

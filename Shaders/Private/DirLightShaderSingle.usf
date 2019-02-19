@@ -59,7 +59,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
         
     //// Sample the volume intensity halfway between current voxel and previous voxel.
     float3 CurrentUVW = GetUVW(pos, uResolution);
-    float3 SampleUVW = CurrentUVW + UVWOffset;
+    float3 SampleUVW = CurrentUVW + (0.5 * (float3(UVWOffset.x, UVWOffset.y, UVWOffset.z)));
 
     float2 PreviousUV = ((PixelLoc + float2(0.5, 0.5)) / float2(texSizeX, texSizeY)) + PrevPixelOffset;
     float PreviousLightAlpha = ReadBuffer.SampleLevel(ReadBufferSampler, PreviousUV, 0);
@@ -86,7 +86,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
         // If the distance of the center of the voxel to the cutting plane is  0, then exactly half is cut away.
 
         float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
-        float CurrentSample = SampleDataVolumeUniformStep(SampleUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
+        float CurrentSample = SampleDataVolumeNorm(SampleUVW, StepSize, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         CurrentSample *= AlphaWeight;
         CurrentLightAlpha = PreviousLightAlpha * (1 - (CurrentSample));
     }
@@ -97,7 +97,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     }
     else // Case of being not cut away at all.
     {
-        float CurrentSample = SampleDataVolumeUniformStep(SampleUVW, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
+        float CurrentSample = SampleDataVolumeNorm(SampleUVW, StepSize, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         CurrentLightAlpha = PreviousLightAlpha * (1 - (CurrentSample));
     }
 

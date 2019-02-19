@@ -278,7 +278,7 @@ void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
   }
 
   LocalLightDir =
-      WorldParameters.VolumeTransform.InverseTransformVectorNoScale(LightParameters.LightDirection);
+      WorldParameters.VolumeTransform.InverseTransformVector(LightParameters.LightDirection);
 
   LocalLightDir.Normalize();
 

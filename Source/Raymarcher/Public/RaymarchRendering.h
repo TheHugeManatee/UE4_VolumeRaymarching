@@ -210,8 +210,8 @@ static FMajorAxes GetMajorAxes(FVector LightPos) {
     // Dot^2 for non-negative faces will always sum up to 1.
     weight = (weight > 0 ? weight * weight : 0);
     RetVal.FaceWeight.push_back(std::make_pair(FCubeFace(i), weight));
-
-    /*float dot = FVector::DotProduct(FCubeFaceNormals[i], LightPos);
+/*
+    float dot = FVector::DotProduct(FCubeFaceNormals[i], LightPos);
     float weight = 1 - (2 * acos(dot) / PI);
     RetVal.FaceWeight.push_back(std::make_pair(FCubeFace(i), weight));*/
   }
@@ -361,6 +361,10 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 							  bool SaveNow = false, bool UAVCompatible = false);
 
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat);
+
+FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt);
+uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsigned index);
+
 
 /** Creates a 2D Texture asset with the given name from the provided bulk data with the given format.*/
 bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
@@ -585,10 +589,21 @@ public:
 	void SetRaymarchResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, const FTexture3DRHIRef pVolume,
 		const FTexture2DRHIRef pTransferFunc) {
 		// Create a static sampler reference and bind it together with the volume texture + TF.
-		FSamplerStateRHIParamRef SamplerRef =
-			TStaticSamplerState<SF_Trilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+
+		FLinearColor VolumeClearColor = FLinearColor(0.0, 0.0, 0.0, 0.0);
+		const uint32 BorderColorInt = VolumeClearColor.ToFColor(false).ToPackedARGB();
+
+		FSamplerStateRHIRef SamplerRef = RHICreateSamplerState(FSamplerStateInitializerRHI(SF_Trilinear, AM_Border, AM_Border,
+			AM_Border, 0, 1, 0, 0, BorderColorInt));
+
+		/*FSamplerStateRHIRef SamplerRef = TStaticSamplerState<SF_Trilinear, AM_Border, AM_Border,
+			AM_Border, 0, 1, 0>::GetRHI();
+*/
+
+		FSamplerStateRHIRef TFSamplerRef = // GetBufferSamplerRef(VolumeClearColor.ToFColor(true).ToPackedARGB());
+			TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 		SetTextureParameter(RHICmdList, ShaderRHI, Volume, VolumeSampler, SamplerRef, pVolume);
-		SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, TransferFuncSampler, SamplerRef,
+		SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, TransferFuncSampler, TFSamplerRef,
 			pTransferFunc);
 	}
 
