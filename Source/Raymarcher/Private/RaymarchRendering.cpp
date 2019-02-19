@@ -9,27 +9,27 @@
 #define LOCTEXT_NAMESPACE "RaymarchPlugin"
 
 IMPLEMENT_SHADER_TYPE(, FVolumePS, TEXT("/Plugin/VolumeRaymarching/Private/RaymarchShader.usf"),
-                      TEXT("PassthroughPS"), SF_Pixel)
-//IMPLEMENT_SHADER_TYPE(, FAddOrRemoveDirLightShader,
-//                      TEXT("/Plugin/VolumeRaymarching/Private/DirLightShader.usf"),
-//                      TEXT("MainComputeShader"), SF_Compute)
-//IMPLEMENT_SHADER_TYPE(, FChangeDirLightShader,
-//                      TEXT("/Plugin/VolumeRaymarching/Private/ChangeDirLightShader.usf"),
-//                      TEXT("MainComputeShader"), SF_Compute)
-//IMPLEMENT_SHADER_TYPE(, FClearLightVolumesShader,
-//                      TEXT("/Plugin/VolumeRaymarching/Private/ClearVolumesShader.usf"),
-//                      TEXT("MainComputeShader"), SF_Compute)
+	TEXT("PassthroughPS"), SF_Pixel)
+	//IMPLEMENT_SHADER_TYPE(, FAddOrRemoveDirLightShader,
+	//                      TEXT("/Plugin/VolumeRaymarching/Private/DirLightShader.usf"),
+	//                      TEXT("MainComputeShader"), SF_Compute)
+	//IMPLEMENT_SHADER_TYPE(, FChangeDirLightShader,
+	//                      TEXT("/Plugin/VolumeRaymarching/Private/ChangeDirLightShader.usf"),
+	//                      TEXT("MainComputeShader"), SF_Compute)
+	//IMPLEMENT_SHADER_TYPE(, FClearLightVolumesShader,
+	//                      TEXT("/Plugin/VolumeRaymarching/Private/ClearVolumesShader.usf"),
+	//                      TEXT("MainComputeShader"), SF_Compute)
 
-IMPLEMENT_SHADER_TYPE(, FAddDirLightShaderSingle,
-                      TEXT("/Plugin/VolumeRaymarching/Private/DirLightShaderSingle.usf"),
-                      TEXT("MainComputeShader"), SF_Compute)
-IMPLEMENT_SHADER_TYPE(, FChangeDirLightShaderSingle,
-                      TEXT("/Plugin/VolumeRaymarching/Private/ChangeDirLightShaderSingle.usf"),
-                      TEXT("MainComputeShader"), SF_Compute)
+	IMPLEMENT_SHADER_TYPE(, FAddDirLightShaderSingle,
+		TEXT("/Plugin/VolumeRaymarching/Private/DirLightShaderSingle.usf"),
+		TEXT("MainComputeShader"), SF_Compute)
+	IMPLEMENT_SHADER_TYPE(, FChangeDirLightShaderSingle,
+		TEXT("/Plugin/VolumeRaymarching/Private/ChangeDirLightShaderSingle.usf"),
+		TEXT("MainComputeShader"), SF_Compute)
 
 	IMPLEMENT_SHADER_TYPE(, FClearSingleLightVolumeShader,
-	TEXT("/Plugin/VolumeRaymarching/Private/ClearVolumesShaderSingle.usf"),
-	TEXT("MainComputeShader"), SF_Compute)
+		TEXT("/Plugin/VolumeRaymarching/Private/ClearVolumesShaderSingle.usf"),
+		TEXT("MainComputeShader"), SF_Compute)
 
 
 	IMPLEMENT_SHADER_TYPE(, FClearFloatRWTextureCS,
@@ -47,70 +47,70 @@ IMPLEMENT_SHADER_TYPE(, FChangeDirLightShaderSingle,
 #define NUM_THREADS_PER_GROUP_DIMENSION \
   32  // This has to be the same as in the compute shader's spec [X, X, 1]
 
-// Writes to 3D texture slice(s).
-void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Size,
-                                   UVolumeTexture* inTexture, ERHIFeatureLevel::Type FeatureLevel) {
-  // Set render target to our volume texture.
-  SetRenderTarget(RHICmdList, inTexture->Resource->TextureRHI, FTextureRHIRef());
+	// Writes to 3D texture slice(s).
+	void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Size,
+		UVolumeTexture* inTexture, ERHIFeatureLevel::Type FeatureLevel) {
+	// Set render target to our volume texture.
+	SetRenderTarget(RHICmdList, inTexture->Resource->TextureRHI, FTextureRHIRef());
 
-  // Initialize Pipeline
-  FGraphicsPipelineStateInitializer GraphicsPSOInit;
-  RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
+	// Initialize Pipeline
+	FGraphicsPipelineStateInitializer GraphicsPSOInit;
+	RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
 
-  // No blend, no depth checking.
-  GraphicsPSOInit.BlendState = TStaticBlendState<>::GetRHI();
-  GraphicsPSOInit.RasterizerState = TStaticRasterizerState<>::GetRHI();
-  GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
+	// No blend, no depth checking.
+	GraphicsPSOInit.BlendState = TStaticBlendState<>::GetRHI();
+	GraphicsPSOInit.RasterizerState = TStaticRasterizerState<>::GetRHI();
+	GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
 
-  // Get shaders from GlobalShaderMap
-  TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
-  // Get Geometry and Vertex shaders for Volume texture writes (provided by EPIC).
-  TShaderMapRef<FWriteToSliceVS> VertexShader(GlobalShaderMap);
-  TOptionalShaderMapRef<FWriteToSliceGS> GeometryShader(GlobalShaderMap);
-  // Get a primitive shader that just writes a constant value everywhere (provided by me).
-  TShaderMapRef<FVolumePS> PixelShader(GlobalShaderMap);
+	// Get shaders from GlobalShaderMap
+	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+	// Get Geometry and Vertex shaders for Volume texture writes (provided by EPIC).
+	TShaderMapRef<FWriteToSliceVS> VertexShader(GlobalShaderMap);
+	TOptionalShaderMapRef<FWriteToSliceGS> GeometryShader(GlobalShaderMap);
+	// Get a primitive shader that just writes a constant value everywhere (provided by me).
+	TShaderMapRef<FVolumePS> PixelShader(GlobalShaderMap);
 
-  // Set the bounds of where to write (you can write to multiple slices in any orientation - along
-  // X/Y/Z)
-  FVolumeBounds VolumeBounds(Size.X);
-  // This will write to 5 slices along X-axis.
-  VolumeBounds.MinX = Size.X - 10;
-  VolumeBounds.MaxX = Size.X - 5;
+	// Set the bounds of where to write (you can write to multiple slices in any orientation - along
+	// X/Y/Z)
+	FVolumeBounds VolumeBounds(Size.X);
+	// This will write to 5 slices along X-axis.
+	VolumeBounds.MinX = Size.X - 10;
+	VolumeBounds.MaxX = Size.X - 5;
 
-  // Set the shaders into the pipeline.
-  GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI =
-      GScreenVertexDeclaration.VertexDeclarationRHI;
-  GraphicsPSOInit.BoundShaderState.VertexShaderRHI = GETSAFERHISHADER_VERTEX(*VertexShader);
-  GraphicsPSOInit.BoundShaderState.GeometryShaderRHI = GETSAFERHISHADER_GEOMETRY(*GeometryShader);
-  GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*PixelShader);
-  GraphicsPSOInit.PrimitiveType = PT_TriangleStrip;
-  SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit);
+	// Set the shaders into the pipeline.
+	GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI =
+		GScreenVertexDeclaration.VertexDeclarationRHI;
+	GraphicsPSOInit.BoundShaderState.VertexShaderRHI = GETSAFERHISHADER_VERTEX(*VertexShader);
+	GraphicsPSOInit.BoundShaderState.GeometryShaderRHI = GETSAFERHISHADER_GEOMETRY(*GeometryShader);
+	GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*PixelShader);
+	GraphicsPSOInit.PrimitiveType = PT_TriangleStrip;
+	SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit);
 
-  // Set shader parameters - must set the volume bounds to vertex shader.
-  VertexShader->SetParameters(RHICmdList, VolumeBounds, Size);
-  if (GeometryShader.IsValid()) {
-    GeometryShader->SetParameters(RHICmdList, VolumeBounds.MinZ);
-  }
-  // Pixel shader doesn't have parameters now, it was just for testing.
+	// Set shader parameters - must set the volume bounds to vertex shader.
+	VertexShader->SetParameters(RHICmdList, VolumeBounds, Size);
+	if (GeometryShader.IsValid()) {
+		GeometryShader->SetParameters(RHICmdList, VolumeBounds.MinZ);
+	}
+	// Pixel shader doesn't have parameters now, it was just for testing.
 
-  // Do the rendering.
-  RasterizeToVolumeTexture(RHICmdList, VolumeBounds);
+	// Do the rendering.
+	RasterizeToVolumeTexture(RHICmdList, VolumeBounds);
 
-  // Ummmmmmm.......
-  // This is probably unnecessary or actually a bad idea...
-  FResolveParams ResolveParams;
-  RHICmdList.CopyToResolveTarget(inTexture->Resource->TextureRHI, inTexture->Resource->TextureRHI,
-                                 ResolveParams);
+	// Ummmmmmm.......
+	// This is probably unnecessary or actually a bad idea...
+	FResolveParams ResolveParams;
+	RHICmdList.CopyToResolveTarget(inTexture->Resource->TextureRHI, inTexture->Resource->TextureRHI,
+		ResolveParams);
 }
 
 bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntVector Dimensions,
-                              uint8* BulkData,UVolumeTexture*& LoadedTexture, bool Persistent, bool SaveNow, bool UAVCompatible) {
+	uint8* BulkData, UVolumeTexture*& LoadedTexture, bool Persistent, bool SaveNow, bool UAVCompatible) {
 
 	FString PackageName = TEXT("/Game/GeneratedTextures/");
 	PackageName += AssetName;
 	UPackage* Package = CreatePackage(NULL, *PackageName);
 	Package->FullyLoad();
-	int PixelByteSize =	GPixelFormats[PixelFormat].BlockBytes;
+	int PixelByteSize = GPixelFormats[PixelFormat].BlockBytes;
 	const long long TotalSize = (long long)Dimensions.X * Dimensions.Y * Dimensions.Z * PixelByteSize;
 	// Create the texture with given name and location. This will overwrite any existing asset with that name.
 	UVolumeTexture* NewTexture = NewObject<UVolumeTexture>((UObject*)Package, FName(*AssetName), RF_Public | RF_Standalone | RF_MarkAsRootSet);
@@ -124,7 +124,7 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 
 	NewTexture->SRGB = false;
 	NewTexture->NeverStream = true;
-	
+
 	// Create the one and only mip in this texture.
 	FTexture2DMipMap* mip = new FTexture2DMipMap();
 	mip->SizeX = Dimensions.X;
@@ -162,9 +162,9 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 		}
 		// Otherwise initialize the source struct with our size and bulk data.
 		NewTexture->Source.Init(Dimensions.X, Dimensions.Y, Dimensions.Z, 1, TextureSourceFormat, ByteArray);
-	}	
+	}
 #endif // WITH_EDITORONLY_DATA
-	
+
 	// Set the texture to be UAV Compatible if requested. Beware! Not all formats support this (notably anything compressed).
 	NewTexture->bUAVCompatible = UAVCompatible;
 	// Update resourc, mark that the folder needs to be rescan and notify editor about asset creation.
@@ -187,141 +187,143 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 		return true;
 	}
 
-  // Let's put mip creation aside now, these wouldn't play nice with persistence as of now...
-  //// Add mips for higher levels - these are empty and will be filled by compute shaders
-  //while(ActualMips < NumMips) {
-  //	  // Each mip level of a volume texture is 8x smaller (2^3)
-	 // TotalSize /= 8;
-	 // MipDimensions /= 2;
-	 // if (MipDimensions.X == 0 || MipDimensions.Y == 0 || MipDimensions.Z == 0) {
-		//  break;
-	 // }
+	// Let's put mip creation aside now, these wouldn't play nice with persistence as of now...
+	//// Add mips for higher levels - these are empty and will be filled by compute shaders
+	//while(ActualMips < NumMips) {
+	//	  // Each mip level of a volume texture is 8x smaller (2^3)
+	   // TotalSize /= 8;
+	   // MipDimensions /= 2;
+	   // if (MipDimensions.X == 0 || MipDimensions.Y == 0 || MipDimensions.Z == 0) {
+		  //  break;
+	   // }
 
-	 // FTexture2DMipMap* Mip = new FTexture2DMipMap();
-	 // Mip->SizeX = MipDimensions.X;
-	 // Mip->SizeY = MipDimensions.Y;
-	 // Mip->SizeZ = MipDimensions.Z;
+	   // FTexture2DMipMap* Mip = new FTexture2DMipMap();
+	   // Mip->SizeX = MipDimensions.X;
+	   // Mip->SizeY = MipDimensions.Y;
+	   // Mip->SizeZ = MipDimensions.Z;
 
-	 // Mip->BulkData.Lock(LOCK_READ_WRITE);
+	   // Mip->BulkData.Lock(LOCK_READ_WRITE);
 
-	 // uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
-	 // FMemory::Memset(ByteArray, 0, TotalSize);
+	   // uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
+	   // FMemory::Memset(ByteArray, 0, TotalSize);
 
-	 // Mip->BulkData.Unlock();
-	 // NewTexture->PlatformData->Mips.Add(Mip);
-	 // ActualMips++;
-  //}
+	   // Mip->BulkData.Unlock();
+	   // NewTexture->PlatformData->Mips.Add(Mip);
+	   // ActualMips++;
+	//}
 
 }
 
 bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
-                          uint8* BulkData, bool SaveNow, TextureAddress TilingX,
-                          TextureAddress TilingY) {
-  ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
+	uint8* BulkData, bool SaveNow, TextureAddress TilingX,
+	TextureAddress TilingY) {
+	ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
 
-  if (TextureSourceFormat == TSF_Invalid) {
-    return false;
-  }
+	if (TextureSourceFormat == TSF_Invalid) {
+		return false;
+	}
 
-  const long TotalSize = (long)Dimensions.X * Dimensions.Y * GPixelFormats[PixelFormat].BlockBytes;
+	const long TotalSize = (long)Dimensions.X * Dimensions.Y * GPixelFormats[PixelFormat].BlockBytes;
 
-  FString PackageName = TEXT("/Game/GeneratedTextures/");
-  PackageName += AssetName;
-  UPackage* Package = CreatePackage(NULL, *PackageName);
-  Package->FullyLoad();
+	FString PackageName = TEXT("/Game/GeneratedTextures/");
+	PackageName += AssetName;
+	UPackage* Package = CreatePackage(NULL, *PackageName);
+	Package->FullyLoad();
 
-  UTexture2D* NewTexture = NewObject<UTexture2D>((UObject*)Package, FName(*AssetName),
-                                                 RF_Public | RF_Standalone | RF_MarkAsRootSet);
+	UTexture2D* NewTexture = NewObject<UTexture2D>((UObject*)Package, FName(*AssetName),
+		RF_Public | RF_Standalone | RF_MarkAsRootSet);
 
-  NewTexture->AddToRoot();  // This line prevents garbage collection of the texture
-  NewTexture->PlatformData = new FTexturePlatformData();  // Then we initialize the PlatformData
-  NewTexture->PlatformData->SizeX = Dimensions.X;
-  NewTexture->PlatformData->SizeY = Dimensions.Y;
-  NewTexture->PlatformData->NumSlices = 1;
-  NewTexture->PlatformData->PixelFormat = PixelFormat;
+	NewTexture->AddToRoot();  // This line prevents garbage collection of the texture
+	NewTexture->PlatformData = new FTexturePlatformData();  // Then we initialize the PlatformData
+	NewTexture->PlatformData->SizeX = Dimensions.X;
+	NewTexture->PlatformData->SizeY = Dimensions.Y;
+	NewTexture->PlatformData->NumSlices = 1;
+	NewTexture->PlatformData->PixelFormat = PixelFormat;
 
-  NewTexture->AddressX = TA_Clamp;
-  NewTexture->AddressY = TA_Clamp;
-  NewTexture->CompressionSettings = TC_Default;
-  NewTexture->SRGB = false;
+	NewTexture->AddressX = TA_Clamp;
+	NewTexture->AddressY = TA_Clamp;
+	NewTexture->CompressionSettings = TC_Default;
+	NewTexture->SRGB = false;
 
-  FTexture2DMipMap* Mip = new (NewTexture->PlatformData->Mips) FTexture2DMipMap();
-  Mip->SizeX = Dimensions.X;
-  Mip->SizeY = Dimensions.Y;
-  Mip->SizeZ = 1;
+	FTexture2DMipMap* Mip = new (NewTexture->PlatformData->Mips) FTexture2DMipMap();
+	Mip->SizeX = Dimensions.X;
+	Mip->SizeY = Dimensions.Y;
+	Mip->SizeZ = 1;
 
-  Mip->BulkData.Lock(LOCK_READ_WRITE);
+	Mip->BulkData.Lock(LOCK_READ_WRITE);
 
-  uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
-  FMemory::Memcpy(ByteArray, BulkData, TotalSize);
+	uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
+	FMemory::Memcpy(ByteArray, BulkData, TotalSize);
 
-  Mip->BulkData.Unlock();
+	Mip->BulkData.Unlock();
 #if WITH_EDITORONLY_DATA
-  NewTexture->Source.Init(Dimensions.X, Dimensions.Y, 1, 1, TextureSourceFormat, ByteArray);
+	NewTexture->Source.Init(Dimensions.X, Dimensions.Y, 1, 1, TextureSourceFormat, ByteArray);
 #endif
-  NewTexture->UpdateResource();
-  Package->MarkPackageDirty();
-  FAssetRegistryModule::AssetCreated(NewTexture);
+	NewTexture->UpdateResource();
+	Package->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(NewTexture);
 
-  // Only save the asset if that is needed (as this is a disk operation and takes a long time)
-  if (SaveNow) {
-    FString PackageFileName = FPackageName::LongPackageNameToFilename(
-        PackageName, FPackageName::GetAssetPackageExtension());
-    return UPackage::SavePackage(Package, NewTexture,
-                                 EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
-                                 *PackageFileName, GError, nullptr, true, true, SAVE_NoError);
-  } else {
-    return true;
-  }
+	// Only save the asset if that is needed (as this is a disk operation and takes a long time)
+	if (SaveNow) {
+		FString PackageFileName = FPackageName::LongPackageNameToFilename(
+			PackageName, FPackageName::GetAssetPackageExtension());
+		return UPackage::SavePackage(Package, NewTexture,
+			EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
+			*PackageFileName, GError, nullptr, true, true, SAVE_NoError);
+	}
+	else {
+		return true;
+	}
 }
 
 bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoint Dimensions,
-                          uint8* BulkData, TextureAddress TilingX /*= TA_Clamp*/,
-                          TextureAddress TilingY /*= TA_Clamp*/) {
-  if (!Texture || !Texture->PlatformData) {
-    return false;
-  }
+	uint8* BulkData, TextureAddress TilingX /*= TA_Clamp*/,
+	TextureAddress TilingY /*= TA_Clamp*/) {
+	if (!Texture || !Texture->PlatformData) {
+		return false;
+	}
 
-  ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
+	ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
 
-  if (TextureSourceFormat == TSF_Invalid) {
-    return false;
-  }
+	if (TextureSourceFormat == TSF_Invalid) {
+		return false;
+	}
 
-  const long TotalSize = (long)Dimensions.X * Dimensions.Y * GPixelFormats[PixelFormat].BlockBytes;
+	const long TotalSize = (long)Dimensions.X * Dimensions.Y * GPixelFormats[PixelFormat].BlockBytes;
 
-  Texture->PlatformData->SizeX = Dimensions.X;
-  Texture->PlatformData->SizeY = Dimensions.Y;
-  Texture->PlatformData->NumSlices = 1;
-  Texture->PlatformData->PixelFormat = PixelFormat;
+	Texture->PlatformData->SizeX = Dimensions.X;
+	Texture->PlatformData->SizeY = Dimensions.Y;
+	Texture->PlatformData->NumSlices = 1;
+	Texture->PlatformData->PixelFormat = PixelFormat;
 
-  Texture->AddressX = TA_Clamp;
-  Texture->AddressY = TA_Clamp;
-  Texture->CompressionSettings = TC_Default;
-  Texture->SRGB = false;
+	Texture->AddressX = TA_Clamp;
+	Texture->AddressY = TA_Clamp;
+	Texture->CompressionSettings = TC_Default;
+	Texture->SRGB = false;
 
-  FTexture2DMipMap* Mip;
-  // If texture doesn't have a single mip, create it.
-  if (!Texture->PlatformData->Mips.IsValidIndex(0)) {
-    Mip = new (Texture->PlatformData->Mips) FTexture2DMipMap();
-  } else {
-    Mip = &Texture->PlatformData->Mips[0];
-  }
-  Mip->SizeX = Dimensions.X;
-  Mip->SizeY = Dimensions.Y;
-  Mip->SizeZ = 1;
+	FTexture2DMipMap* Mip;
+	// If texture doesn't have a single mip, create it.
+	if (!Texture->PlatformData->Mips.IsValidIndex(0)) {
+		Mip = new (Texture->PlatformData->Mips) FTexture2DMipMap();
+	}
+	else {
+		Mip = &Texture->PlatformData->Mips[0];
+	}
+	Mip->SizeX = Dimensions.X;
+	Mip->SizeY = Dimensions.Y;
+	Mip->SizeZ = 1;
 
-  Mip->BulkData.Lock(LOCK_READ_WRITE);
+	Mip->BulkData.Lock(LOCK_READ_WRITE);
 
-  uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
-  FMemory::Memcpy(ByteArray, BulkData, TotalSize);
+	uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
+	FMemory::Memcpy(ByteArray, BulkData, TotalSize);
 
-  Mip->BulkData.Unlock();
+	Mip->BulkData.Unlock();
 #if WITH_EDITORONLY_DATA
-  Texture->Source.Init(Dimensions.X, Dimensions.Y, 1, 1, TextureSourceFormat, ByteArray);
+	Texture->Source.Init(Dimensions.X, Dimensions.Y, 1, 1, TextureSourceFormat, ByteArray);
 #endif
-  Texture->UpdateResource();
-  return true;
+	Texture->UpdateResource();
+	return true;
 }
 
 // For making statistics about GPU use.
@@ -352,7 +354,7 @@ void GenerateVolumeTextureMipLevels_RenderThread(FRHICommandListImmediate& RHICm
 	}
 
 	for (uint8 i = 0; i < 7; i++) {
-		ComputeShader->SetResources(RHICmdList, ShaderRHI, VolumeUAVs[i], VolumeUAVs[i+1]);
+		ComputeShader->SetResources(RHICmdList, ShaderRHI, VolumeUAVs[i], VolumeUAVs[i + 1]);
 		Dimensions /= 2;
 		if (Dimensions.X == 0 || Dimensions.Y == 0 || Dimensions.Z == 0) {
 			GEngine->AddOnScreenDebugMessage(0, 10, FColor::Red, "Zero dimension mip detected! Aborting...");
@@ -395,17 +397,17 @@ void GenerateDistanceField_RenderThread(FRHICommandListImmediate& RHICmdList, FI
 
 	FUnorderedAccessViewRHIRef DistanceFieldUAV = RHICreateUnorderedAccessView(DistanceFieldResource);
 
-	ComputeShader->SetResources(RHICmdList, ShaderRHI, DistanceFieldUAV, VolumeResource, TransferFunc, brush, threshold, localSphereDiameter/2);
-	
+	ComputeShader->SetResources(RHICmdList, ShaderRHI, DistanceFieldUAV, VolumeResource, TransferFunc, brush, threshold, localSphereDiameter / 2);
+
 	uint32 GroupSizeX =
 		FMath::DivideAndRoundUp(Dimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
 	uint32 GroupSizeY =
 		FMath::DivideAndRoundUp(Dimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
-	
+
 	// Separate into parts so that the GPU doesn't hang.
 	for (int i = 0; i < 10; i++) {
-			ComputeShader->SetZOffset(RHICmdList, ShaderRHI, i * (Dimensions.Z / 10));
-			DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, Dimensions.Z / 10);
+		ComputeShader->SetZOffset(RHICmdList, ShaderRHI, i * (Dimensions.Z / 10));
+		DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, Dimensions.Z / 10);
 	}
 
 	// Unbind UAVs.
@@ -416,49 +418,49 @@ void GenerateDistanceField_RenderThread(FRHICommandListImmediate& RHICmdList, FI
 }
 
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat) {
-  // THIS IS UNTESTED FOR FORMATS OTHER THAN G8 AND R16G16B16A16_SNORM!
-  // USE AT YOUR OWN PERIL!
-  switch (PixelFormat) {
-    case PF_G8: return TSF_G8;
+	// THIS IS UNTESTED FOR FORMATS OTHER THAN G8 AND R16G16B16A16_SNORM!
+	// USE AT YOUR OWN PERIL!
+	switch (PixelFormat) {
+	case PF_G8: return TSF_G8;
 
-    case PF_B8G8R8A8: return TSF_BGRA8;
-    case PF_R8G8B8A8: return TSF_RGBA8;
+	case PF_B8G8R8A8: return TSF_BGRA8;
+	case PF_R8G8B8A8: return TSF_RGBA8;
 
-    case PF_R16G16B16A16_SINT:
-    case PF_R16G16B16A16_UINT: return TSF_RGBA16;
+	case PF_R16G16B16A16_SINT:
+	case PF_R16G16B16A16_UINT: return TSF_RGBA16;
 
-    case PF_R16G16B16A16_SNORM:
-    case PF_R16G16B16A16_UNORM:
-    case PF_FloatRGBA: return TSF_RGBA16F;
+	case PF_R16G16B16A16_SNORM:
+	case PF_R16G16B16A16_UNORM:
+	case PF_FloatRGBA: return TSF_RGBA16F;
 
-    default: return TSF_Invalid;
-  }
+	default: return TSF_Invalid;
+	}
 }
 
 FIntVector GetTransposedDimensions(const FMajorAxes& Axes, const FRHITexture3D* VolumeRef, const unsigned index) {
-  FCubeFace face = Axes.FaceWeight[index].first;
-  unsigned axis = face / 2;
-  switch (axis) {
-    case 0:  // going along X -> Volume Y = x, volume Z = y
-      return FIntVector(VolumeRef->GetSizeY(), VolumeRef->GetSizeZ(), VolumeRef->GetSizeX());
-    case 1:  // going along Y -> Volume X = x, volume Z = y
-      return FIntVector(VolumeRef->GetSizeX(), VolumeRef->GetSizeZ(), VolumeRef->GetSizeY());
-    case 2:  // going along Z -> Volume X = x, volume Y = y
-      return FIntVector(VolumeRef->GetSizeX(), VolumeRef->GetSizeY(), VolumeRef->GetSizeZ());
-    default: check(false); return FIntVector(0, 0, 0);
-  }
+	FCubeFace face = Axes.FaceWeight[index].first;
+	unsigned axis = face / 2;
+	switch (axis) {
+	case 0:  // going along X -> Volume Y = x, volume Z = y
+		return FIntVector(VolumeRef->GetSizeY(), VolumeRef->GetSizeZ(), VolumeRef->GetSizeX());
+	case 1:  // going along Y -> Volume X = x, volume Z = y
+		return FIntVector(VolumeRef->GetSizeX(), VolumeRef->GetSizeZ(), VolumeRef->GetSizeY());
+	case 2:  // going along Z -> Volume X = x, volume Y = y
+		return FIntVector(VolumeRef->GetSizeX(), VolumeRef->GetSizeY(), VolumeRef->GetSizeZ());
+	default: check(false); return FIntVector(0, 0, 0);
+	}
 }
 
 int GetAxisDirection(const FMajorAxes& Axes, unsigned index) {
 	// All even axis number are going down on their respective axes.
-	return ( Axes.FaceWeight[index].first % 2 ? 1 : -1);
+	return (Axes.FaceWeight[index].first % 2 ? 1 : -1);
 }
 
 OneAxisReadWriteBufferResources & GetBuffers(const FMajorAxes Axes, const unsigned index,
-                                           FBasicRaymarchRenderingResources& InParams) {
-  FCubeFace face = Axes.FaceWeight[index].first;
-  unsigned axis = face / 2;
-  return InParams.XYZReadWriteBuffers[axis];
+	FBasicRaymarchRenderingResources& InParams) {
+	FCubeFace face = Axes.FaceWeight[index].first;
+	unsigned axis = face / 2;
+	return InParams.XYZReadWriteBuffers[axis];
 }
 
 void ClearFloatTextureRW(FRHICommandListImmediate & RHICmdList, FUnorderedAccessViewRHIParamRef TextureRW, FIntPoint TextureSize, float Value) {
@@ -515,7 +517,7 @@ FVector2D GetUVOffset(int Axis, FVector LightPosition, FIntVector TransposedDime
 	// that we're propagating along TD.Z, The X-size of the buffer is in TD.X and Y-size of the buffer is in TD.Y
 	//// Divide by length of step
 	RetVal /= TransposedDimensions.Z;
-	
+
 	return RetVal;
 }
 
@@ -546,71 +548,71 @@ void GetStepSizeAndUVWOffset(int Axis, FVector LightPosition, FIntVector Transpo
 
 
 void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
-                                const FTransform& VolumeTransform,
-                                FDirLightParameters& OutLocalLightParameters,
-                                FMajorAxes& OutLocalMajorAxes) {
-  // TODO Why the fuck does light direction need NoScale and no multiplication by scale and clipping
-  // plane needs to be multiplied?
+	const FTransform& VolumeTransform,
+	FDirLightParameters& OutLocalLightParameters,
+	FMajorAxes& OutLocalMajorAxes) {
+	// TODO Why the fuck does light direction need NoScale and no multiplication by scale and clipping
+	// plane needs to be multiplied?
 
-  // Transform light directions into local space.
-  OutLocalLightParameters.LightDirection =
-      VolumeTransform.InverseTransformVector(LightParameters.LightDirection);
-  // Normalize Light Direction to get unit length.
-  OutLocalLightParameters.LightDirection.Normalize();
+	// Transform light directions into local space.
+	OutLocalLightParameters.LightDirection =
+		VolumeTransform.InverseTransformVector(LightParameters.LightDirection);
+	// Normalize Light Direction to get unit length.
+	OutLocalLightParameters.LightDirection.Normalize();
 
-  // Color and Intensity are the same in local space -> copy.
-  OutLocalLightParameters.LightColor = LightParameters.LightColor;
-  OutLocalLightParameters.LightIntensity = LightParameters.LightIntensity;
+	// Color and Intensity are the same in local space -> copy.
+	OutLocalLightParameters.LightColor = LightParameters.LightColor;
+	OutLocalLightParameters.LightIntensity = LightParameters.LightIntensity;
 
-  // Get Major Axes (notice inverting of light Direction - for a directional light, the position of
-  // the light is the opposite of the direction) e.g. Directional light with direction (1, 0, 0) is
-  // assumed to be shining from (-1, 0, 0)
-  OutLocalMajorAxes = GetMajorAxes(-OutLocalLightParameters.LightDirection);
-  if (OutLocalMajorAxes.FaceWeight[0].second > 0.99f) {
-	  OutLocalMajorAxes.FaceWeight[0].second = 1.0f;
-  }
+	// Get Major Axes (notice inverting of light Direction - for a directional light, the position of
+	// the light is the opposite of the direction) e.g. Directional light with direction (1, 0, 0) is
+	// assumed to be shining from (-1, 0, 0)
+	OutLocalMajorAxes = GetMajorAxes(-OutLocalLightParameters.LightDirection);
+	if (OutLocalMajorAxes.FaceWeight[0].second > 0.99f) {
+		OutLocalMajorAxes.FaceWeight[0].second = 1.0f;
+	}
 
-  // Set second axis weight to (1 - (first axis weight))
-  OutLocalMajorAxes.FaceWeight[1].second = 1 - OutLocalMajorAxes.FaceWeight[0].second;
+	// Set second axis weight to (1 - (first axis weight))
+	OutLocalMajorAxes.FaceWeight[1].second = 1 - OutLocalMajorAxes.FaceWeight[0].second;
 
-  // FString debug = "Global light dir : " + LightParameters.LightDirection.ToString() +
-  //                ", Local light dir : " + OutLocalLightParameters.LightDirection.ToString();
-  // GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, debug);
+	// FString debug = "Global light dir : " + LightParameters.LightDirection.ToString() +
+	//                ", Local light dir : " + OutLocalLightParameters.LightDirection.ToString();
+	// GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, debug);
 
-  // RetVal.Direction *= VolumeTransform.GetScale3D();
+	// RetVal.Direction *= VolumeTransform.GetScale3D();
 }
 
 FClippingPlaneParameters GetLocalClippingParameters(
-    const FRaymarchWorldParameters WorldParameters) {
-  FClippingPlaneParameters RetVal;
-  // Get clipping center to (0-1) texture local space. (Invert transform, divide by mesh size,
-  // divide by 2 and add 0.5 to get to (0-1) space.
-  RetVal.Center = ((WorldParameters.VolumeTransform.InverseTransformPosition(
-                        WorldParameters.ClippingPlaneParameters.Center) /
-                    (WorldParameters.MeshMaxBounds)) /
-                   2.0) +
-                  0.5;
-  // Get clipping direction in local space - here we don't care about the mesh size (as long as
-  // it's a cube, which it really bloody better be).
+	const FRaymarchWorldParameters WorldParameters) {
+	FClippingPlaneParameters RetVal;
+	// Get clipping center to (0-1) texture local space. (Invert transform, divide by mesh size,
+	// divide by 2 and add 0.5 to get to (0-1) space.
+	RetVal.Center = ((WorldParameters.VolumeTransform.InverseTransformPosition(
+		WorldParameters.ClippingPlaneParameters.Center) /
+		(WorldParameters.MeshMaxBounds)) /
+		2.0) +
+		0.5;
+	// Get clipping direction in local space - here we don't care about the mesh size (as long as
+	// it's a cube, which it really bloody better be).
 
-  // TODO Why the fuck does light direction need NoScale and no multiplication by scale and clipping
-  // plane needs to be multiplied?
-  RetVal.Direction = WorldParameters.VolumeTransform.InverseTransformVectorNoScale(
-      WorldParameters.ClippingPlaneParameters.Direction);
-  RetVal.Direction *= WorldParameters.VolumeTransform.GetScale3D();
-  RetVal.Direction.Normalize();
+	// TODO Why the fuck does light direction need NoScale and no multiplication by scale and clipping
+	// plane needs to be multiplied?
+	RetVal.Direction = WorldParameters.VolumeTransform.InverseTransformVectorNoScale(
+		WorldParameters.ClippingPlaneParameters.Direction);
+	RetVal.Direction *= WorldParameters.VolumeTransform.GetScale3D();
+	RetVal.Direction.Normalize();
 
-  //  FString debug = "Global clip dir : " + WorldParameters.ClippingPlaneParameters.ToString() + ",
-  //  Local clip dir : " +  RetVal.Direction.ToString(); GEngine->AddOnScreenDebugMessage(-1, 0,
-  //  FColor::Yellow, debug);
+	//  FString debug = "Global clip dir : " + WorldParameters.ClippingPlaneParameters.ToString() + ",
+	//  Local clip dir : " +  RetVal.Direction.ToString(); GEngine->AddOnScreenDebugMessage(-1, 0,
+	//  FColor::Yellow, debug);
 
-  return RetVal;
+	return RetVal;
 }
 
 FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt) {
-  // Return a sampler for RW buffers - bordered by specified color.
-  return RHICreateSamplerState(FSamplerStateInitializerRHI(SF_Bilinear, AM_Border, AM_Border,
-                                                           AM_Border, 0, 0, 0, 1, BorderColorInt));
+	// Return a sampler for RW buffers - bordered by specified color.
+	return RHICreateSamplerState(FSamplerStateInitializerRHI(SF_Bilinear, AM_Border, AM_Border,
+		AM_Border, 0, 0, 0, 1, BorderColorInt));
 }
 
 // Returns the color int required for the given light color and major axis (single channel)
@@ -663,7 +665,7 @@ float GetStepSize(FVector2D PixelOffset, FIntVector TransposedDimensions) {
 	// Return the product.
 	FString debugMsg = "Layer thickness = " + FString::SanitizeFloat(LayerThickness) + ", Pix offset = " + PixelOffset.ToString() + ", diagonal = " + FString::SanitizeFloat(PixelOffsetSize) + ", final StepSize = " + FString::SanitizeFloat(PixelOffsetSize * LayerThickness);
 
-//	GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow,debugMsg);
+	//	GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow,debugMsg);
 
 	return PixelOffsetSize * LayerThickness;
 
@@ -671,31 +673,31 @@ float GetStepSize(FVector2D PixelOffset, FIntVector TransposedDimensions) {
 
 void GetLoopStartStopIndexes(int& OutStart, int& OutStop, int& OutAxisDirection, const FMajorAxes& MajorAxes, const unsigned& index, const int zDimension) {
 
-OutAxisDirection = GetAxisDirection(MajorAxes, index);
-if (OutAxisDirection == -1) {
-	OutStart = zDimension - 1;
-	OutStop = -1; // We want to go all the way to zero, so stop at -1
-}
-else {
-	OutStart = 0;
-	OutStop = zDimension; // want to go to Z - 1, so stop at Z
-}
+	OutAxisDirection = GetAxisDirection(MajorAxes, index);
+	if (OutAxisDirection == -1) {
+		OutStart = zDimension - 1;
+		OutStop = -1; // We want to go all the way to zero, so stop at -1
+	}
+	else {
+		OutStart = 0;
+		OutStop = zDimension; // want to go to Z - 1, so stop at Z
+	}
 }
 
 // Returns the color int required for the given light color and major axis.
 uint32 GetBorderColorInt(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsigned index) {
-  FVector LC = LightParams.LightColor;
-  FLinearColor LightColor = FLinearColor(
-      LC.X, LC.Y, LC.Z, LightParams.LightIntensity * MajorAxes.FaceWeight[index].second);
-  return LightColor.ToFColor(true).ToPackedARGB();
+	FVector LC = LightParams.LightColor;
+	FLinearColor LightColor = FLinearColor(
+		LC.X, LC.Y, LC.Z, LightParams.LightIntensity * MajorAxes.FaceWeight[index].second);
+	return LightColor.ToFColor(true).ToPackedARGB();
 }
 
 void TransitionBufferResources(FRHICommandListImmediate& RHICmdList,
-                               FTextureRHIParamRef NewlyReadableTexture,
-                               FUnorderedAccessViewRHIParamRef NewlyWriteableUAV) {
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, NewlyReadableTexture);
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
-                                EResourceTransitionPipeline::EComputeToCompute, NewlyWriteableUAV);
+	FTextureRHIParamRef NewlyReadableTexture,
+	FUnorderedAccessViewRHIParamRef NewlyWriteableUAV) {
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, NewlyReadableTexture);
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
+		EResourceTransitionPipeline::EComputeToCompute, NewlyWriteableUAV);
 }
 
 // For making statistics about GPU use.
@@ -712,62 +714,62 @@ DECLARE_GPU_STAT_NAMED(GPUClearingLights, TEXT("ClearingLightsInVolume"));
 
 
 void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                           FBasicRaymarchRenderingResources Resources,
-                                           const FColorVolumesResources ColorResources,
-                                           const FDirLightParameters LightParameters,
-                                           const bool Added,
-                                           const FRaymarchWorldParameters WorldParameters,
-                                           ERHIFeatureLevel::Type FeatureLevel) {
-  // Todo - template shaders on resource type.
+	FBasicRaymarchRenderingResources Resources,
+	const FColorVolumesResources ColorResources,
+	const FDirLightParameters LightParameters,
+	const bool Added,
+	const FRaymarchWorldParameters WorldParameters,
+	ERHIFeatureLevel::Type FeatureLevel) {
+	// Todo - template shaders on resource type.
 }
 
 void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                              FBasicRaymarchRenderingResources Resources,
-                                              const FColorVolumesResources ColorResources,
-                                              const FDirLightParameters OldLightParameters,
-                                              const FDirLightParameters NewLightParameters,
-                                              const FRaymarchWorldParameters WorldParameters,
-                                              ERHIFeatureLevel::Type FeatureLevel) {
-  // Todo - template shaders on resource type
+	FBasicRaymarchRenderingResources Resources,
+	const FColorVolumesResources ColorResources,
+	const FDirLightParameters OldLightParameters,
+	const FDirLightParameters NewLightParameters,
+	const FRaymarchWorldParameters WorldParameters,
+	ERHIFeatureLevel::Type FeatureLevel) {
+	// Todo - template shaders on resource type
 }
-  void ClearLightVolumes_RenderThread(
-      FRHICommandListImmediate & RHICmdList, FRHITexture3D * RLightVolumeResource,
-      FRHITexture3D * GLightVolumeResource, FRHITexture3D * BLightVolumeResource,
-      FRHITexture3D * ALightVolumeResource, FVector4 ClearValues,
-      ERHIFeatureLevel::Type FeatureLevel) {
-	  // Todo - template shaders on resource type
-  }
+void ClearLightVolumes_RenderThread(
+	FRHICommandListImmediate & RHICmdList, FRHITexture3D * RLightVolumeResource,
+	FRHITexture3D * GLightVolumeResource, FRHITexture3D * BLightVolumeResource,
+	FRHITexture3D * ALightVolumeResource, FVector4 ClearValues,
+	ERHIFeatureLevel::Type FeatureLevel) {
+	// Todo - template shaders on resource type
+}
 
-  void AddDirLightToSingleLightVolume_RenderThread(
-      FRHICommandListImmediate & RHICmdList, FBasicRaymarchRenderingResources Resources,
-      const FDirLightParameters LightParameters, const bool Added,
-      const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel) {
-    check(IsInRenderingThread());
+void AddDirLightToSingleLightVolume_RenderThread(
+	FRHICommandListImmediate & RHICmdList, FBasicRaymarchRenderingResources Resources,
+	const FDirLightParameters LightParameters, const bool Added,
+	const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel) {
+	check(IsInRenderingThread());
 
-    // Can't have directional light without direction...
-    if (LightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
-      GEngine->AddOnScreenDebugMessage(
-          -1, 100.0f, FColor::Yellow,
-          TEXT("Returning because the directional light doesn't have a direction."));
-      return;
-    }
+	// Can't have directional light without direction...
+	if (LightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
+		GEngine->AddOnScreenDebugMessage(
+			-1, 100.0f, FColor::Yellow,
+			TEXT("Returning because the directional light doesn't have a direction."));
+		return;
+	}
 
-    FDirLightParameters LocalLightParams;
-    FMajorAxes LocalMajorAxes;
-    // Calculate local Light parameters and corresponding axes.
-    GetLocalLightParamsAndAxes(LightParameters, WorldParameters.VolumeTransform, LocalLightParams,
-                               LocalMajorAxes);
+	FDirLightParameters LocalLightParams;
+	FMajorAxes LocalMajorAxes;
+	// Calculate local Light parameters and corresponding axes.
+	GetLocalLightParamsAndAxes(LightParameters, WorldParameters.VolumeTransform, LocalLightParams,
+		LocalMajorAxes);
 
 	// For testing...
 	//LocalMajorAxes.FaceWeight[0].second = 1;
 	//LocalMajorAxes.FaceWeight[1].second = 0;
 
-    // Transform clipping parameters into local space.
-    FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
+	// Transform clipping parameters into local space.
+	FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
 
-    // For GPU profiling.
-    SCOPED_DRAW_EVENTF(RHICmdList, AddDirLightToSingleLightVolume_RenderThread, TEXT("Adding Lights"));
-    SCOPED_GPU_STAT(RHICmdList, GPUAddingLights);
+	// For GPU profiling.
+	SCOPED_DRAW_EVENTF(RHICmdList, AddDirLightToSingleLightVolume_RenderThread, TEXT("Adding Lights"));
+	SCOPED_GPU_STAT(RHICmdList, GPUAddingLights);
 
 	// TODO create structure with 2 sets of buffers so we don't have to look for them again in the actual shader loop!
 	// Clear buffers for the two axes we will be using.
@@ -807,99 +809,107 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
 
 	// Set parameters, resources, LightAdded and ALightVolume
 	ComputeShader->SetRaymarchParameters(RHICmdList, ShaderRHI, LocalClippingParameters, Resources.TFRangeParameters.IntensityDomain);
-	ComputeShader->SetRaymarchResources(RHICmdList, ShaderRHI, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(), 
+	ComputeShader->SetRaymarchResources(RHICmdList, ShaderRHI, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(),
 		Resources.TFTextureRef->Resource->TextureRHI->GetTexture2D());
 	ComputeShader->SetLightAdded(RHICmdList, ShaderRHI, Added);
 	ComputeShader->SetALightVolume(RHICmdList, ShaderRHI, AVolumeUAV);
 
-    for (unsigned i = 0; i < 2; i++) {
-      // Break if the main axis weight == 1
-      if (LocalMajorAxes.FaceWeight[i].second == 0) {
-        break;
-      }
-	  OneAxisReadWriteBufferResources& Buffers = GetBuffers(LocalMajorAxes, i, Resources);
+	for (unsigned i = 0; i < 2; i++) {
+		// Break if the main axis weight == 1
+		if (LocalMajorAxes.FaceWeight[i].second == 0) {
+			break;
+		}
+		OneAxisReadWriteBufferResources& Buffers = GetBuffers(LocalMajorAxes, i, Resources);
 
-	  uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
-	  FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
+		uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
+		FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
 
-      // Get the X, Y and Z transposed into the current axis orientation.
-      FIntVector TransposedDimensions = GetTransposedDimensions(
-          LocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
+		// Get the X, Y and Z transposed into the current axis orientation.
+		FIntVector TransposedDimensions = GetTransposedDimensions(
+			LocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
 
-	  FVector2D UVOffset = GetUVOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection, TransposedDimensions);
-	  FMatrix PermutationMatrix = GetPermutationMatrix(LocalMajorAxes, i);
+		FVector2D UVOffset = GetUVOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection, TransposedDimensions);
+		FMatrix PermutationMatrix = GetPermutationMatrix(LocalMajorAxes, i);
 
-	  FIntVector LightVolumeSize = FIntVector( Resources.ALightVolumeRef->GetSizeX(), Resources.ALightVolumeRef->GetSizeY(), Resources.ALightVolumeRef->GetSizeZ()); 
+		FIntVector LightVolumeSize = FIntVector(Resources.ALightVolumeRef->GetSizeX(), Resources.ALightVolumeRef->GetSizeY(), Resources.ALightVolumeRef->GetSizeZ());
 
-	  FVector UVWOffset;
-	  float StepSize;
-	  GetStepSizeAndUVWOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection, TransposedDimensions, WorldParameters, StepSize, UVWOffset);
+		FVector UVWOffset;
+		float StepSize;
+		GetStepSizeAndUVWOffset(LocalMajorAxes.FaceWeight[i].first, -LocalLightParams.LightDirection, TransposedDimensions, WorldParameters, StepSize, UVWOffset);
 
-	  ComputeShader->SetStepSize(RHICmdList, ShaderRHI, StepSize);
-	  ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, PermutationMatrix);
-	  ComputeShader->SetUVOffset(RHICmdList, ShaderRHI, UVOffset);
-	  ComputeShader->SetUVWOffset(RHICmdList, ShaderRHI, UVWOffset);
+		
+		// Normalize UVW offset to length of largest voxel size to get rid of artifacts. (Not correct, but consistent!)
+		int LowestVoxelCount = FMath::Min3(TransposedDimensions.X, TransposedDimensions.Y, TransposedDimensions.Z);
+		float LongestVoxelSide = 1.0f / LowestVoxelCount;
+		UVWOffset.Normalize();
+		UVWOffset *= LongestVoxelSide;
 
-      uint32 GroupSizeX =
-          FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
-      uint32 GroupSizeY =
-          FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
+		ComputeShader->SetStepSize(RHICmdList, ShaderRHI, StepSize);
+		ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, PermutationMatrix);
+		ComputeShader->SetUVOffset(RHICmdList, ShaderRHI, UVOffset);
+		ComputeShader->SetUVWOffset(RHICmdList, ShaderRHI, UVWOffset);
 
-	  int Start, Stop, AxisDirection;
-	  GetLoopStartStopIndexes(Start, Stop, AxisDirection, LocalMajorAxes, i, TransposedDimensions.Z);
-	  
-      for (int j = Start; j != Stop; j += AxisDirection) {
-        // Switch read and write buffers each row.
-        if (j % 2 == 0) {
-          ComputeShader->SetLoop(RHICmdList, ShaderRHI, j, Buffers.Buffers[0], readBuffSampler, Buffers.UAVs[1]);
-        } else {
-          ComputeShader->SetLoop(RHICmdList, ShaderRHI, j, Buffers.Buffers[1], readBuffSampler, Buffers.UAVs[0]);
-        }
-        DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
-      }
-    }
+		uint32 GroupSizeX =
+			FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
+		uint32 GroupSizeY =
+			FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
 
-    // Unbind UAVs.
-    ComputeShader->UnbindResources(RHICmdList, ShaderRHI);
+		int Start, Stop, AxisDirection;
+		GetLoopStartStopIndexes(Start, Stop, AxisDirection, LocalMajorAxes, i, TransposedDimensions.Z);
+
+		for (int j = Start; j != Stop; j += AxisDirection) {
+			// Switch read and write buffers each row.
+			if (j % 2 == 0) {
+				ComputeShader->SetLoop(RHICmdList, ShaderRHI, j, Buffers.Buffers[0], readBuffSampler, Buffers.UAVs[1]);
+			}
+			else {
+				ComputeShader->SetLoop(RHICmdList, ShaderRHI, j, Buffers.Buffers[1], readBuffSampler, Buffers.UAVs[0]);
+			}
+			DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
+		}
+	}
+
+	// Unbind UAVs.
+	ComputeShader->UnbindResources(RHICmdList, ShaderRHI);
 
 	// Transition resources back to the renderer.
-    RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
-                                  EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
-  }
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
+		EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
+}
 
-  void ChangeDirLightInSingleLightVolume_RenderThread(
-      FRHICommandListImmediate & RHICmdList, FBasicRaymarchRenderingResources Resources,
-      const FDirLightParameters RemovedLightParameters, const FDirLightParameters AddedLightParameters,
-      const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel) {
-    // Can't have directional light without direction...
-    if (AddedLightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
-      GEngine->AddOnScreenDebugMessage(
-          -1, 100.0f, FColor::Yellow,
-          TEXT("Returning because the directional light doesn't have a direction."));
-      return;
-    }
+void ChangeDirLightInSingleLightVolume_RenderThread(
+	FRHICommandListImmediate & RHICmdList, FBasicRaymarchRenderingResources Resources,
+	const FDirLightParameters RemovedLightParameters, const FDirLightParameters AddedLightParameters,
+	const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel) {
+	// Can't have directional light without direction...
+	if (AddedLightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
+		GEngine->AddOnScreenDebugMessage(
+			-1, 100.0f, FColor::Yellow,
+			TEXT("Returning because the directional light doesn't have a direction."));
+		return;
+	}
 
-    FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
-    // Create local copies of Light Params, so that if we have to fall back to 2x
-    // AddOrRemoveLight, we can just pass the original parameters.
-    FDirLightParameters RemovedLocalLightParams, AddedLocalLightParams;
-    FMajorAxes RemovedLocalMajorAxes, AddedLocalMajorAxes;
-    // Calculate local Light parameters and corresponding axes.
-    GetLocalLightParamsAndAxes(RemovedLightParameters, WorldParameters.VolumeTransform,
-                               RemovedLocalLightParams, RemovedLocalMajorAxes);
-    GetLocalLightParamsAndAxes(AddedLightParameters, WorldParameters.VolumeTransform,
-                               AddedLocalLightParams, AddedLocalMajorAxes);
+	FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
+	// Create local copies of Light Params, so that if we have to fall back to 2x
+	// AddOrRemoveLight, we can just pass the original parameters.
+	FDirLightParameters RemovedLocalLightParams, AddedLocalLightParams;
+	FMajorAxes RemovedLocalMajorAxes, AddedLocalMajorAxes;
+	// Calculate local Light parameters and corresponding axes.
+	GetLocalLightParamsAndAxes(RemovedLightParameters, WorldParameters.VolumeTransform,
+		RemovedLocalLightParams, RemovedLocalMajorAxes);
+	GetLocalLightParamsAndAxes(AddedLightParameters, WorldParameters.VolumeTransform,
+		AddedLocalLightParams, AddedLocalMajorAxes);
 
-    // If lights have different major axes, do a proper removal and addition.
-    if (RemovedLocalMajorAxes.FaceWeight[0].first != AddedLocalMajorAxes.FaceWeight[0].first ||
-        RemovedLocalMajorAxes.FaceWeight[1].first != AddedLocalMajorAxes.FaceWeight[1].first) {
-      AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, RemovedLightParameters, false,
-                                                  WorldParameters, FeatureLevel);
-      AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, AddedLightParameters, true,
-                                                  WorldParameters, FeatureLevel);
-      return;
-    }
-	
+	// If lights have different major axes, do a proper removal and addition.
+	if (RemovedLocalMajorAxes.FaceWeight[0].first != AddedLocalMajorAxes.FaceWeight[0].first ||
+		RemovedLocalMajorAxes.FaceWeight[1].first != AddedLocalMajorAxes.FaceWeight[1].first) {
+		AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, RemovedLightParameters, false,
+			WorldParameters, FeatureLevel);
+		AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, AddedLightParameters, true,
+			WorldParameters, FeatureLevel);
+		return;
+	}
+
 	// Clear buffers for the two axes we will be using.
 	for (unsigned i = 0; i < 2; i++) {
 		// Break if the main axis weight == 1
@@ -925,133 +935,134 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
 		ClearFloatTextureRW(RHICmdList, Buffers.UAVs[3], FIntPoint(TransposedDimensions.X, TransposedDimensions.Y), AddedLightAlpha);
 	}
 
-    // For GPU profiling.
-    SCOPED_DRAW_EVENTF(RHICmdList, ChangeDirLightInLightVolume_RenderThread, TEXT("Changing Lights"));
-    SCOPED_GPU_STAT(RHICmdList, GPUChangingLights);
+	// For GPU profiling.
+	SCOPED_DRAW_EVENTF(RHICmdList, ChangeDirLightInLightVolume_RenderThread, TEXT("Changing Lights"));
+	SCOPED_GPU_STAT(RHICmdList, GPUChangingLights);
 
-    TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
-    TShaderMapRef<FChangeDirLightShaderSingle> ComputeShader(GlobalShaderMap);
+	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+	TShaderMapRef<FChangeDirLightShaderSingle> ComputeShader(GlobalShaderMap);
 
 	FComputeShaderRHIParamRef ShaderRHI = ComputeShader->GetComputeShader();
-    RHICmdList.SetComputeShader(ShaderRHI);
-    // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
-    // LightVolumeResource);
-    FUnorderedAccessViewRHIRef AVolumeUAV = RHICreateUnorderedAccessView(
-        Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D());
+	RHICmdList.SetComputeShader(ShaderRHI);
+	// RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+	// LightVolumeResource);
+	FUnorderedAccessViewRHIRef AVolumeUAV = RHICreateUnorderedAccessView(
+		Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D());
 
-    // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
-    // no race conditions But we definitely need to transition the resource to Compute-shader
-    // accessible, otherwise the renderer might touch our textures while we're writing them.
-    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
-                                  EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
-	
+	// Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
+	// no race conditions But we definitely need to transition the resource to Compute-shader
+	// accessible, otherwise the renderer might touch our textures while we're writing them.
+	RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+		EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
+
 	ComputeShader->SetRaymarchParameters(RHICmdList, ShaderRHI, LocalClippingParameters, Resources.TFRangeParameters.IntensityDomain);
 	ComputeShader->SetRaymarchResources(RHICmdList, ShaderRHI, Resources.VolumeTextureRef->Resource->TextureRHI->GetTexture3D(),
 		Resources.TFTextureRef->Resource->TextureRHI->GetTexture2D());
 	ComputeShader->SetALightVolume(RHICmdList, ShaderRHI, AVolumeUAV);
 
-    for (unsigned i = 0; i < 2; i++) {
-      // Get Color ints for texture borders.
-      uint32 RemovedColorInt = GetBorderColorIntSingle(RemovedLocalLightParams, RemovedLocalMajorAxes, i);
-      uint32 AddedColorInt = GetBorderColorIntSingle(AddedLocalLightParams, AddedLocalMajorAxes, i);
-      // Get the sampler for read buffer to use border with the proper light color.
-      FSamplerStateRHIRef RemovedReadBuffSampler = GetBufferSamplerRef(RemovedColorInt);
-      FSamplerStateRHIRef AddedReadBuffSampler = GetBufferSamplerRef(AddedColorInt);
+	for (unsigned i = 0; i < 2; i++) {
+		// Get Color ints for texture borders.
+		uint32 RemovedColorInt = GetBorderColorIntSingle(RemovedLocalLightParams, RemovedLocalMajorAxes, i);
+		uint32 AddedColorInt = GetBorderColorIntSingle(AddedLocalLightParams, AddedLocalMajorAxes, i);
+		// Get the sampler for read buffer to use border with the proper light color.
+		FSamplerStateRHIRef RemovedReadBuffSampler = GetBufferSamplerRef(RemovedColorInt);
+		FSamplerStateRHIRef AddedReadBuffSampler = GetBufferSamplerRef(AddedColorInt);
 
-      OneAxisReadWriteBufferResources& Buffers = GetBuffers(RemovedLocalMajorAxes, i, Resources);
-	  // TODO take these from buffers.
-	  FIntVector TransposedDimensions = GetTransposedDimensions(RemovedLocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
-	  
-	  FVector2D AddedPixOffset = GetUVOffset(AddedLocalMajorAxes.FaceWeight[i].first, -AddedLocalLightParams.LightDirection, TransposedDimensions);
-	  FVector2D RemovedPixOffset = GetUVOffset(RemovedLocalMajorAxes.FaceWeight[i].first, -RemovedLocalLightParams.LightDirection, TransposedDimensions);
+		OneAxisReadWriteBufferResources& Buffers = GetBuffers(RemovedLocalMajorAxes, i, Resources);
+		// TODO take these from buffers.
+		FIntVector TransposedDimensions = GetTransposedDimensions(RemovedLocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
 
-	  ComputeShader->SetStepSizes(RHICmdList, ShaderRHI, GetStepSize(RemovedPixOffset, TransposedDimensions), GetStepSize(AddedPixOffset, TransposedDimensions));
-	  ComputeShader->SetPixelOffsets(RHICmdList, ShaderRHI, AddedPixOffset, RemovedPixOffset);
+		FVector2D AddedPixOffset = GetUVOffset(AddedLocalMajorAxes.FaceWeight[i].first, -AddedLocalLightParams.LightDirection, TransposedDimensions);
+		FVector2D RemovedPixOffset = GetUVOffset(RemovedLocalMajorAxes.FaceWeight[i].first, -RemovedLocalLightParams.LightDirection, TransposedDimensions);
 
-	  FMatrix perm = GetPermutationMatrix(RemovedLocalMajorAxes, i);
-	  ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, perm);
+		ComputeShader->SetStepSizes(RHICmdList, ShaderRHI, GetStepSize(RemovedPixOffset, TransposedDimensions), GetStepSize(AddedPixOffset, TransposedDimensions));
+		ComputeShader->SetPixelOffsets(RHICmdList, ShaderRHI, AddedPixOffset, RemovedPixOffset);
 
-      // Get group sizes for compute shader
-      uint32 GroupSizeX =
-          FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
-      uint32 GroupSizeY =
-          FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
+		FMatrix perm = GetPermutationMatrix(RemovedLocalMajorAxes, i);
+		ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, perm);
 
-	  int Start, Stop, AxisDirection;
-	  GetLoopStartStopIndexes(Start, Stop, AxisDirection, RemovedLocalMajorAxes, i, TransposedDimensions.Z);
-	  
-	  for (int j = Start; j != Stop; j += AxisDirection) {        // Switch read and write buffers each cycle.
-        if (j % 2 == 0) {
-          TransitionBufferResources(RHICmdList, Buffers.Buffers[0], Buffers.UAVs[1]);
-          TransitionBufferResources(RHICmdList, Buffers.Buffers[2], Buffers.UAVs[3]);
-          ComputeShader->SetLoop(RHICmdList, ShaderRHI, j, Buffers.Buffers[0], RemovedReadBuffSampler,
-                                 Buffers.UAVs[1], Buffers.Buffers[2], AddedReadBuffSampler,
-                                 Buffers.UAVs[3]);
-        } else {
-          TransitionBufferResources(RHICmdList, Buffers.Buffers[1], Buffers.UAVs[0]);
-          TransitionBufferResources(RHICmdList, Buffers.Buffers[3], Buffers.UAVs[2]);
-          ComputeShader->SetLoop(RHICmdList, ShaderRHI, j, Buffers.Buffers[1], RemovedReadBuffSampler,
-                                 Buffers.UAVs[0], Buffers.Buffers[3], AddedReadBuffSampler,
-                                 Buffers.UAVs[2]);
-        }
-        DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
-      }
-    }
+		// Get group sizes for compute shader
+		uint32 GroupSizeX =
+			FMath::DivideAndRoundUp(TransposedDimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
+		uint32 GroupSizeY =
+			FMath::DivideAndRoundUp(TransposedDimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
 
-    // Unbind Resources.
-    ComputeShader->UnbindResources(RHICmdList, ShaderRHI);
+		int Start, Stop, AxisDirection;
+		GetLoopStartStopIndexes(Start, Stop, AxisDirection, RemovedLocalMajorAxes, i, TransposedDimensions.Z);
+
+		for (int j = Start; j != Stop; j += AxisDirection) {        // Switch read and write buffers each cycle.
+			if (j % 2 == 0) {
+				TransitionBufferResources(RHICmdList, Buffers.Buffers[0], Buffers.UAVs[1]);
+				TransitionBufferResources(RHICmdList, Buffers.Buffers[2], Buffers.UAVs[3]);
+				ComputeShader->SetLoop(RHICmdList, ShaderRHI, j, Buffers.Buffers[0], RemovedReadBuffSampler,
+					Buffers.UAVs[1], Buffers.Buffers[2], AddedReadBuffSampler,
+					Buffers.UAVs[3]);
+			}
+			else {
+				TransitionBufferResources(RHICmdList, Buffers.Buffers[1], Buffers.UAVs[0]);
+				TransitionBufferResources(RHICmdList, Buffers.Buffers[3], Buffers.UAVs[2]);
+				ComputeShader->SetLoop(RHICmdList, ShaderRHI, j, Buffers.Buffers[1], RemovedReadBuffSampler,
+					Buffers.UAVs[0], Buffers.Buffers[3], AddedReadBuffSampler,
+					Buffers.UAVs[2]);
+			}
+			DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
+		}
+	}
+
+	// Unbind Resources.
+	ComputeShader->UnbindResources(RHICmdList, ShaderRHI);
 
 	// Transition resources back to the renderer.
-    RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
-                                  EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
-  }
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
+		EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
+}
 
-  void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate & RHICmdList,
-                                           FRHITexture3D * ALightVolumeResource, float ClearValues,
-                                           ERHIFeatureLevel::Type FeatureLevel) {
-    TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
-    TShaderMapRef<FClearSingleLightVolumeShader> ComputeShader(GlobalShaderMap);
-	
+void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate & RHICmdList,
+	FRHITexture3D * ALightVolumeResource, float ClearValues,
+	ERHIFeatureLevel::Type FeatureLevel) {
+	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+	TShaderMapRef<FClearSingleLightVolumeShader> ComputeShader(GlobalShaderMap);
+
 	// For GPU profiling.
 	SCOPED_DRAW_EVENTF(RHICmdList, ClearSingleLightVolume_RenderThread, TEXT("Clearing lights"));
 	SCOPED_GPU_STAT(RHICmdList, GPUClearingLights);
 
-    RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
-    // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
-    // LightVolumeResource);
-    FUnorderedAccessViewRHIRef AVolumeUAV = RHICreateUnorderedAccessView(ALightVolumeResource);
+	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
+	// RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+	// LightVolumeResource);
+	FUnorderedAccessViewRHIRef AVolumeUAV = RHICreateUnorderedAccessView(ALightVolumeResource);
 
-    // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
-    // no race conditions But we definitely need to transition the resource to Compute-shader
-    // accessible, otherwise the renderer might touch our textures while we're writing them.
-    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
-                                  EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
-	
+	// Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
+	// no race conditions But we definitely need to transition the resource to Compute-shader
+	// accessible, otherwise the renderer might touch our textures while we're writing them.
+	RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+		EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
+
 	ComputeShader->SetLightVolumeUAV(RHICmdList, AVolumeUAV);
 	ComputeShader->SetParameters(RHICmdList, ClearValues, ALightVolumeResource->GetSizeZ());
 
-    uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)ALightVolumeResource->GetSizeX(),
-                                                NUM_THREADS_PER_GROUP_DIMENSION);
-    uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)ALightVolumeResource->GetSizeY(),
-                                                NUM_THREADS_PER_GROUP_DIMENSION);
+	uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)ALightVolumeResource->GetSizeX(),
+		NUM_THREADS_PER_GROUP_DIMENSION);
+	uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)ALightVolumeResource->GetSizeY(),
+		NUM_THREADS_PER_GROUP_DIMENSION);
 
-    DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
-    ComputeShader->UnbindLightVolumeUAV(RHICmdList);
+	DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
+	ComputeShader->UnbindLightVolumeUAV(RHICmdList);
 
-    RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
-                                  EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
-  }
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
+		EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
+}
 
 #undef LOCTEXT_NAMESPACE
-  
-    /*
-      double end = FPlatformTime::Seconds();
-      FString text = "Time elapsed before shader & copy creation = ";
-      text += FString::SanitizeFloat(end - start, 6);
-      GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, text);*/
 
-    // start = FPlatformTime::Seconds();
+/*
+  double end = FPlatformTime::Seconds();
+  FString text = "Time elapsed before shader & copy creation = ";
+  text += FString::SanitizeFloat(end - start, 6);
+  GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, text);*/
 
-    // text = "Time elapsed in shader & copy = ";
-    // text += FString::SanitizeFloat(start - end, 6);
-    // GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, text);
+  // start = FPlatformTime::Seconds();
+
+  // text = "Time elapsed in shader & copy = ";
+  // text += FString::SanitizeFloat(start - end, 6);
+  // GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, text);
