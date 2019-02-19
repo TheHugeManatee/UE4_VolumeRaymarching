@@ -515,10 +515,7 @@ FVector2D GetUVOffset(int Axis, FVector LightPosition, FIntVector TransposedDime
 	// that we're propagating along TD.Z, The X-size of the buffer is in TD.X and Y-size of the buffer is in TD.Y
 	//// Divide by length of step
 	RetVal /= TransposedDimensions.Z;
-	// Want to sample centers of pixels (the offset is from the pixel int coordinates, not the center)
-	FString loggg = "Pixel offset is " + (RetVal).ToString();
-	GEngine->AddOnScreenDebugMessage(10, 2, FColor::Yellow, loggg);
-
+	
 	return RetVal;
 }
 
@@ -544,9 +541,6 @@ void GetStepSizeAndUVWOffset(int Axis, FVector LightPosition, FIntVector Transpo
 
 	// Transform local vector to world space.
 	FVector WorldVec = WorldParameters.VolumeTransform.TransformVector(OutUVWOffset * WorldParameters.MeshMaxBounds * 2);
-	FString loggg = "OutUVWOffset = " + OutUVWOffset.ToString() + "World vec = " + WorldVec.ToString() + ", size in world = " + FString::SanitizeFloat(WorldVec.Size()) + " Transposed Dims = " + TransposedDimensions.ToString();
-	GEngine->AddOnScreenDebugMessage(10, 20, FColor::Yellow, loggg);
-
 	OutStepSize = WorldVec.Size();
 }
 
@@ -824,9 +818,6 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
         break;
       }
 	  OneAxisReadWriteBufferResources& Buffers = GetBuffers(LocalMajorAxes, i, Resources);
-
-	  FString loggg = "Now propagating from " + GetDirectionName(LocalMajorAxes.FaceWeight[i].first);
-	  GEngine->AddOnScreenDebugMessage(-230, 10, FColor::Yellow, loggg);
 
 	  uint32 ColorInt = GetBorderColorIntSingle(LocalLightParams, LocalMajorAxes, i);
 	  FSamplerStateRHIRef readBuffSampler = GetBufferSamplerRef(ColorInt);
