@@ -237,6 +237,18 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Raymarcher", meta = (WorldContext = "WorldContextObject"))
 	  static void ChangeViewportProperties(const UObject* WorldContextObject, FVector2D Origin, FVector2D Size);
 
+  /** Transforms the first player's viewport size on the screen. All values normalized to 0-1.*/
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+	  static void GetCutplaneMaterialParams(FCubeFace DominantFace, FVector& Origin, FVector& UMultiplier, FVector& SliceMultiplier);
+
+  /** Returns the face whose inverted normal is closest to the provided vector (in local space).
+	  E.G - local vector (0,0,1) will return Bottom (as that side's normal is (0,0,-1)).
+	*/
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+	  static void GetDominantFace(FVector LocalDirectionVector, FCubeFace& DominantFace);
+
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+	  static void GetFaceNormal(FCubeFace& CubeFace, FVector& FaceNormalLocal);
 
 
 

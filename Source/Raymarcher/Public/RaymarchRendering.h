@@ -152,7 +152,9 @@ USTRUCT(BlueprintType) struct FColorVolumesResources {
 };
 
 // Enum for indexes for cube faces - used to discern axes for light propagation shader.
-enum FCubeFace : int {
+// Also used for deciding vectors provided into cutting plane material.
+UENUM(BlueprintType)
+enum class FCubeFace : uint8 {
   Right = 0,  // +X
   Left = 1,   // -X
   Front = 2,  // +Y
@@ -163,12 +165,12 @@ enum FCubeFace : int {
 
 static FString GetDirectionName(FCubeFace face) {
 	switch (face) {
-	case Right :  return FString("+X");
-	case Left : return FString("-X");
-	case Front :return FString("+Y");
-	case Back : return FString("-Y");
-	case Top : return FString("+Z");
-	case Bottom : return FString("-Z");
+	case FCubeFace::Right :  return FString("+X");
+	case FCubeFace::Left : return FString("-X");
+	case FCubeFace::Front :return FString("+Y");
+	case FCubeFace::Back : return FString("-Y");
+	case FCubeFace::Top : return FString("+Z");
+	case FCubeFace::Bottom : return FString("-Z");
 	default : return FString("Something went wrong here!");
 	}
 

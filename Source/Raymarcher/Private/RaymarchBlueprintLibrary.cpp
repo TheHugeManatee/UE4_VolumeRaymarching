@@ -741,4 +741,37 @@ void URaymarchBlueprintLibrary::ChangeViewportProperties(const UObject* WorldCon
 	GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].SizeY = Size.Y; // default 1.f
 }
 
+void URaymarchBlueprintLibrary::GetCutplaneMaterialParams(FCubeFace DominantFace, FVector& Origin, FVector& UMultiplier, FVector& SliceMultiplier)
+{
+	switch (DominantFace) {
+		// Bottom = going from the bottom -> dominant face is at -Z, so slices are going along Z, U coordinate increases Y)
+	case FCubeFace::Bottom : Origin = FVector(0, 0, 0); UMultiplier = FVector(0, 1, 0); SliceMultiplier = FVector(0, 0, 1);
+		break;
+		// Top = going from the top -> dominant face is at +Z, so slices going along going along -Z,  U coordinate decreases Y))
+	case FCubeFace::Top : Origin = FVector(0, 1, 1); UMultiplier = FVector(0, -1, 0); SliceMultiplier = FVector(0, 0, -1);
+		break;
+		// Back = going from back -> dominant face is at -Y,  so slices going along +Y, U coordinate decreases Z)
+	case FCubeFace::Back: Origin = FVector(0, 0, 1); UMultiplier = FVector(0, 0, -1); SliceMultiplier = FVector(0, 1, 0);
+		break;
+		// Front = going from Front -> dominant face is at +Y, so slices going along -Y, U coordinate increases Z))
+	case FCubeFace::Front: Origin = FVector(0, 1, 0); UMultiplier = FVector(0, 0, 1); SliceMultiplier = FVector(0, -1, 0);
+		break;
+		// Should never go from +-X, so assert here.
+	case FCubeFace::Left:
+	case FCubeFace::Right:
+		check(0);
+	}
+}
+
+void URaymarchBlueprintLibrary::GetDominantFace(FVector LocalDirectionVector, FCubeFace& DominantFace)
+{
+	FMajorAxes axes = GetMajorAxes(LocalDirectionVector);
+	DominantFace = axes.FaceWeight[0].first;
+}
+
+void URaymarchBlueprintLibrary::GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal)
+{
+	FaceNormalLocal = FCubeFaceNormals[CubeFace];
+}
+
 #undef LOCTEXT_NAMESPACE

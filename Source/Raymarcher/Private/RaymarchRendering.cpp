@@ -440,7 +440,7 @@ ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat) {
 
 FIntVector GetTransposedDimensions(const FMajorAxes& Axes, const FRHITexture3D* VolumeRef, const unsigned index) {
 	FCubeFace face = Axes.FaceWeight[index].first;
-	unsigned axis = face / 2;
+	unsigned axis = (uint8)face / 2;
 	switch (axis) {
 	case 0:  // going along X -> Volume Y = x, volume Z = y
 		return FIntVector(VolumeRef->GetSizeY(), VolumeRef->GetSizeZ(), VolumeRef->GetSizeX());
@@ -454,13 +454,13 @@ FIntVector GetTransposedDimensions(const FMajorAxes& Axes, const FRHITexture3D* 
 
 int GetAxisDirection(const FMajorAxes& Axes, unsigned index) {
 	// All even axis number are going down on their respective axes.
-	return (Axes.FaceWeight[index].first % 2 ? 1 : -1);
+	return ((uint8)Axes.FaceWeight[index].first % 2 ? 1 : -1);
 }
 
 OneAxisReadWriteBufferResources & GetBuffers(const FMajorAxes Axes, const unsigned index,
 	FBasicRaymarchRenderingResources& InParams) {
 	FCubeFace face = Axes.FaceWeight[index].first;
-	unsigned axis = face / 2;
+	unsigned axis = (uint8)face / 2;
 	return InParams.XYZReadWriteBuffers[axis];
 }
 
@@ -481,33 +481,33 @@ void ClearFloatTextureRW(FRHICommandListImmediate & RHICmdList, FUnorderedAccess
 	ComputeShader->UnbindUAV(RHICmdList);
 }
 
-FVector2D GetUVOffset(int Axis, FVector LightPosition, FIntVector TransposedDimensions) {
+FVector2D GetUVOffset(FCubeFace Axis, FVector LightPosition, FIntVector TransposedDimensions) {
 	FVector normLightPosition = LightPosition;
 	// Normalize the light position to get the major axis to be one. The other 2 components are then
 	// an offset to apply to current pos to read from our read buffer texture.
 	FVector2D RetVal;
 	switch (Axis) {
-	case 0:
+	case FCubeFace::Right: // +X
 		normLightPosition /= normLightPosition.X;
 		RetVal = FVector2D(normLightPosition.Y, normLightPosition.Z);
 		break;
-	case 1:
+	case FCubeFace::Left: // -X
 		normLightPosition /= -normLightPosition.X;
 		RetVal = FVector2D(normLightPosition.Y, normLightPosition.Z);
 		break;
-	case 2:
+	case FCubeFace::Front: // +Y
 		normLightPosition /= normLightPosition.Y;
 		RetVal = FVector2D(normLightPosition.X, normLightPosition.Z);
 		break;
-	case 3:
+	case FCubeFace::Back: // -Y
 		normLightPosition /= -normLightPosition.Y;
 		RetVal = FVector2D(normLightPosition.X, normLightPosition.Z);
 		break;
-	case 4:
+	case FCubeFace::Top: // +Z
 		normLightPosition /= normLightPosition.Z;
 		RetVal = FVector2D(normLightPosition.X, normLightPosition.Y);
 		break;
-	case 5:
+	case FCubeFace::Bottom: // -Z
 		normLightPosition /= -normLightPosition.Z;
 		RetVal = FVector2D(normLightPosition.X, normLightPosition.Y);
 		break;
@@ -523,20 +523,20 @@ FVector2D GetUVOffset(int Axis, FVector LightPosition, FIntVector TransposedDime
 }
 
 
-void GetStepSizeAndUVWOffset(int Axis, FVector LightPosition, FIntVector TransposedDimensions, const FRaymarchWorldParameters WorldParameters, float& OutStepSize, FVector& OutUVWOffset) {
+void GetStepSizeAndUVWOffset(FCubeFace Axis, FVector LightPosition, FIntVector TransposedDimensions, const FRaymarchWorldParameters WorldParameters, float& OutStepSize, FVector& OutUVWOffset) {
 	OutUVWOffset = LightPosition;
 	// Since we don't care about the direction, just the size, ignore signs.
 	switch (Axis) {
-	case 0:
-	case 1:
+	case FCubeFace::Right: // +-X
+	case FCubeFace::Left:
 		OutUVWOffset /= abs(LightPosition.X) * TransposedDimensions.Z;
 		break;
-	case 2:
-	case 3:
+	case FCubeFace::Front: // +-Y
+	case FCubeFace::Back:
 		OutUVWOffset /= abs(LightPosition.Y) * TransposedDimensions.Z;
 		break;
-	case 4:
-	case 5:
+	case FCubeFace::Top:	// +-Z
+	case FCubeFace::Bottom:
 		OutUVWOffset /= abs(LightPosition.Z) * TransposedDimensions.Z;
 		break;
 	default: check(false);;
@@ -634,7 +634,7 @@ float GetLightAlpha(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsig
 }
 
 FMatrix GetPermutationMatrix(FMajorAxes MajorAxes, unsigned index) {
-	int Axis = MajorAxes.FaceWeight[index].first / 2;
+	uint8 Axis = (uint8)MajorAxes.FaceWeight[index].first / 2;
 	FMatrix retVal;
 	retVal.SetIdentity();
 
