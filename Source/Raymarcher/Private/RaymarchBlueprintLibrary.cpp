@@ -381,7 +381,7 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
 
   // Actually create the asset.
   bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions, TempArray, LoadedTexture, 
-                                          Persistent, false, false);
+                                          Persistent, Persistent, false);
   if (Success) {
     MY_LOG("Asset created and saved successfuly.")
   }
@@ -433,7 +433,7 @@ void URaymarchBlueprintLibrary::LoadMhdFileIntoVolumeTextureAsset(
       FString::SanitizeFloat(WorldDimensions.Z, 3);
   GEngine->AddOnScreenDebugMessage(-1, 20.f, FColor::Yellow, text);
 
-   LoadRawVolumeIntoVolumeTextureAsset(WorldContextObject, FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions, TextureName, false, LoadedTexture);
+   LoadRawVolumeIntoVolumeTextureAsset(WorldContextObject, FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions, TextureName, Persistent, LoadedTexture);
 
   //LoadRawVolumeIntoVolumeTextureAsset2(WorldContextObject,
   //                                    FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions.X, info.Dimensions.Y, info.Dimensions.Z ,

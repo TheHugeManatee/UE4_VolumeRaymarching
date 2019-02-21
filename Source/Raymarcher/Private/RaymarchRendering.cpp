@@ -150,7 +150,8 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 	NewTexture->MipGenSettings = TMGS_NoMipmaps;
 
 	// CompressionNone assures the texture is actually saved as we want when it is made persistent and not in DXT1 format.
-	NewTexture->CompressionNone = true;
+	// Todo: Saving without compression does not work, figure out why.
+	// NewTexture->CompressionNone = true;
 
 	// If asset is to be persistent, handle creating the Source structure for it.
 	if (Persistent) {
@@ -167,7 +168,7 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 
 	// Set the texture to be UAV Compatible if requested. Beware! Not all formats support this (notably anything compressed).
 	NewTexture->bUAVCompatible = UAVCompatible;
-	// Update resourc, mark that the folder needs to be rescan and notify editor about asset creation.
+	// Update resource, mark that the folder needs to be rescan and notify editor about asset creation.
 	NewTexture->UpdateResource();
 	Package->MarkPackageDirty();
 	FAssetRegistryModule::AssetCreated(NewTexture);
