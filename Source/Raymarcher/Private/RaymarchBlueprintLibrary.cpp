@@ -381,7 +381,7 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
 
   // Actually create the asset.
   bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions, TempArray, LoadedTexture, 
-                                          Persistent, Persistent, false);
+                                          Persistent, false, false);
   if (Success) {
     MY_LOG("Asset created and saved successfuly.")
   }
@@ -731,6 +731,14 @@ void URaymarchBlueprintLibrary::ChangeTFInResources(const UObject* WorldContextO
 	Resources.TFRangeParameters = TFParameters;
 	Resources.TFTextureRef = TransferFunction;
 	OutResources = Resources;
+}
+
+void URaymarchBlueprintLibrary::ChangeViewportProperties(const UObject* WorldContextObject, FVector2D Origin, FVector2D Size)
+{
+	GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].OriginX = Origin.X; // default: 0.f
+	GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].OriginY = Origin.Y; // default: 0.f
+	GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].SizeX = Size.X; // default 1.f
+	GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].SizeY = Size.Y; // default 1.f
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -233,6 +233,10 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Raymarcher", meta = (WorldContext = "WorldContextObject"))
   static void ChangeTFInResources(const UObject* WorldContextObject,  FBasicRaymarchRenderingResources Resources, UTexture2D* TFTexture,  FTransferFunctionRangeParameters TFParameters, FBasicRaymarchRenderingResources& OutResources);
 
+  /** Transforms the first player's viewport size on the screen. All values normalized to 0-1.*/
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher", meta = (WorldContext = "WorldContextObject"))
+	  static void ChangeViewportProperties(const UObject* WorldContextObject, FVector2D Origin, FVector2D Size);
+
 
 
 

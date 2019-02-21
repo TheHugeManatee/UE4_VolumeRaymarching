@@ -96,4 +96,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
 		meta = (WorldContext = "WorldContextObject"))
 	static void MarkCuboidInVolumeWorld(UVolumeTexture* MarkedVolume, FVector BrushWorldCenter, const float SphereRadiusWorld, const FRaymarchWorldParameters WorldParameters, const FLinearColor WrittenValue);
+
+	
 };

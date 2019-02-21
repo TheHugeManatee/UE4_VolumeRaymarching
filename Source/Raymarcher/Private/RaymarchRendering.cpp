@@ -151,7 +151,7 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
 
 	// CompressionNone assures the texture is actually saved as we want when it is made persistent and not in DXT1 format.
 	// Todo: Saving without compression does not work, figure out why.
-	// NewTexture->CompressionNone = true;
+	NewTexture->CompressionNone = true;
 
 	// If asset is to be persistent, handle creating the Source structure for it.
 	if (Persistent) {
