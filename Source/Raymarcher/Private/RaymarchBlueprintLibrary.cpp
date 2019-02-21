@@ -771,7 +771,7 @@ void URaymarchBlueprintLibrary::GetDominantFace(FVector LocalDirectionVector, FC
 
 void URaymarchBlueprintLibrary::GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal)
 {
-	FaceNormalLocal = FCubeFaceNormals[CubeFace];
+	FaceNormalLocal = FCubeFaceNormals[(uint8)CubeFace];
 }
 
 #undef LOCTEXT_NAMESPACE

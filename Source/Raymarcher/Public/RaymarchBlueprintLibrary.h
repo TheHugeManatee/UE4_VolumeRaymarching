@@ -248,7 +248,7 @@ public:
 	  static void GetDominantFace(FVector LocalDirectionVector, FCubeFace& DominantFace);
 
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
-	  static void GetFaceNormal(FCubeFace& CubeFace, FVector& FaceNormalLocal);
+	  static void GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal);
 
 
 
