@@ -267,10 +267,11 @@ void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
     const UObject* WorldContextObject, FBasicRaymarchRenderingResources Resources,
     const FDirLightParameters LightParameters, const bool Added,
     const FRaymarchWorldParameters WorldParameters, bool& LightAdded, FVector& LocalLightDir) {
-  if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
-      !Resources.ALightVolumeRef->Resource || !Resources.VolumeTextureRef->Resource->TextureRHI ||
-	  !Resources.TFTextureRef->Resource->TextureRHI ||
-      !Resources.ALightVolumeRef->Resource->TextureRHI) {
+  if (!Resources.VolumeTextureRef || !Resources.VolumeTextureRef->Resource ||
+      !Resources.TFTextureRef->Resource || !Resources.ALightVolumeRef->Resource ||
+      !Resources.VolumeTextureRef->Resource->TextureRHI ||
+      !Resources.TFTextureRef->Resource->TextureRHI ||
+      !Resources.ALightVolumeRef->Resource->TextureRHI || !Resources.ALightVolumeUAVRef) {
     LightAdded = false;
     return;
   } else {
@@ -296,8 +297,9 @@ void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
     const UObject* WorldContextObject, FBasicRaymarchRenderingResources Resources,
     const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
     const FRaymarchWorldParameters WorldParameters, bool& LightAdded, FVector& LocalLightDir) {
-  if (!Resources.VolumeTextureRef->Resource || !Resources.TFTextureRef->Resource ||
-      !Resources.ALightVolumeRef->Resource || !Resources.VolumeTextureRef->Resource->TextureRHI ||
+  if (!Resources.VolumeTextureRef || !Resources.VolumeTextureRef->Resource ||
+      !Resources.TFTextureRef->Resource || !Resources.ALightVolumeRef->Resource ||
+      !Resources.VolumeTextureRef->Resource->TextureRHI ||
       !Resources.TFTextureRef->Resource->TextureRHI ||
       !Resources.ALightVolumeRef->Resource->TextureRHI) {
     LightAdded = false;
@@ -380,8 +382,8 @@ void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
   MY_LOG("File was successfully read!");
 
   // Actually create the asset.
-  bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions, TempArray, LoadedTexture, 
-                                          Persistent, false, false);
+  bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions, TempArray,
+                                          LoadedTexture, Persistent, false, false);
   if (Success) {
     MY_LOG("Asset created and saved successfuly.")
   }
@@ -403,7 +405,7 @@ void URaymarchBlueprintLibrary::LoadMhdFileIntoVolumeTextureAsset(
     FString RelativePath = FPaths::ProjectContentDir();
     FString FullPath =
         IFileManager::Get().ConvertToAbsolutePathForExternalAppForRead(*RelativePath) + FileName;
-		FileName = FullPath;
+    FileName = FullPath;
     if (!FFileHelper::LoadFileToString(/*out*/ FileContent, *FullPath)) {
       MY_LOG("Reading mhd file failed!");
       return;
@@ -433,10 +435,13 @@ void URaymarchBlueprintLibrary::LoadMhdFileIntoVolumeTextureAsset(
       FString::SanitizeFloat(WorldDimensions.Z, 3);
   GEngine->AddOnScreenDebugMessage(-1, 20.f, FColor::Yellow, text);
 
-   LoadRawVolumeIntoVolumeTextureAsset(WorldContextObject, FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions, TextureName, Persistent, LoadedTexture);
+  LoadRawVolumeIntoVolumeTextureAsset(WorldContextObject,
+                                      FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions,
+                                      TextureName, Persistent, LoadedTexture);
 
-  //LoadRawVolumeIntoVolumeTextureAsset2(WorldContextObject,
-  //                                    FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions.X, info.Dimensions.Y, info.Dimensions.Z ,
+  // LoadRawVolumeIntoVolumeTextureAsset2(WorldContextObject,
+  //                                    FileName.Replace(TEXT(".mhd"), TEXT(".raw")),
+  //                                    info.Dimensions.X, info.Dimensions.Y, info.Dimensions.Z ,
   //                                    TextureName, LoadedTexture);
 
   return;
@@ -494,9 +499,8 @@ void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(
     return;
   }
   if (!Curve || !Texture) {
-	  CustomLog(WorldContextObject,
-		  "Cannot create TF with missing curve/texture asset", 10);
-	  return;
+    CustomLog(WorldContextObject, "Cannot create TF with missing curve/texture asset", 10);
+    return;
   }
 
   // Sanity check
@@ -584,7 +588,7 @@ void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(
 }
 
 void CreateBufferTextures(FIntPoint Size, EPixelFormat PixelFormat,
-                                 OneAxisReadWriteBufferResources& RWBuffers) {
+                          OneAxisReadWriteBufferResources& RWBuffers) {
   if (Size.X == 0 || Size.Y == 0) {
     UE_LOG(LogTemp, Error, TEXT("Error: Creating Buffer Textures: Size is Zero!"), 3);
     return;
@@ -598,8 +602,15 @@ void CreateBufferTextures(FIntPoint Size, EPixelFormat PixelFormat,
 
 void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
     const UObject* WorldContextObject, UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
-    UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFRangeParams, bool HalfResolution,
-    const bool ColoredLightSupport, struct FBasicRaymarchRenderingResources& OutParameters) {
+    UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFRangeParams,
+    bool HalfResolution, const bool ColoredLightSupport,
+    struct FBasicRaymarchRenderingResources& OutParameters) {
+  if (!ensure(Volume != nullptr) || !ensure(ALightVolume != nullptr) ||
+      !ensure(TransferFunction != nullptr)) {
+    UE_LOG(LogTemp, Error, TEXT("Invalid input parameters!"));
+    return;
+  }
+
   OutParameters.VolumeTextureRef = Volume;
   OutParameters.ALightVolumeRef = ALightVolume;
   OutParameters.TFTextureRef = TransferFunction;
@@ -610,9 +621,9 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
 
   // If using half res, divide by two.
   if (HalfResolution) {
-	  X = FMath::DivideAndRoundUp(X, 2);
-	  Y = FMath::DivideAndRoundUp(Y, 2);
-	  Z = FMath::DivideAndRoundUp(Z, 2);
+    X = FMath::DivideAndRoundUp(X, 2);
+    Y = FMath::DivideAndRoundUp(Y, 2);
+    Z = FMath::DivideAndRoundUp(Z, 2);
   }
 
   // Initialize the Alpha Light volume
@@ -633,15 +644,13 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
 
   OutParameters.isInitialized = true;
   OutParameters.supportsColor = ColoredLightSupport;
-
 }
 
 void URaymarchBlueprintLibrary::CreateLightVolumeAsset(const UObject* WorldContextObject,
                                                        FString TextureName, FIntVector Dimensions,
                                                        UVolumeTexture*& CreatedVolume) {
   EPixelFormat PixelFormat = PF_G8;
-  const long TotalElements =
-      Dimensions.X * Dimensions.Y * Dimensions.Z ;
+  const long TotalElements = Dimensions.X * Dimensions.Y * Dimensions.Z;
   const long TotalSize = TotalElements * GPixelFormats[PixelFormat].BlockBytes;
 
   FFloat16* InitMemory = new FFloat16[TotalElements];
@@ -652,8 +661,8 @@ void URaymarchBlueprintLibrary::CreateLightVolumeAsset(const UObject* WorldConte
   }
 
   // FMemory::Memset(InitMemory, 1, TotalSize);
-  bool Success = CreateVolumeTextureAsset(TextureName, PixelFormat, Dimensions, (uint8*)InitMemory, CreatedVolume,
-                                          false, false, true);
+  bool Success = CreateVolumeTextureAsset(TextureName, PixelFormat, Dimensions, (uint8*)InitMemory,
+                                          CreatedVolume, false, false, true);
   if (Success) {
     MY_LOG("Asset created and saved successfuly.")
   }
@@ -675,34 +684,47 @@ void URaymarchBlueprintLibrary::ReadTransferFunctionFromFile(const UObject* Worl
   OutColorCurve = NewObject<UCurveLinearColor>();
 }
 
-void URaymarchBlueprintLibrary::GenerateVolumeTextureMipLevels(const UObject* WorldContextObject, FIntVector Dimensions, UVolumeTexture* inTexture, UTexture2D* TransferFunction, bool& success)
-{
-	success = true;
-	if (!(inTexture->Resource && inTexture->Resource->TextureRHI && TransferFunction->Resource && TransferFunction->Resource->TextureRHI)) {
-		success = false;
-		return;
-	}
+void URaymarchBlueprintLibrary::GenerateVolumeTextureMipLevels(const UObject* WorldContextObject,
+                                                               FIntVector Dimensions,
+                                                               UVolumeTexture* inTexture,
+                                                               UTexture2D* TransferFunction,
+                                                               bool& success) {
+  success = true;
+  if (!(inTexture->Resource && inTexture->Resource->TextureRHI && TransferFunction->Resource &&
+        TransferFunction->Resource->TextureRHI)) {
+    success = false;
+    return;
+  }
 
-	// Call the actual rendering code on RenderThread.
-	ENQUEUE_RENDER_COMMAND(CaptureCommand)
-		([=](FRHICommandListImmediate& RHICmdList) {
-		GenerateVolumeTextureMipLevels_RenderThread(RHICmdList, Dimensions, inTexture->Resource->TextureRHI->GetTexture3D(), TransferFunction->Resource->TextureRHI->GetTexture2D());
-	});
+  // Call the actual rendering code on RenderThread.
+  ENQUEUE_RENDER_COMMAND(CaptureCommand)
+  ([=](FRHICommandListImmediate& RHICmdList) {
+    GenerateVolumeTextureMipLevels_RenderThread(
+        RHICmdList, Dimensions, inTexture->Resource->TextureRHI->GetTexture3D(),
+        TransferFunction->Resource->TextureRHI->GetTexture2D());
+  });
 }
 
-void URaymarchBlueprintLibrary::GenerateDistanceField(const UObject* WorldContextObject, FIntVector Dimensions, UVolumeTexture* inTexture, UTexture2D* TransferFunction, UVolumeTexture* SDFTexture, float localSphereDiameter, float threshold, bool& success)
-{
-	success = true;
-	if (!(inTexture->Resource && inTexture->Resource->TextureRHI && TransferFunction->Resource && TransferFunction->Resource->TextureRHI && SDFTexture->Resource && SDFTexture->Resource->TextureRHI)) {
-		success = false;
-		return;
-	}
+void URaymarchBlueprintLibrary::GenerateDistanceField(
+    const UObject* WorldContextObject, FIntVector Dimensions, UVolumeTexture* inTexture,
+    UTexture2D* TransferFunction, UVolumeTexture* SDFTexture, float localSphereDiameter,
+    float threshold, bool& success) {
+  success = true;
+  if (!(inTexture->Resource && inTexture->Resource->TextureRHI && TransferFunction->Resource &&
+        TransferFunction->Resource->TextureRHI && SDFTexture->Resource &&
+        SDFTexture->Resource->TextureRHI)) {
+    success = false;
+    return;
+  }
 
-	// Call the actual rendering code on RenderThread.
-	ENQUEUE_RENDER_COMMAND(CaptureCommand)
-		([=](FRHICommandListImmediate& RHICmdList) {
-		GenerateDistanceField_RenderThread(RHICmdList, Dimensions, inTexture->Resource->TextureRHI->GetTexture3D(), TransferFunction->Resource->TextureRHI->GetTexture2D(), SDFTexture->Resource->TextureRHI->GetTexture3D(), localSphereDiameter, threshold);
-	});
+  // Call the actual rendering code on RenderThread.
+  ENQUEUE_RENDER_COMMAND(CaptureCommand)
+  ([=](FRHICommandListImmediate& RHICmdList) {
+    GenerateDistanceField_RenderThread(
+        RHICmdList, Dimensions, inTexture->Resource->TextureRHI->GetTexture3D(),
+        TransferFunction->Resource->TextureRHI->GetTexture2D(),
+        SDFTexture->Resource->TextureRHI->GetTexture3D(), localSphereDiameter, threshold);
+  });
 }
 
 void URaymarchBlueprintLibrary::CustomLog(const UObject* WorldContextObject, FString LoggedString,
@@ -726,52 +748,69 @@ void URaymarchBlueprintLibrary::TransformToMatrix(const UObject* WorldContextObj
   OutMatrix = Transform.ToMatrixNoScale();
 }
 
-void URaymarchBlueprintLibrary::ChangeTFInResources(const UObject* WorldContextObject,  FBasicRaymarchRenderingResources Resources,  UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFParameters, FBasicRaymarchRenderingResources& OutResources)
-{
-	Resources.TFRangeParameters = TFParameters;
-	Resources.TFTextureRef = TransferFunction;
-	OutResources = Resources;
+void URaymarchBlueprintLibrary::ChangeTFInResources(
+    const UObject* WorldContextObject, FBasicRaymarchRenderingResources Resources,
+    UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFParameters,
+    FBasicRaymarchRenderingResources& OutResources) {
+  Resources.TFRangeParameters = TFParameters;
+  Resources.TFTextureRef = TransferFunction;
+  OutResources = Resources;
 }
 
-void URaymarchBlueprintLibrary::ChangeViewportProperties(const UObject* WorldContextObject, FVector2D Origin, FVector2D Size)
-{
-	GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].OriginX = Origin.X; // default: 0.f
-	GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].OriginY = Origin.Y; // default: 0.f
-	GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].SizeX = Size.X; // default 1.f
-	GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].SizeY = Size.Y; // default 1.f
+void URaymarchBlueprintLibrary::ChangeViewportProperties(const UObject* WorldContextObject,
+                                                         FVector2D Origin, FVector2D Size) {
+  GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].OriginX = Origin.X;  // default: 0.f
+  GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].OriginY = Origin.Y;  // default: 0.f
+  GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].SizeX = Size.X;      // default 1.f
+  GEngine->GameViewport->SplitscreenInfo[0].PlayerData[0].SizeY = Size.Y;      // default 1.f
 }
 
-void URaymarchBlueprintLibrary::GetCutplaneMaterialParams(FCubeFace DominantFace, FVector& Origin, FVector& UMultiplier, FVector& SliceMultiplier)
-{
-	switch (DominantFace) {
-		// Bottom = going from the bottom -> dominant face is at -Z, so slices are going along Z, U coordinate increases Y)
-	case FCubeFace::Bottom : Origin = FVector(0, 0, 0); UMultiplier = FVector(0, 1, 0); SliceMultiplier = FVector(0, 0, 1);
-		break;
-		// Top = going from the top -> dominant face is at +Z, so slices going along going along -Z,  U coordinate decreases Y))
-	case FCubeFace::Top : Origin = FVector(0, 1, 1); UMultiplier = FVector(0, -1, 0); SliceMultiplier = FVector(0, 0, -1);
-		break;
-		// Back = going from back -> dominant face is at -Y,  so slices going along +Y, U coordinate decreases Z)
-	case FCubeFace::Back: Origin = FVector(0, 0, 1); UMultiplier = FVector(0, 0, -1); SliceMultiplier = FVector(0, 1, 0);
-		break;
-		// Front = going from Front -> dominant face is at +Y, so slices going along -Y, U coordinate increases Z))
-	case FCubeFace::Front: Origin = FVector(0, 1, 0); UMultiplier = FVector(0, 0, 1); SliceMultiplier = FVector(0, -1, 0);
-		break;
-		// Should never go from +-X, so assert here.
-	case FCubeFace::Left:
-	case FCubeFace::Right:
-		check(0);
-	}
+void URaymarchBlueprintLibrary::GetCutplaneMaterialParams(FCubeFace DominantFace, FVector& Origin,
+                                                          FVector& UMultiplier,
+                                                          FVector& SliceMultiplier) {
+  switch (DominantFace) {
+      // Bottom = going from the bottom -> dominant face is at -Z, so slices are going along Z, U
+      // coordinate increases Y)
+    case FCubeFace::Bottom:
+      Origin = FVector(0, 0, 0);
+      UMultiplier = FVector(0, 1, 0);
+      SliceMultiplier = FVector(0, 0, 1);
+      break;
+      // Top = going from the top -> dominant face is at +Z, so slices going along going along -Z,
+      // U coordinate decreases Y))
+    case FCubeFace::Top:
+      Origin = FVector(0, 1, 1);
+      UMultiplier = FVector(0, -1, 0);
+      SliceMultiplier = FVector(0, 0, -1);
+      break;
+      // Back = going from back -> dominant face is at -Y,  so slices going along +Y, U coordinate
+      // decreases Z)
+    case FCubeFace::Back:
+      Origin = FVector(0, 0, 1);
+      UMultiplier = FVector(0, 0, -1);
+      SliceMultiplier = FVector(0, 1, 0);
+      break;
+      // Front = going from Front -> dominant face is at +Y, so slices going along -Y, U coordinate
+      // increases Z))
+    case FCubeFace::Front:
+      Origin = FVector(0, 1, 0);
+      UMultiplier = FVector(0, 0, 1);
+      SliceMultiplier = FVector(0, -1, 0);
+      break;
+      // Should never go from +-X, so assert here.
+    case FCubeFace::Left:
+    case FCubeFace::Right: check(0);
+  }
 }
 
-void URaymarchBlueprintLibrary::GetDominantFace(FVector LocalDirectionVector, FCubeFace& DominantFace)
-{
-	FMajorAxes axes = GetMajorAxes(LocalDirectionVector);
-	DominantFace = axes.FaceWeight[0].first;
+void URaymarchBlueprintLibrary::GetDominantFace(FVector LocalDirectionVector,
+                                                FCubeFace& DominantFace) {
+  FMajorAxes axes = GetMajorAxes(LocalDirectionVector);
+  DominantFace = axes.FaceWeight[0].first;
 }
 
-void URaymarchBlueprintLibrary::GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal)
-{
-	FaceNormalLocal = FCubeFaceNormals[(uint8)CubeFace];
+void URaymarchBlueprintLibrary::GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal) {
+  FaceNormalLocal = FCubeFaceNormals[(uint8)CubeFace];
 }
 
 #undef LOCTEXT_NAMESPACE
