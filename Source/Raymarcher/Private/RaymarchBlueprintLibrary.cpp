@@ -271,7 +271,7 @@ void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
       !Resources.TFTextureRef->Resource || !Resources.ALightVolumeRef->Resource ||
       !Resources.VolumeTextureRef->Resource->TextureRHI ||
       !Resources.TFTextureRef->Resource->TextureRHI ||
-      !Resources.ALightVolumeRef->Resource->TextureRHI || !Resources.ALightVolumeUAVRef) {
+      !Resources.ALightVolumeRef->Resource->TextureRHI) { //|| !Resources.ALightVolumeUAVRef) {
     LightAdded = false;
     return;
   } else {
@@ -291,6 +291,21 @@ void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
     AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, LightParameters, Added,
                                                 WorldParameters, FeatureLevel);
   });
+}
+
+void URaymarchBlueprintLibrary::CreateLightVolumeUAV(FBasicRaymarchRenderingResources Resources, FBasicRaymarchRenderingResources& OutResources, bool& Success)
+{
+	OutResources = Resources;
+	if (!Resources.ALightVolumeRef || !Resources.ALightVolumeRef->Resource || !Resources.ALightVolumeRef->Resource->TextureRHI) {
+		Success = false;
+	}
+	else if (Resources.ALightVolumeUAVRef) {
+		Success = true;
+	} else {
+		Resources.ALightVolumeUAVRef = RHICreateUnorderedAccessView(Resources.ALightVolumeRef->Resource->TextureRHI);
+		Success = true;
+	}
+
 }
 
 void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
@@ -604,9 +619,8 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
     const UObject* WorldContextObject, UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
     UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFRangeParams,
     bool HalfResolution, const bool ColoredLightSupport,
-    struct FBasicRaymarchRenderingResources& OutParameters) {
-  if (!ensure(Volume != nullptr) || !ensure(ALightVolume != nullptr) ||
-      !ensure(TransferFunction != nullptr)) {
+    FBasicRaymarchRenderingResources& OutParameters) {
+  if (!Volume || !ALightVolume || !TransferFunction) {
     UE_LOG(LogTemp, Error, TEXT("Invalid input parameters!"));
     return;
   }
@@ -641,9 +655,17 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
   CreateBufferTextures(XBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[0]);
   CreateBufferTextures(YBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[1]);
   CreateBufferTextures(ZBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[2]);
-
+   
   OutParameters.isInitialized = true;
   OutParameters.supportsColor = ColoredLightSupport;
+}
+
+void URaymarchBlueprintLibrary::CheckBasicRaymarchingResources(const UObject* WorldContextObject, FBasicRaymarchRenderingResources OutParameters)
+{
+
+	FString dgbmsg = "Resources X buff 0 address = " + FString::FromInt(OutParameters.isInitialized);
+	GEngine->AddOnScreenDebugMessage(123, 12, FColor::Yellow,  dgbmsg);
+
 }
 
 void URaymarchBlueprintLibrary::CreateLightVolumeAsset(const UObject* WorldContextObject,
@@ -812,5 +834,6 @@ void URaymarchBlueprintLibrary::GetDominantFace(FVector LocalDirectionVector,
 void URaymarchBlueprintLibrary::GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal) {
   FaceNormalLocal = FCubeFaceNormals[(uint8)CubeFace];
 }
+
 
 #undef LOCTEXT_NAMESPACE

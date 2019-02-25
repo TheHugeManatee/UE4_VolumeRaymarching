@@ -72,7 +72,7 @@ public:
   //
 
   /** Adds a light to light volume.	 */
-  UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void AddDirLightToSingleVolume(const UObject* WorldContextObject,
                                         const FBasicRaymarchRenderingResources Resources,
@@ -80,8 +80,16 @@ public:
                                         const FRaymarchWorldParameters WorldParameters,
                                         bool& LightAdded, FVector& LocalLightDir);
 
+  /** Adds a light to light volume.	 */
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher",
+	  meta = (WorldContext = "WorldContextObject"))
+	  static void CreateLightVolumeUAV(FBasicRaymarchRenderingResources Resources,
+									   FBasicRaymarchRenderingResources& OutResources,
+									   bool& Success);
+
+
   /** Changes a light in the light volume.	 */
-  UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void ChangeDirLightInSingleVolume(const UObject* WorldContextObject,
                                            FBasicRaymarchRenderingResources Resources,
@@ -91,7 +99,7 @@ public:
                                            bool& LightAdded, FVector& LocalLightDir);
 
   /** Clears a light volume. */
-  UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher",
             meta = (WorldContext = "WorldContextObject"))
   static void ClearSingleLightVolume(const UObject* WorldContextObject,
                                      UVolumeTexture* ALightVolume, float ClearValue);
@@ -175,7 +183,16 @@ public:
       const UObject* WorldContextObject, UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
       UTexture2D* TransferFunction, FTransferFunctionRangeParameters TFRangeParams,  bool HalfResolution,
       const bool ColoredLightSupport,
-      struct FBasicRaymarchRenderingResources& OutParameters);  //
+      FBasicRaymarchRenderingResources& OutParameters);  //
+
+  //
+
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher",
+	  meta = (WorldContext = "WorldContextObject"))
+	  static void CheckBasicRaymarchingResources(
+		  const UObject* WorldContextObject, FBasicRaymarchRenderingResources OutParameters);  //
+
+
 
   /** Loads a RAW 3D texture into this classes FRHITexture3D member. Will output error log messages
    * and return if unsuccessful */
