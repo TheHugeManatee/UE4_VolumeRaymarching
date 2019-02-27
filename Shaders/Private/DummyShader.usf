@@ -21,8 +21,7 @@ float opacity = 0;
 
 int3 randpos = int3(Parameters.SvPosition.xy, View.StateFrameIndexMod8);
 float rand = float(Rand3DPCG16(randpos).x) / 0xffff;
-CurPos += localcamvec * rand.x *
-Jitter;
+CurPos += localcamvec * rand.x * Jitter;
 
 //float3 LightVectorWS = normalize(mul(LightVector, Primitive.LocalToWorld));
 float3 LightVectorWS = float3(1, 1, 1);
