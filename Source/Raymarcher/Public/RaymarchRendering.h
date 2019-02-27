@@ -351,7 +351,7 @@ public:
 };
 
 void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Size,
-                                   UVolumeTexture* inTexture, ERHIFeatureLevel::Type FeatureLevel);
+                                   UVolumeTexture* inTexture);
 
 /** Creates a Volume Texture asset with the given name, pixel format and dimensions and fills it 
 	with the bulk data provided. It can be set to be persistent and UAV compatible and can also
@@ -383,39 +383,34 @@ void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                            const FColorVolumesResources ColorResources,
                                            const FDirLightParameters LightParameters,
                                            const bool Added,
-                                           const FRaymarchWorldParameters WorldParameters,
-                                           ERHIFeatureLevel::Type FeatureLevel);
+                                           const FRaymarchWorldParameters WorldParameters);
 
 void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                               FBasicRaymarchRenderingResources Resources,
                                               const FColorVolumesResources ColorResources,
                                               const FDirLightParameters OldLightParameters,
                                               const FDirLightParameters NewLightParameters,
-                                              const FRaymarchWorldParameters WorldParameters,
-                                              ERHIFeatureLevel::Type FeatureLevel);
+                                              const FRaymarchWorldParameters WorldParameters);
 
 void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
                                     FRHITexture3D* RLightVolumeResource,
                                     FRHITexture3D* GLightVolumeResource,
                                     FRHITexture3D* BLightVolumeResource,
-                                    FRHITexture3D* ALightVolumeResource, FVector4 ClearValues,
-                                    ERHIFeatureLevel::Type FeatureLevel);
+                                    FRHITexture3D* ALightVolumeResource, FVector4 ClearValues);
 
 void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                                  FBasicRaymarchRenderingResources Resources,
                                                  const FDirLightParameters LightParameters,
                                                  const bool Added,
-                                                 const FRaymarchWorldParameters WorldParameters,
-                                                 ERHIFeatureLevel::Type FeatureLevel);
+                                                 const FRaymarchWorldParameters WorldParameters);
 
 void ChangeDirLightInSingleLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, FBasicRaymarchRenderingResources Resources,
     const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
-    const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel);
+    const FRaymarchWorldParameters WorldParameters);
 
 void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                         FRHITexture3D* ALightVolumeResource, float ClearValue,
-                                         ERHIFeatureLevel::Type FeatureLevel);
+                                         FRHITexture3D* ALightVolumeResource, float ClearValue);
 
 void GenerateVolumeTextureMipLevels_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
 	FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc);
@@ -424,8 +419,7 @@ void GenerateDistanceField_RenderThread (FRHICommandListImmediate& RHICmdList, F
 	FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc, FRHITexture3D* DistanceFieldResource,float localSphereDiameter, float threshold);
 
 static void CreateBasicRaymarchingResources_RenderThread(
-	FRHICommandListImmediate& RHICmdList, struct FBasicRaymarchRenderingResources& InParams,
-	ERHIFeatureLevel::Type FeatureLevel);
+	FRHICommandListImmediate& RHICmdList, struct FBasicRaymarchRenderingResources& InParams);
 
 
 //

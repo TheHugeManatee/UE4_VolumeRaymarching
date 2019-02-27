@@ -6,7 +6,7 @@
 #include "RaymarchRendering.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 
-#include "VolumeMarking.generated.h"
+#include "VolumeLabeling.generated.h"
 
 
 // Enum class for the different possible labels
@@ -23,17 +23,17 @@ enum class FSurgeryLabel : uint8 {
 
 // Parent shader for any shader that works on Light Volumes. Provides a way to bind and unbind the 4
 // light volumes.
-class FWriteCuboidToVolumeShader : public FGlobalShader {
-	DECLARE_SHADER_TYPE(FWriteCuboidToVolumeShader, Global)
+class FWriteSphereToVolumeShader : public FGlobalShader {
+	DECLARE_SHADER_TYPE(FWriteSphereToVolumeShader, Global)
 
 public:
   static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
     return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
   }
 
-  FWriteCuboidToVolumeShader(){};
+  FWriteSphereToVolumeShader(){};
 
-  FWriteCuboidToVolumeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+  FWriteSphereToVolumeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
     : FGlobalShader(Initializer) {
     // Bind Light Volume resource parameters
     MarkedVolume.Bind(Initializer.ParameterMap, TEXT("MarkedVolume"));
@@ -78,24 +78,20 @@ protected:
   FShaderParameter WrittenValue;
 };
 
-void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRHITexture3D * MarkedVolume, const float SphereRadiusWorld, const FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, float WrittenValue);
+void WriteSphereToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRHITexture3D * MarkedVolume, const float SphereRadiusWorld, const FVector BrushWorldSize, const FRaymarchWorldParameters WorldParameters, float WrittenValue);
 
 
 // Actual blueprint library follows
 UCLASS()
-class UVolumeMarkingLibrary : public UBlueprintFunctionLibrary {
+class ULabelVolumeLibrary : public UBlueprintFunctionLibrary {
 	GENERATED_BODY()
 public:
+	/** Creates labeling volume with the provided name and dimensions. */
+	UFUNCTION(BlueprintCallable, Category = "Label Volume")
+		static void CreateLabelingVolume(FIntVector Dimensions, FString AssetName, UVolumeTexture*& OutTexture);
 
-	///** Writes specified value into a volume at a cuboid specified in world coordinates. */
-	UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
-		meta = (WorldContext = "WorldContextObject"))
-		static void CreateMarkingVolume(FIntVector Dimensions, FString AssetName, UVolumeTexture*& OutTexture);
-
-	/** Writes specified value into a volume at a cuboid specified in world coordinates. */
-	UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher",
-		meta = (WorldContext = "WorldContextObject"))
-	static void MarkCuboidInVolumeWorld(UVolumeTexture* MarkedVolume, FVector BrushWorldCenter, const float SphereRadiusWorld, const FRaymarchWorldParameters WorldParameters, const FLinearColor WrittenValue);
-
+	/** Writes specified value into a volume at a sphere specified in world coordinates. */
+	UFUNCTION(BlueprintCallable, Category = "Label Volume")
+	static void LabelSphereInVolumeWorld(UVolumeTexture* MarkedVolume, FVector BrushWorldCenter, const float SphereRadiusWorld, const FRaymarchWorldParameters WorldParameters, const FLinearColor WrittenValue);
 	
 };

@@ -49,7 +49,7 @@ IMPLEMENT_SHADER_TYPE(, FVolumePS, TEXT("/Plugin/VolumeRaymarching/Private/Rayma
 
 	// Writes to 3D texture slice(s).
 	void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Size,
-		UVolumeTexture* inTexture, ERHIFeatureLevel::Type FeatureLevel) {
+		UVolumeTexture* inTexture) {
 	// Set render target to our volume texture.
 	SetRenderTarget(RHICmdList, inTexture->Resource->TextureRHI, FTextureRHIRef());
 
@@ -63,7 +63,7 @@ IMPLEMENT_SHADER_TYPE(, FVolumePS, TEXT("/Plugin/VolumeRaymarching/Private/Rayma
 	GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
 
 	// Get shaders from GlobalShaderMap
-	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
 	// Get Geometry and Vertex shaders for Volume texture writes (provided by EPIC).
 	TShaderMapRef<FWriteToSliceVS> VertexShader(GlobalShaderMap);
 	TOptionalShaderMapRef<FWriteToSliceGS> GeometryShader(GlobalShaderMap);
@@ -719,8 +719,7 @@ void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
 	const FColorVolumesResources ColorResources,
 	const FDirLightParameters LightParameters,
 	const bool Added,
-	const FRaymarchWorldParameters WorldParameters,
-	ERHIFeatureLevel::Type FeatureLevel) {
+	const FRaymarchWorldParameters WorldParameters) {
 	// Todo - template shaders on resource type.
 }
 
@@ -729,22 +728,20 @@ void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdLi
 	const FColorVolumesResources ColorResources,
 	const FDirLightParameters OldLightParameters,
 	const FDirLightParameters NewLightParameters,
-	const FRaymarchWorldParameters WorldParameters,
-	ERHIFeatureLevel::Type FeatureLevel) {
+	const FRaymarchWorldParameters WorldParameters) {
 	// Todo - template shaders on resource type
 }
 void ClearLightVolumes_RenderThread(
 	FRHICommandListImmediate & RHICmdList, FRHITexture3D * RLightVolumeResource,
 	FRHITexture3D * GLightVolumeResource, FRHITexture3D * BLightVolumeResource,
-	FRHITexture3D * ALightVolumeResource, FVector4 ClearValues,
-	ERHIFeatureLevel::Type FeatureLevel) {
+	FRHITexture3D * ALightVolumeResource, FVector4 ClearValues) {
 	// Todo - template shaders on resource type
 }
 
 void AddDirLightToSingleLightVolume_RenderThread(
 	FRHICommandListImmediate & RHICmdList, FBasicRaymarchRenderingResources Resources,
 	const FDirLightParameters LightParameters, const bool Added,
-	const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel) {
+	const FRaymarchWorldParameters WorldParameters) {
 	check(IsInRenderingThread());
 
 	// Can't have directional light without direction...
@@ -794,7 +791,7 @@ void AddDirLightToSingleLightVolume_RenderThread(
 	}
 
 	// Find and set compute shader
-	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
 	TShaderMapRef<FAddDirLightShaderSingle> ComputeShader(GlobalShaderMap);
 	FComputeShaderRHIParamRef ShaderRHI = ComputeShader->GetComputeShader();
 	RHICmdList.SetComputeShader(ShaderRHI);
@@ -881,7 +878,7 @@ void AddDirLightToSingleLightVolume_RenderThread(
 void ChangeDirLightInSingleLightVolume_RenderThread(
 	FRHICommandListImmediate & RHICmdList, FBasicRaymarchRenderingResources Resources,
 	const FDirLightParameters RemovedLightParameters, const FDirLightParameters AddedLightParameters,
-	const FRaymarchWorldParameters WorldParameters, ERHIFeatureLevel::Type FeatureLevel) {
+	const FRaymarchWorldParameters WorldParameters) {
 	// Can't have directional light without direction...
 	if (AddedLightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
 		GEngine->AddOnScreenDebugMessage(
@@ -905,9 +902,9 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
 	if (RemovedLocalMajorAxes.FaceWeight[0].first != AddedLocalMajorAxes.FaceWeight[0].first ||
 		RemovedLocalMajorAxes.FaceWeight[1].first != AddedLocalMajorAxes.FaceWeight[1].first) {
 		AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, RemovedLightParameters, false,
-			WorldParameters, FeatureLevel);
+			WorldParameters);
 		AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, AddedLightParameters, true,
-			WorldParameters, FeatureLevel);
+			WorldParameters);
 		return;
 	}
 
@@ -940,7 +937,7 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
 	SCOPED_DRAW_EVENTF(RHICmdList, ChangeDirLightInLightVolume_RenderThread, TEXT("Changing Lights"));
 	SCOPED_GPU_STAT(RHICmdList, GPUChangingLights);
 
-	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
 	TShaderMapRef<FChangeDirLightShaderSingle> ComputeShader(GlobalShaderMap);
 
 	FComputeShaderRHIParamRef ShaderRHI = ComputeShader->GetComputeShader();
@@ -1019,9 +1016,8 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
 }
 
 void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate & RHICmdList,
-	FRHITexture3D * ALightVolumeResource, float ClearValues,
-	ERHIFeatureLevel::Type FeatureLevel) {
-	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+	FRHITexture3D * ALightVolumeResource, float ClearValues) {
+	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
 	TShaderMapRef<FClearSingleLightVolumeShader> ComputeShader(GlobalShaderMap);
 
 	// For GPU profiling.

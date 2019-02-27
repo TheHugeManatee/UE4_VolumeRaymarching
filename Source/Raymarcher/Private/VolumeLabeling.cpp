@@ -1,17 +1,17 @@
 // (C) Technical University of Munich - Computer Aided Medical Procedures
 // Developed by Tomas Bartipan (tomas.bartipan@tum.de)
 
-#include "../Public/VolumeMarking.h"
+#include "../Public/VolumeLabeling.h"
 #include "AssetRegistryModule.h"
 #include "RenderCore/Public/RenderUtils.h"
 #include "Renderer/Public/VolumeRendering.h"
 
 #define LOCTEXT_NAMESPACE "RaymarchPlugin"
 
-IMPLEMENT_SHADER_TYPE(, FWriteCuboidToVolumeShader, TEXT("/Plugin/VolumeRaymarching/Private/WriteCuboidShader.usf"),
+IMPLEMENT_SHADER_TYPE(, FWriteSphereToVolumeShader, TEXT("/Plugin/VolumeRaymarching/Private/WriteCuboidShader.usf"),
                       TEXT("MainComputeShader"), SF_Compute)
 
-void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRHITexture3D * MarkedVolume, const FVector BrushWorldCenter,const float SphereRadiusWorld, const FRaymarchWorldParameters WorldParameters, FLinearColor WrittenValue)
+void WriteSphereToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRHITexture3D * MarkedVolume, const FVector BrushWorldCenter,const float SphereRadiusWorld, const FRaymarchWorldParameters WorldParameters, FLinearColor WrittenValue)
 {
 	// Get local center.
 	FVector localCenter = ((WorldParameters.VolumeTransform.InverseTransformPosition(BrushWorldCenter) /
@@ -35,7 +35,7 @@ void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRH
 	
 	// Get shader ref from GlobalShaderMap
 	TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
-	TShaderMapRef<FWriteCuboidToVolumeShader> ComputeShader(GlobalShaderMap);
+	TShaderMapRef<FWriteSphereToVolumeShader> ComputeShader(GlobalShaderMap);
 
 	RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
 	// RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier, LightVolumeResource);
@@ -61,7 +61,7 @@ void WriteCuboidToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRH
 }
 
 
-void UVolumeMarkingLibrary::CreateMarkingVolume(FIntVector Dimensions, FString AssetName, UVolumeTexture*& OutTexture)
+void ULabelVolumeLibrary::CreateLabelingVolume(FIntVector Dimensions, FString AssetName, UVolumeTexture*& OutTexture)
 {
 	unsigned TotalSize = (long)Dimensions.X * (long)Dimensions.Y * (long)Dimensions.Z * 4;
 	uint8* dummy = (uint8*)FMemory::Malloc(TotalSize);
@@ -74,13 +74,13 @@ void UVolumeMarkingLibrary::CreateMarkingVolume(FIntVector Dimensions, FString A
 	FMemory::Free(dummy);
 }
 
-void UVolumeMarkingLibrary::MarkCuboidInVolumeWorld(UVolumeTexture* MarkedVolume, const FVector BrushWorldCenter, const float SphereRadiusWorld, const FRaymarchWorldParameters WorldParameters, const FLinearColor WrittenValue)
+void ULabelVolumeLibrary::LabelSphereInVolumeWorld(UVolumeTexture* MarkedVolume, const FVector BrushWorldCenter, const float SphereRadiusWorld, const FRaymarchWorldParameters WorldParameters, const FLinearColor WrittenValue)
 {
 	if (MarkedVolume->Resource == NULL) return;
 	// Call the actual rendering code on RenderThread.
 	ENQUEUE_RENDER_COMMAND(CaptureCommand)
 		([=](FRHICommandListImmediate& RHICmdList) {
-		WriteCuboidToVolume_RenderThread(RHICmdList, MarkedVolume->Resource->TextureRHI->GetTexture3D(), BrushWorldCenter, SphereRadiusWorld, WorldParameters, WrittenValue);
+		WriteSphereToVolume_RenderThread(RHICmdList, MarkedVolume->Resource->TextureRHI->GetTexture3D(), BrushWorldCenter, SphereRadiusWorld, WorldParameters, WrittenValue);
 	});
 }
 
