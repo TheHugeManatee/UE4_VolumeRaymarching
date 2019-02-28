@@ -88,7 +88,12 @@ class ULabelVolumeLibrary : public UBlueprintFunctionLibrary {
 public:
 	/** Creates labeling volume with the provided name and dimensions. */
 	UFUNCTION(BlueprintCallable, Category = "Label Volume")
-		static void CreateLabelingVolume(FIntVector Dimensions, FString AssetName, UVolumeTexture*& OutTexture);
+		static void CreateNewLabelingVolumeAsset(FString AssetName, FIntVector Dimensions, UVolumeTexture*& OutTexture);
+
+	/** Recreates the labeling volume in the provided volume texture. */
+	UFUNCTION(BlueprintCallable, Category = "Label Volume")
+		static void InitLabelingVolume(UVolumeTexture* LabelVolumeAsset, FIntVector Dimensions);
+
 
 	/** Writes specified value into a volume at a sphere specified in world coordinates. */
 	UFUNCTION(BlueprintCallable, Category = "Label Volume")

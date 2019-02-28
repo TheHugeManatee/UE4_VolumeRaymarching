@@ -101,90 +101,6 @@ void URaymarchBlueprintLibrary::ClearLightVolumes(
   });
 }
 
-/** Loads a RAW 3D volume (G8 format) into the provided Volume Texture asset. Will output error log
- * messages and return if unsuccessful */
-void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTexture(
-                                                               FString textureName,
-                                                               FIntVector Dimensions,
-                                                               UVolumeTexture* inTexture) {
-  const long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
-
-  IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-
-  FString RelativePath = FPaths::ProjectContentDir();
-  FString FullPath =
-      IFileManager::Get().ConvertToAbsolutePathForExternalAppForRead(*RelativePath) + textureName;
-
-  IFileHandle* FileHandle = PlatformFile.OpenRead(*FullPath);
-
-  if (!FileHandle) {
-    // Or not.
-    MY_LOG("File could not be opened.");
-    return;
-  }
-  MY_LOG("RAW file was opened!")
-
-  if (FileHandle->Size() < TotalSize) {
-    MY_LOG("File is smaller than expected, cannot read volume.")
-    return;
-  } else if (FileHandle->Size() > TotalSize) {
-    MY_LOG(
-        "File is larger than expected, check your dimensions and pixel format (nonfatal, but the "
-        "texture will probably be screwed up)")
-  }
-
-  // Set volume texture parameters.
-
-#if WITH_EDITORONLY_DATA
-  inTexture->MipGenSettings = TMGS_LeaveExistingMips;
-  inTexture->CompressionNone = true;
-#endif
-
-  inTexture->NeverStream = false;
-  inTexture->SRGB = false;
-
-  // Set PlatformData parameters (create PlatformData if it doesn't exist)
-  if (!inTexture->PlatformData) {
-    inTexture->PlatformData = new FTexturePlatformData();
-  }
-  inTexture->PlatformData->PixelFormat = PF_G8;
-  inTexture->PlatformData->SizeX = Dimensions.X;
-  inTexture->PlatformData->SizeY = Dimensions.Y;
-  inTexture->PlatformData->NumSlices = Dimensions.Z;
-
-  FTexture2DMipMap* mip = new FTexture2DMipMap();
-  mip->SizeX = Dimensions.X;
-  mip->SizeY = Dimensions.Y;
-  mip->SizeZ = Dimensions.Z;
-  mip->BulkData.Lock(LOCK_READ_WRITE);
-
-  uint8* ByteArray = (uint8*)mip->BulkData.Realloc(TotalSize);
-  FileHandle->Read(ByteArray, TotalSize);
-
-  mip->BulkData.Unlock();
-
-  // Close the RAW file.
-  delete FileHandle;
-
-  // Let the whole world know we were successful.
-  MY_LOG("File was successfully read!");
-
-  // If the texture already has MIPs in it, destroy and free them (Empty() calls destructors and
-  // frees space).
-  if (inTexture->PlatformData->Mips.Num() != 0) {
-    inTexture->PlatformData->Mips.Empty();
-  }
-
-  // Add the new MIP.
-  inTexture->PlatformData->Mips.Add(mip);
-  inTexture->bUAVCompatible = true;
-
-  inTexture->UpdateResource();
-  return;
-}
-
-// void URaymarchBlueprintLibrary::Fill
-
 /** Creates light volumes with the given dimensions */
 void URaymarchBlueprintLibrary::CreateLightVolumes(
     FIntVector Dimensions, UVolumeTexture* inRTexture,
@@ -209,51 +125,22 @@ void URaymarchBlueprintLibrary::CreateLightVolumes(
 
 void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
                                                 FIntVector Dimensions) {
-  if (!LightVolume) return;
-
-  const long long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * 2;
-
-  // todo remove?
-#if WITH_EDITORONLY_DATA
-  LightVolume->MipGenSettings = TMGS_LeaveExistingMips;
-  LightVolume->CompressionNone = true;
-#endif
-
-  // Set volume texture parameters.
-  LightVolume->NeverStream = false;
-  LightVolume->SRGB = false;
-
-  // Set PlatformData parameters (create PlatformData if it doesn't exist)
-  if (!LightVolume->PlatformData) {
-    LightVolume->PlatformData = new FTexturePlatformData();
-  }
-  LightVolume->PlatformData->PixelFormat = PF_G16;
-  LightVolume->PlatformData->SizeX = Dimensions.X;
-  LightVolume->PlatformData->SizeY = Dimensions.Y;
-  LightVolume->PlatformData->NumSlices = Dimensions.Z;
-
-  FTexture2DMipMap* mip = new FTexture2DMipMap();
-  mip->SizeX = Dimensions.X;
-  mip->SizeY = Dimensions.Y;
-  mip->SizeZ = Dimensions.Z;
-  mip->BulkData.Lock(LOCK_READ_WRITE);
-
-  uint8* ByteArray = (uint8*)mip->BulkData.Realloc(TotalSize);
-  FMemory::Memset(ByteArray, 0, TotalSize);
-
-  mip->BulkData.Unlock();
-
-  // If the texture already has MIPs in it, destroy and free them (Empty() calls destructors and
-  // frees space).
-  if (LightVolume->PlatformData->Mips.Num() != 0) {
-    LightVolume->PlatformData->Mips.Empty();
+  if (!LightVolume) {
+	  GEngine->AddOnScreenDebugMessage(10, 10, FColor::Red, "Trying to init light volume without providing the volume texture.");
+	  return;
   }
 
-  // Add the new MIP.
-  LightVolume->PlatformData->Mips.Add(mip);
-  LightVolume->bUAVCompatible = true;
+  EPixelFormat PixelFormat = PF_G8;
+  const long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
 
-  LightVolume->UpdateResource();
+  uint8* InitMemory = (uint8*)FMemory::Malloc(TotalSize);
+  FMemory::Memset(InitMemory, 0, TotalSize);
+
+  // FMemory::Memset(InitMemory, 1, TotalSize);
+  UpdateVolumeTextureAsset(LightVolume, PixelFormat, Dimensions, InitMemory, false, false, true);
+
+  FMemory::Free(InitMemory);
+
 }
 
 void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
@@ -355,91 +242,76 @@ void URaymarchBlueprintLibrary::ClearResourceLightVolumes(const FBasicRaymarchRe
   });
 }
 
-void URaymarchBlueprintLibrary::LoadRawVolumeIntoVolumeTextureAsset(
-    FString FileName, FIntVector Dimensions, FString TextureName,
-    bool Persistent, UVolumeTexture*& LoadedTexture) {
-  const long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
+void URaymarchBlueprintLibrary::LoadRawIntoVolumeTextureAsset(FString RawFileName, UVolumeTexture* inTexture, FIntVector Dimensions, bool Persistent)
+{
+	const int64 TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
 
-  IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+	uint8* TempArray = LoadFileIntoArray(RawFileName, TotalSize);
+	if (!TempArray) {
+		return;
+	}
+	
+	// Actually update the asset.
+	bool Success = UpdateVolumeTextureAsset(inTexture, EPixelFormat::PF_G8, Dimensions, TempArray,
+		 Persistent, false);
 
-  IFileHandle* FileHandle = PlatformFile.OpenRead(*FileName);
-
-  if (!FileHandle) {
-    // Or not.
-    MY_LOG("File could not be opened.");
-    return;
-  } else if (FileHandle->Size() < TotalSize) {
-    MY_LOG("File is smaller than expected, cannot read volume.")
-    delete FileHandle;
-    return;
-  } else if (FileHandle->Size() > TotalSize) {
-    MY_LOG(
-        "File is larger than expected, check your dimensions and pixel format (nonfatal, but the "
-        "texture will probably be screwed up)")
-  }
-
-  uint8* TempArray = new uint8[TotalSize];
-  FileHandle->Read(TempArray, TotalSize);
-  // Let the whole world know we were successful.
-  MY_LOG("File was successfully read!");
-
-  // Actually create the asset.
-  bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions, TempArray,
-                                          LoadedTexture, Persistent, false, false);
-  if (Success) {
-    MY_LOG("Asset created and saved successfuly.")
-  }
-  // Close the RAW file and delete temp data.
-
-  delete[] TempArray;
-  delete FileHandle;
-
-  return;
+	// Delete temp data.
+	delete[] TempArray;
 }
 
-void URaymarchBlueprintLibrary::LoadMhdFileIntoVolumeTextureAsset(
+void URaymarchBlueprintLibrary::LoadRawIntoNewVolumeTextureAsset(
+	FString RawFileName, FString TextureName, FIntVector Dimensions,
+	bool Persistent, UVolumeTexture*& LoadedTexture) {
+	
+	const int64 TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
+
+	uint8* TempArray = LoadFileIntoArray(RawFileName, TotalSize);
+	if (!TempArray) {
+		return;
+	}
+
+	// Actually create the asset.
+	bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions, TempArray,
+		LoadedTexture, Persistent, false, false);
+
+	// Ddelete temp data.
+	delete[] TempArray;
+}
+
+void URaymarchBlueprintLibrary::LoadMhdIntoNewVolumeTextureAsset(
     FString FileName, FString TextureName, bool Persistent,
     FIntVector& TextureDimensions, FVector& WorldDimensions, UVolumeTexture*& LoadedTexture) {
-  FString FileContent;
-  // First, try to read as absolute path
-  if (!FFileHelper::LoadFileToString(/*out*/ FileContent, *FileName)) {
-    // Try it as a relative path
-    FString RelativePath = FPaths::ProjectContentDir();
-    FString FullPath =
-        IFileManager::Get().ConvertToAbsolutePathForExternalAppForRead(*RelativePath) + FileName;
-    FileName = FullPath;
-    if (!FFileHelper::LoadFileToString(/*out*/ FileContent, *FullPath)) {
-      MY_LOG("Reading mhd file failed!");
-      return;
-    }
-  }
 
-  FMhdInfo info = FMhdParser::ParseString(FileContent);
-
+  FMhdInfo info = LoadAndParseMhdFile(FileName);
   if (!info.ParseSuccessful) {
     MY_LOG("MHD Parsing failed!");
     return;
   }
 
-  WorldDimensions.X = info.Dimensions.X * info.Spacing.X;
-  WorldDimensions.Y = info.Dimensions.Y * info.Spacing.Y;
-  WorldDimensions.Z = info.Dimensions.Z * info.Spacing.Z;
-
+  PrintMHDFileInfo(info);
+  WorldDimensions = GetMhdWorldDimensions(info);
   TextureDimensions = info.Dimensions;
-
-  FString text =
-      "Shit read from the MHD file :\nDimensions = " + FString::FromInt(info.Dimensions.X) + " " +
-      FString::FromInt(info.Dimensions.Y) + " " + FString::FromInt(info.Dimensions.Z) +
-      "\nSpacing : " + FString::SanitizeFloat(info.Spacing.X, 3) + " " +
-      FString::SanitizeFloat(info.Spacing.Y, 3) + " " + FString::SanitizeFloat(info.Spacing.Z, 3) +
-      "\nFinal Dimensions : " + FString::SanitizeFloat(WorldDimensions.X, 3) + " " +
-      FString::SanitizeFloat(WorldDimensions.Y, 3) + " " +
-      FString::SanitizeFloat(WorldDimensions.Z, 3);
-  GEngine->AddOnScreenDebugMessage(-1, 20.f, FColor::Yellow, text);
-
-  LoadRawVolumeIntoVolumeTextureAsset(FileName.Replace(TEXT(".mhd"), TEXT(".raw")), info.Dimensions,
-                                      TextureName, Persistent, LoadedTexture);
+  
+  LoadRawIntoNewVolumeTextureAsset(FileName.Replace(TEXT(".mhd"), TEXT(".raw")), TextureName, 
+							       info.Dimensions, Persistent, LoadedTexture);
   return;
+}
+
+void URaymarchBlueprintLibrary::LoadMhdIntoVolumeTextureAsset(FString FileName, UVolumeTexture* VolumeAsset, bool Persistent, FIntVector& TextureDimensions, FVector& WorldDimensions, UVolumeTexture*& LoadedTexture)
+{
+	FMhdInfo info = LoadAndParseMhdFile(FileName);
+	if (!info.ParseSuccessful) {
+		MY_LOG("MHD Parsing failed!");
+		return;
+	}
+
+	PrintMHDFileInfo(info);
+	WorldDimensions = GetMhdWorldDimensions(info);
+	TextureDimensions = info.Dimensions;
+
+	LoadRawIntoVolumeTextureAsset(FileName.Replace(TEXT(".mhd"), TEXT(".raw")), VolumeAsset, info.Dimensions,
+		Persistent);
+
 }
 
 void URaymarchBlueprintLibrary::TryVolumeTextureSliceWrite(FIntVector Dimensions,
@@ -644,26 +516,19 @@ void URaymarchBlueprintLibrary::CheckBasicRaymarchingResources(FBasicRaymarchRen
 
 }
 
-void URaymarchBlueprintLibrary::CreateLightVolumeAsset(
-                                                       FString TextureName, FIntVector Dimensions,
+void URaymarchBlueprintLibrary::CreateLightVolumeAsset(FString TextureName, FIntVector Dimensions,
                                                        UVolumeTexture*& CreatedVolume) {
   EPixelFormat PixelFormat = PF_G8;
-  const long TotalElements = Dimensions.X * Dimensions.Y * Dimensions.Z;
-  const long TotalSize = TotalElements * GPixelFormats[PixelFormat].BlockBytes;
+  const long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
 
-  FFloat16* InitMemory = new FFloat16[TotalElements];
-
-  FFloat16 num = 0.0f;
-  for (long i = 0; i < TotalElements; i++) {
-    InitMemory[i] = num;
-  }
+  uint8* InitMemory = (uint8*)FMemory::Malloc(TotalSize);
+  FMemory::Memset(InitMemory, 0, TotalSize);
 
   // FMemory::Memset(InitMemory, 1, TotalSize);
   bool Success = CreateVolumeTextureAsset(TextureName, PixelFormat, Dimensions, (uint8*)InitMemory,
                                           CreatedVolume, false, false, true);
-  if (Success) {
-    MY_LOG("Asset created and saved successfuly.")
-  }
+
+  FMemory::Free(InitMemory);
 }
 
 void URaymarchBlueprintLibrary::ReadTransferFunctionFromFile(
@@ -811,5 +676,55 @@ void URaymarchBlueprintLibrary::GetFaceNormal(FCubeFace CubeFace, FVector& FaceN
   FaceNormalLocal = FCubeFaceNormals[(uint8)CubeFace];
 }
 
+
+
+
+void URaymarchBlueprintLibrary::PrintMHDFileInfo(const FMhdInfo& MhdInfo)
+{
+	FVector WorldDimensions;
+	WorldDimensions.X = MhdInfo.Dimensions.X * MhdInfo.Spacing.X;
+	WorldDimensions.Y = MhdInfo.Dimensions.Y * MhdInfo.Spacing.Y;
+	WorldDimensions.Z = MhdInfo.Dimensions.Z * MhdInfo.Spacing.Z;
+
+	FString text =
+		"Shit read from the MHD file :\nDimensions = " + FString::FromInt(MhdInfo.Dimensions.X) + " " +
+		FString::FromInt(MhdInfo.Dimensions.Y) + " " + FString::FromInt(MhdInfo.Dimensions.Z) +
+		"\nSpacing : " + FString::SanitizeFloat(MhdInfo.Spacing.X, 3) + " " +
+		FString::SanitizeFloat(MhdInfo.Spacing.Y, 3) + " " + FString::SanitizeFloat(MhdInfo.Spacing.Z, 3) +
+		"\nWorld Size MM : " + FString::SanitizeFloat(WorldDimensions.X, 3) + " " +
+		FString::SanitizeFloat(WorldDimensions.Y, 3) + " " +
+		FString::SanitizeFloat(WorldDimensions.Z, 3);
+
+	GEngine->AddOnScreenDebugMessage(-1, 20.f, FColor::Yellow, text);
+}
+
+FMhdInfo URaymarchBlueprintLibrary::LoadAndParseMhdFile(FString FileName)
+{
+	FMhdInfo MhdInfo;
+	MhdInfo.ParseSuccessful = false;
+
+	FString FileContent;
+	// First, try to read as absolute path
+	if (!FFileHelper::LoadFileToString(/*out*/ FileContent, *FileName)) {
+		// Try it as a relative path
+		FString RelativePath = FPaths::ProjectContentDir();
+		FString FullPath =
+			IFileManager::Get().ConvertToAbsolutePathForExternalAppForRead(*RelativePath) + FileName;
+		FileName = FullPath;
+		if (!FFileHelper::LoadFileToString(/*out*/ FileContent, *FullPath)) {
+			MY_LOG("Reading mhd file failed!");
+			return MhdInfo;
+		}
+	}
+
+	MhdInfo = FMhdParser::ParseString(FileContent);
+	return MhdInfo;
+
+}
+
+FVector URaymarchBlueprintLibrary::GetMhdWorldDimensions(const FMhdInfo& Info)
+{
+	return FVector(Info.Spacing.X * Info.Dimensions.X, Info.Spacing.Y * Info.Dimensions.Y, Info.Spacing.Z * Info.Dimensions.Z);
+}
 
 #undef LOCTEXT_NAMESPACE

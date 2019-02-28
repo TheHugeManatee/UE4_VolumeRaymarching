@@ -11,8 +11,19 @@
 #include "RHIResources.h"
 #include "RaymarchRendering.h"
 #include "UObject/ObjectMacros.h"
+#include "MhdParser.h"
 
 #include "RaymarchBlueprintLibrary.generated.h"
+
+
+
+//
+//
+//
+// Helper functions follow
+//
+//
+//
 
 UCLASS()
 class URaymarchBlueprintLibrary : public UBlueprintFunctionLibrary {
@@ -110,8 +121,9 @@ public:
   /** Loads a RAW file into a provided Volume Texture. Will output error log messages
    * and return if unsuccessful */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
-  static void LoadRawVolumeIntoVolumeTexture(FString textureName,
-                                             FIntVector Dimensions, UVolumeTexture* inTexture);
+  static void LoadRawIntoVolumeTextureAsset(FString RawFileName,
+									     	 UVolumeTexture* inTexture,
+                                             FIntVector Dimensions, bool Persistent);
 
   /** Loads a RAW file into a newly created Volume Texture Asset. Will output error log messages
    * and return if unsuccessful.
@@ -119,19 +131,31 @@ public:
    * @param SaveAsset whether to save the asset to disk right away
    */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
-  static void LoadRawVolumeIntoVolumeTextureAsset(
-                                                  FString FileName, FIntVector Dimensions,
-                                                  FString TextureName, bool SaveAsset,
+  static void LoadRawIntoNewVolumeTextureAsset(FString RawFileName, FString TextureName, 
+                                                  FIntVector Dimensions, bool Persistent,
                                                   UVolumeTexture*& LoadedTexture);
   
   /** Loads a MHD file into a newly created Volume Texture Asset. Returns the loaded texture, it's
   world dimensions and texture dimensions.  **/
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
-  static void LoadMhdFileIntoVolumeTextureAsset(FString FileName,
-                                                FString TextureName, bool Persistent,
-                                                FIntVector& TextureDimensions,
-                                                FVector& WorldDimensions,
-                                                UVolumeTexture*& LoadedTexture);
+  static void LoadMhdIntoNewVolumeTextureAsset(FString FileName,
+                                               FString TextureName, bool Persistent,
+                                               FIntVector& TextureDimensions,
+                                               FVector& WorldDimensions,
+                                               UVolumeTexture*& LoadedTexture);
+
+
+  
+  /** Loads a MHD file into a newly created Volume Texture Asset. Returns the loaded texture, it's
+  world dimensions and texture dimensions.  **/
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+  static void LoadMhdIntoVolumeTextureAsset(FString FileName,
+                                            UVolumeTexture* VolumeAsset, bool Persistent,
+                                            FIntVector& TextureDimensions,
+                                            FVector& WorldDimensions,
+                                            UVolumeTexture*& LoadedTexture);
+  //
+
   //
   //
   // Functions for handling transfer functions and color curves follow.
@@ -239,6 +263,17 @@ public:
   UFUNCTION(BlueprintPure, Category = "Raymarcher")
 	  static void GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal);
 
+  //
+  //
+  // Helper functions (not callable as BPs) follow
+  //
+  //
+
+  static void PrintMHDFileInfo(const FMhdInfo& Info);
+
+  static FMhdInfo LoadAndParseMhdFile(FString FileName);
+
+  static FVector GetMhdWorldDimensions(const FMhdInfo& Info);
 
 
 };

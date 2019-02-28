@@ -362,6 +362,15 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
                               uint8* BulkData, UVolumeTexture*& CreatedTexture, bool Persistent = false, 
 							  bool SaveNow = false, bool UAVCompatible = false);
 
+/** Updates the provided Volume Texture asset to have the provided format, dimensions and pixel data*/
+bool UpdateVolumeTextureAsset(UVolumeTexture* VolumeTexture, EPixelFormat PixelFormat, FIntVector Dimensions,
+	uint8* BulkData, bool Persistent = false,
+	bool SaveNow = false, bool UAVCompatible = false);
+
+bool HandleVolumeTextureEditorData(UVolumeTexture* VolumeTexture, const EPixelFormat PixelFormat, const bool Persistent, const FIntVector Dimensions, const uint8* BulkData);
+
+uint8* LoadFileIntoArray(const FString FileName, const int64 BytesToLoad);
+
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat);
 
 FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt);
