@@ -79,7 +79,7 @@ void URaymarchBlueprintLibrary::CreateLightVolumeUAV(FBasicRaymarchRenderingReso
 	else if (Resources.ALightVolumeUAVRef) {
 		Success = true;
 	} else {
-		Resources.ALightVolumeUAVRef = RHICreateUnorderedAccessView(Resources.ALightVolumeRef->Resource->TextureRHI);
+		OutResources.ALightVolumeUAVRef = RHICreateUnorderedAccessView(Resources.ALightVolumeRef->Resource->TextureRHI);
 		Success = true;
 	}
 
@@ -358,6 +358,7 @@ void CreateBufferTextures(FIntPoint Size, EPixelFormat PixelFormat,
   for (int i = 0; i < 4; i++) {
     RWBuffers.Buffers[i] = RHICreateTexture2D(Size.X, Size.Y, PixelFormat, 1, 1,
                                               TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
+	RWBuffers.UAVs[i] = RHICreateUnorderedAccessView(RWBuffers.Buffers[i]);
   }
 }
 
@@ -401,7 +402,9 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
   CreateBufferTextures(XBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[0]);
   CreateBufferTextures(YBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[1]);
   CreateBufferTextures(ZBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[2]);
-   
+
+  OutParameters.ALightVolumeUAVRef = RHICreateUnorderedAccessView(OutParameters.ALightVolumeRef->Resource->TextureRHI);
+
   OutParameters.isInitialized = true;
   OutParameters.supportsColor = ColoredLightSupport;
 }
@@ -409,7 +412,7 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
 void URaymarchBlueprintLibrary::CheckBasicRaymarchingResources(FBasicRaymarchRenderingResources OutParameters)
 {
 
-	FString dgbmsg = "Resources X buff 0 address = " + FString::FromInt(OutParameters.isInitialized);
+	FString dgbmsg = "Resources X buff 0 address = " + FString::FromInt(OutParameters.ALightVolumeUAVRef != nullptr);
 	GEngine->AddOnScreenDebugMessage(123, 12, FColor::Yellow,  dgbmsg);
 
 }

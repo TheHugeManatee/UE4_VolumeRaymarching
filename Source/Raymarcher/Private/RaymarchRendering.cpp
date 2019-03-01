@@ -523,9 +523,9 @@ void AddDirLightToSingleLightVolume_RenderThread(
 		FIntVector TransposedDimensions = GetTransposedDimensions(LocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
 		OneAxisReadWriteBufferResources& Buffers = GetBuffers(LocalMajorAxes, i, Resources);
 
-		for (int i = 0; i < 2; i++) {
-			if (!Buffers.UAVs[i]) Buffers.UAVs[i] = RHICreateUnorderedAccessView(Buffers.Buffers[i]);
-		}
+		//for (int i = 0; i < 2; i++) {
+		//	if (!Buffers.UAVs[i]) Buffers.UAVs[i] = RHICreateUnorderedAccessView(Buffers.Buffers[i]);
+		//}
 
 		float LightAlpha = GetLightAlpha(LocalLightParams, LocalMajorAxes, i);
 
@@ -539,8 +539,8 @@ void AddDirLightToSingleLightVolume_RenderThread(
 	FComputeShaderRHIParamRef ShaderRHI = ComputeShader->GetComputeShader();
 	RHICmdList.SetComputeShader(ShaderRHI);
 
-	FUnorderedAccessViewRHIRef AVolumeUAV =
-		RHICreateUnorderedAccessView(Resources.ALightVolumeRef->Resource->TextureRHI);
+	FUnorderedAccessViewRHIRef AVolumeUAV = Resources.ALightVolumeUAVRef;
+//		RHICreateUnorderedAccessView(Resources.ALightVolumeRef->Resource->TextureRHI);
 
 	// Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
 	// no race conditions But we definitely need to transition the resource to Compute-shader
@@ -661,9 +661,9 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
 		FIntVector TransposedDimensions = GetTransposedDimensions(RemovedLocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
 		OneAxisReadWriteBufferResources& Buffers = GetBuffers(RemovedLocalMajorAxes, i, Resources);
 
-		for (int i = 0; i < 4; i++) {
-			if (!Buffers.UAVs[i]) Buffers.UAVs[i] = RHICreateUnorderedAccessView(Buffers.Buffers[i]);
-		}
+		//for (int i = 0; i < 4; i++) {
+		//	if (!Buffers.UAVs[i]) Buffers.UAVs[i] = RHICreateUnorderedAccessView(Buffers.Buffers[i]);
+		//}
 
 		float RemovedLightAlpha = GetLightAlpha(RemovedLocalLightParams, RemovedLocalMajorAxes, i);
 		float AddedLightAlpha = GetLightAlpha(AddedLocalLightParams, AddedLocalMajorAxes, i);
@@ -687,8 +687,8 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
 	RHICmdList.SetComputeShader(ShaderRHI);
 	// RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
 	// LightVolumeResource);
-	FUnorderedAccessViewRHIRef AVolumeUAV = RHICreateUnorderedAccessView(
-		Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D());
+	FUnorderedAccessViewRHIRef AVolumeUAV = Resources.ALightVolumeUAVRef;
+//		RHICreateUnorderedAccessView(Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D());
 
 	// Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
 	// no race conditions But we definitely need to transition the resource to Compute-shader

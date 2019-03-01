@@ -96,7 +96,7 @@ USTRUCT(BlueprintType) struct FTransferFunctionRangeParameters {
 // shader.
 struct OneAxisReadWriteBufferResources {
   FTexture2DRHIRef Buffers[4];
-  FUnorderedAccessViewRHIParamRef UAVs[4];
+  FUnorderedAccessViewRHIRef UAVs[4];
 };
 
 /** A structure holding all resources related to a single raymarchable volume - its texture ref, the TF texture ref and TF Range parameters,
@@ -119,7 +119,7 @@ USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
   UPROPERTY(BlueprintReadOnly, Category = "Basic Raymarch Rendering Resources") 
   bool LightVolumeHalfResolution;
   // Not visible in BPs.
-  FUnorderedAccessViewRHIParamRef ALightVolumeUAVRef;
+  FUnorderedAccessViewRHIRef ALightVolumeUAVRef;
   OneAxisReadWriteBufferResources XYZReadWriteBuffers[3];
 };
 
