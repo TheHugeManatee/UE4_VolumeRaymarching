@@ -44,10 +44,6 @@ SamplerState TransferFuncSampler;
 
 SamplerState VolumeSampler;
 
-float StepSize;
-
-float RemovedStepSize;
-
 [numthreads(32, 32, 1)]
 void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
 {
