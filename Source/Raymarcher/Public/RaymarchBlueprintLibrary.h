@@ -11,69 +11,23 @@
 #include "RHIResources.h"
 #include "RaymarchRendering.h"
 #include "UObject/ObjectMacros.h"
-#include "MhdParser.h"
 
 #include "RaymarchBlueprintLibrary.generated.h"
-
-
-
-//
-//
-//
-// Helper functions follow
-//
-//
-//
 
 UCLASS()
 class URaymarchBlueprintLibrary : public UBlueprintFunctionLibrary {
   GENERATED_BODY()
 public:
-  //
-  //
-  // Functions for working with RGB light volumes follow
-  //
-  //
-
-  /** Adds a light to light volumes.	 */
-  UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher")
-  static void AddDirLightToVolumes(
-                                   const FBasicRaymarchRenderingResources Resources,
-                                   const FColorVolumesResources ColorResources,
-                                   const FDirLightParameters LightParameters, const bool Added,
-                                   const FRaymarchWorldParameters WorldParameters,
-                                   bool& LightAdded);
-
-  /** Changes a light in the light volumes.	 */
-  UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher")
-  static void ChangeDirLightInLightVolumes(const FBasicRaymarchRenderingResources Resources,
-                                           const FColorVolumesResources ColorResources,
-                                           const FDirLightParameters OldLightParameters,
-                                           const FDirLightParameters NewLightParameters,
-                                           const FRaymarchWorldParameters WorldParameters,
-                                           bool& LightAdded);
-
-  /** Clear all light volumes.	 */
-  UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher")
-  static void ClearLightVolumes(UVolumeTexture* RLightVolume,
-                                UVolumeTexture* GLightVolume, UVolumeTexture* BLightVolume,
-                                UVolumeTexture* ALightVolume, FVector4 ClearValues);
-
-  /** Sets the provided Volume Texture sizes to "Dimensions" changes them to be Float32, and sets
-   * them to all-zeros.*/
-  UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher")
-  static void CreateLightVolumes(FIntVector Dimensions,
-                                 UVolumeTexture* inRTexture, UVolumeTexture* inGTexture,
-                                 UVolumeTexture* inBTexture, UVolumeTexture* inATexture);
-
-  UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher")
-  static void InitLightVolume(UVolumeTexture* LightVolume, FIntVector Dimensions);
 
   //
   //
   // Functions for working with a single-channel (just alpha) light volume follow.
   //
   //
+
+  UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher")
+  static void InitLightVolume(UVolumeTexture* LightVolume, FIntVector Dimensions);
+
 
   /** Adds a light to light volume.	 */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
@@ -101,12 +55,12 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
   static void ClearSingleLightVolume(UVolumeTexture* ALightVolume, float ClearValue);
 
-  /** Clears a light volume. */
+  /** Clears a light volume in provided raymarch resources. */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
   static void ClearResourceLightVolumes(FBasicRaymarchRenderingResources Resources,
                                         float ClearValue);
 
-  /** Creates a Float32 volume texture asset and fills it with all-zeros. If an asset with the same
+  /** Creates a G8 volume texture asset and fills it with all-zeros. If an asset with the same
    * name already exists, overwrites it.*/
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
   static void CreateLightVolumeAsset(FString textureName,
@@ -154,7 +108,6 @@ public:
                                             FIntVector& TextureDimensions,
                                             FVector& WorldDimensions,
                                             UVolumeTexture*& LoadedTexture);
-  //
 
   //
   //
@@ -227,8 +180,8 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
   static void CustomLog(FString LoggedString, float Duration);
 
-  /** Dets volume texture dimension. */
-  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+  /** Gets volume texture dimension. */
+  UFUNCTION(BlueprintPure, Category = "Raymarcher")
   static void GetVolumeTextureDimensions(UVolumeTexture* Texture,
                                          FIntVector& Dimensions);
 
@@ -262,18 +215,4 @@ public:
   */
   UFUNCTION(BlueprintPure, Category = "Raymarcher")
 	  static void GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal);
-
-  //
-  //
-  // Helper functions (not callable as BPs) follow
-  //
-  //
-
-  static void PrintMHDFileInfo(const FMhdInfo& Info);
-
-  static FMhdInfo LoadAndParseMhdFile(FString FileName);
-
-  static FVector GetMhdWorldDimensions(const FMhdInfo& Info);
-
-
 };

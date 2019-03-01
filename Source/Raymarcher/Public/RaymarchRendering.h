@@ -137,19 +137,6 @@ USTRUCT(BlueprintType) struct FRaymarchWorldParameters {
   FVector MeshMaxBounds;
 };
 
-USTRUCT(BlueprintType) struct FColorVolumesResources {
-  GENERATED_BODY()
-
-  // Flag that these Rendering Resources have been initialized and can be used.
-  UPROPERTY(BlueprintReadOnly, Category = "Colored Lights Raymarch Rendering") bool isInitialized;
-  UVolumeTexture* RLightVolumeRef;
-  UVolumeTexture* GLightVolumeRef;
-  UVolumeTexture* BLightVolumeRef;
-  FUnorderedAccessViewRHIParamRef RLightVolumeUAVRef;
-  FUnorderedAccessViewRHIParamRef GLightVolumeUAVRef;
-  FUnorderedAccessViewRHIParamRef BLightVolumeUAVRef;
-  // Read/Write buffer structs for going along X,Y and Z axes.
-};
 
 // Enum for indexes for cube faces - used to discern axes for light propagation shader.
 // Also used for deciding vectors provided into cutting plane material.
@@ -222,113 +209,6 @@ static FMajorAxes GetMajorAxes(FVector LightPos) {
   return RetVal;
 };
 
-// Parent shader for any shader that works on Light Volumes. Provides a way to bind and unbind the 4
-// light volumes.
-class FGenericLightVolumeShader : public FGlobalShader {
-public:
-  static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
-    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-  }
-
-  FGenericLightVolumeShader(){};
-
-  FGenericLightVolumeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-    : FGlobalShader(Initializer) {
-    // Bind Light Volume resource parameters
-    RLightVolume.Bind(Initializer.ParameterMap, TEXT("RLightVolume"));
-    GLightVolume.Bind(Initializer.ParameterMap, TEXT("GLightVolume"));
-    BLightVolume.Bind(Initializer.ParameterMap, TEXT("BLightVolume"));
-    ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"));
-  }
-
-  virtual void SetLightVolumeUAVs(FRHICommandListImmediate& RHICmdList,
-                                  FComputeShaderRHIParamRef ShaderRHI,
-                                  const FUnorderedAccessViewRHIParamRef* pVolumesArray) {
-    // Set the UAV parameter for the light volume
-    SetUAVParameter(RHICmdList, ShaderRHI, RLightVolume, pVolumesArray[0]);
-    SetUAVParameter(RHICmdList, ShaderRHI, GLightVolume, pVolumesArray[1]);
-    SetUAVParameter(RHICmdList, ShaderRHI, BLightVolume, pVolumesArray[2]);
-    SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pVolumesArray[3]);
-  }
-
-  virtual void SetLightVolumeUAVs(FRHICommandListImmediate& RHICmdList,
-                                  const FUnorderedAccessViewRHIParamRef* pVolumesArray) {
-    SetLightVolumeUAVs(RHICmdList, GetComputeShader(), pVolumesArray);
-  }
-
-  virtual void UnbindLightVolumeUAVs(FRHICommandListImmediate& RHICmdList,
-                                     FComputeShaderRHIParamRef ShaderRHI) {
-    // Unbind the UAVs.
-    SetUAVParameter(RHICmdList, ShaderRHI, RLightVolume, FUnorderedAccessViewRHIParamRef());
-    SetUAVParameter(RHICmdList, ShaderRHI, GLightVolume, FUnorderedAccessViewRHIParamRef());
-    SetUAVParameter(RHICmdList, ShaderRHI, BLightVolume, FUnorderedAccessViewRHIParamRef());
-    SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, FUnorderedAccessViewRHIParamRef());
-  }
-
-  virtual void UnbindLightVolumeUAVs(FRHICommandListImmediate& RHICmdList) {
-    UnbindLightVolumeUAVs(RHICmdList, GetComputeShader());
-  }
-
-  bool Serialize(FArchive& Ar) {
-    bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-    Ar << RLightVolume << GLightVolume << BLightVolume << ALightVolume;
-    return bShaderHasOutdatedParameters;
-  }
-
-protected:
-  // In/Out light volume.
-  FShaderResourceParameter RLightVolume;
-  FShaderResourceParameter GLightVolume;
-  FShaderResourceParameter BLightVolume;
-  FShaderResourceParameter ALightVolume;
-};
-
-// Shader used for fast resetting of light volumes. Just fills zeros everywhere.
-class FClearLightVolumesShader : public FGenericLightVolumeShader {
-  DECLARE_SHADER_TYPE(FClearLightVolumesShader, Global)
-
-public:
-  static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
-    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-  }
-
-  FClearLightVolumesShader(){};
-
-  // Don't need any more bindings than the 4 volumes from generic shader, so just call parent
-  // constructor.
-  FClearLightVolumesShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-    : FGenericLightVolumeShader(Initializer) {
-    RClearValue.Bind(Initializer.ParameterMap, TEXT("RClearValue"));
-    GClearValue.Bind(Initializer.ParameterMap, TEXT("GClearValue"));
-    BClearValue.Bind(Initializer.ParameterMap, TEXT("BClearValue"));
-    AClearValue.Bind(Initializer.ParameterMap, TEXT("AClearValue"));
-    ZSize.Bind(Initializer.ParameterMap, TEXT("ZSize"));
-  }
-
-  virtual void SetParameters(FRHICommandListImmediate& RHICmdList, FVector4 ClearParams,
-                             int ZSizeParam) {
-    FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
-    SetShaderValue(RHICmdList, ShaderRHI, RClearValue, ClearParams.X);
-    SetShaderValue(RHICmdList, ShaderRHI, GClearValue, ClearParams.Y);
-    SetShaderValue(RHICmdList, ShaderRHI, BClearValue, ClearParams.Z);
-    SetShaderValue(RHICmdList, ShaderRHI, AClearValue, ClearParams.W);
-    SetShaderValue(RHICmdList, ShaderRHI, ZSize, ZSizeParam);
-  }
-
-  virtual bool Serialize(FArchive& Ar) override {
-    bool bShaderHasOutdatedParameters = FGenericLightVolumeShader::Serialize(Ar);
-    Ar << RClearValue << GClearValue << BClearValue << AClearValue;
-    return bShaderHasOutdatedParameters;
-  }
-
-protected:
-  // Float values to be set to all the volumes.
-  FShaderParameter RClearValue;
-  FShaderParameter GClearValue;
-  FShaderParameter BClearValue;
-  FShaderParameter AClearValue;
-  FShaderParameter ZSize;
-};
 
 // Pixel shader for writing to a Volume Texture.
 class FVolumePS : public FGlobalShader {
@@ -350,28 +230,9 @@ public:
   }
 };
 
+/** Experimental - testing writing a single value into a texture */
 void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Size,
                                    UVolumeTexture* inTexture);
-
-/** Creates a Volume Texture asset with the given name, pixel format and dimensions and fills it 
-	with the bulk data provided. It can be set to be persistent and UAV compatible and can also
-	be immediately saved to disk.
-	Returns a reference to the created texture in the CreatedTexture param.
-*/
-bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntVector Dimensions,
-                              uint8* BulkData, UVolumeTexture*& CreatedTexture, bool Persistent = false, 
-							  bool SaveNow = false, bool UAVCompatible = false);
-
-/** Updates the provided Volume Texture asset to have the provided format, dimensions and pixel data*/
-bool UpdateVolumeTextureAsset(UVolumeTexture* VolumeTexture, EPixelFormat PixelFormat, FIntVector Dimensions,
-	uint8* BulkData, bool Persistent = false,
-	bool SaveNow = false, bool UAVCompatible = false);
-
-bool HandleVolumeTextureEditorData(UVolumeTexture* VolumeTexture, const EPixelFormat PixelFormat, const bool Persistent, const FIntVector Dimensions, const uint8* BulkData);
-
-uint8* LoadFileIntoArray(const FString FileName, const int64 BytesToLoad);
-
-ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat);
 
 FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt);
 uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsigned index);
@@ -387,25 +248,6 @@ bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoi
 	uint8* BulkData, TextureAddress TilingX = TA_Clamp,
 	TextureAddress TilingY = TA_Clamp);
 
-void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                           FBasicRaymarchRenderingResources Resources,
-                                           const FColorVolumesResources ColorResources,
-                                           const FDirLightParameters LightParameters,
-                                           const bool Added,
-                                           const FRaymarchWorldParameters WorldParameters);
-
-void ChangeDirLightInLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                              FBasicRaymarchRenderingResources Resources,
-                                              const FColorVolumesResources ColorResources,
-                                              const FDirLightParameters OldLightParameters,
-                                              const FDirLightParameters NewLightParameters,
-                                              const FRaymarchWorldParameters WorldParameters);
-
-void ClearLightVolumes_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                    FRHITexture3D* RLightVolumeResource,
-                                    FRHITexture3D* GLightVolumeResource,
-                                    FRHITexture3D* BLightVolumeResource,
-                                    FRHITexture3D* ALightVolumeResource, FVector4 ClearValues);
 
 void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                                  FBasicRaymarchRenderingResources Resources,
@@ -426,10 +268,6 @@ void GenerateVolumeTextureMipLevels_RenderThread(FRHICommandListImmediate& RHICm
 
 void GenerateDistanceField_RenderThread (FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
 	FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc, FRHITexture3D* DistanceFieldResource,float localSphereDiameter, float threshold);
-
-static void CreateBasicRaymarchingResources_RenderThread(
-	FRHICommandListImmediate& RHICmdList, struct FBasicRaymarchRenderingResources& InParams);
-
 
 //
 // Shaders for single (alpha) light volume follow.

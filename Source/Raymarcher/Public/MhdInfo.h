@@ -30,9 +30,13 @@ public:
   FMhdInfo(FIntVector Dims, FVector Spaces)
     : ParseSuccessful(true), Dimensions(Dims), Spacing(Spaces) {}
   FMhdInfo() : ParseSuccessful(false), Dimensions(0, 0, 0), Spacing(0, 0, 0) {}
+
+  static FMhdInfo LoadAndParseMhdFile(const FString FileName);
+
+  static FMhdInfo ParseFromString(const FString FileName);
+
+  FVector GetWorldDimensions() const;
+
+  FString ToString() const;
 };
 
-class FMhdParser {
-public:
-  static FMhdInfo ParseString(const FString inString);
-};
