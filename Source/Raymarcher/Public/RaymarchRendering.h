@@ -235,18 +235,8 @@ void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVec
                                    UVolumeTexture* inTexture);
 
 FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt);
+
 uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsigned index);
-
-
-/** Creates a 2D Texture asset with the given name from the provided bulk data with the given format.*/
-bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
-	uint8* BulkData, bool SaveNow = false, TextureAddress TilingX = TA_Clamp,
-	TextureAddress TilingY = TA_Clamp);
-
-/** Updates the provided 2D Texture asset to have the provided format, dimensions and pixel data*/
-bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoint Dimensions,
-	uint8* BulkData, TextureAddress TilingX = TA_Clamp,
-	TextureAddress TilingY = TA_Clamp);
 
 
 void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,

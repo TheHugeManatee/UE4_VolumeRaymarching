@@ -34,6 +34,18 @@ bool UpdateVolumeTextureAsset(UVolumeTexture* VolumeTexture, EPixelFormat PixelF
 	uint8* BulkData, bool Persistent = false,
 	bool SaveNow = false, bool UAVCompatible = false);
 
+/** Creates a 2D Texture asset with the given name from the provided bulk data with the given
+ * format.*/
+bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
+                          uint8* BulkData, bool SaveNow = false, TextureAddress TilingX = TA_Clamp,
+                          TextureAddress TilingY = TA_Clamp);
+
+/** Updates the provided 2D Texture asset to have the provided format, dimensions and pixel data*/
+bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoint Dimensions,
+                          uint8* BulkData, bool Persistent, TextureAddress TilingX = TA_Clamp,
+                          TextureAddress TilingY = TA_Clamp);
+
+
 bool HandleVolumeTextureEditorData(UVolumeTexture* VolumeTexture, const EPixelFormat PixelFormat, const bool Persistent, const FIntVector Dimensions, const uint8* BulkData);
 
 uint8* LoadFileIntoArray(const FString FileName, const int64 BytesToLoad);

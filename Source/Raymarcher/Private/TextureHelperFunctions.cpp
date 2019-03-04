@@ -277,17 +277,10 @@ bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint
 }
 
 bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoint Dimensions,
-	uint8* BulkData, TextureAddress TilingX /*= TA_Clamp*/,
-	TextureAddress TilingY /*= TA_Clamp*/) {
+	uint8* BulkData, bool Persistent, TextureAddress TilingX, TextureAddress TilingY) {
 	if (!Texture || !Texture->PlatformData) {
 		return false;
 	}
-
-	ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
-	if (TextureSourceFormat == TSF_Invalid) {
-		return false;
-	}
-
 	const long TotalSize = (long)Dimensions.X * Dimensions.Y * GPixelFormats[PixelFormat].BlockBytes;
 
 	Texture->PlatformData->SizeX = Dimensions.X;
@@ -319,7 +312,14 @@ bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoi
 
 	Mip->BulkData.Unlock();
 #if WITH_EDITORONLY_DATA
-	Texture->Source.Init(Dimensions.X, Dimensions.Y, 1, 1, TextureSourceFormat, ByteArray);
+
+	if (Persistent) {
+		ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
+		if (TextureSourceFormat == TSF_Invalid) {
+			return false;
+		}
+		Texture->Source.Init(Dimensions.X, Dimensions.Y, 1, 1, TextureSourceFormat, ByteArray);
+	}
 #endif
 	Texture->UpdateResource();
 	return true;
