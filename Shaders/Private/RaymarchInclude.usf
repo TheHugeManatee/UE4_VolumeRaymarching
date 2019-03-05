@@ -44,11 +44,3 @@ float GetDFShadow(float3 CurPos, int DFSteps, float LightTangent, float3 LightVe
 		}
     return dfshadow;
 }
-//
-//void PerformRaymarchStep() {
-//    }
-//}
-
-
-float4 BlackReturnColor() {return float4(0.0, 0.0, 0.0, 1.0);}
-float4 WhiteReturnColor() {return float4(1.0, 1.0, 1.0, 1.0);} //

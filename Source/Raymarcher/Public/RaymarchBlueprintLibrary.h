@@ -204,15 +204,28 @@ public:
   /** Transforms the first player's viewport size on the screen. All values normalized to 0-1.*/
   UFUNCTION(BlueprintPure, Category = "Raymarcher")
 	  static void GetCutplaneMaterialParams(FCubeFace DominantFace, FVector& Origin, FVector& UMultiplier, FVector& SliceMultiplier);
-
+  
   /** Returns the face whose inverted normal is closest to the provided vector (in local space).
 	  E.G - local vector (0,0,1) will return Bottom (as that side's normal is (0,0,-1)).
 	*/
   UFUNCTION(BlueprintPure, Category = "Raymarcher")
 	  static void GetDominantFace(FVector LocalDirectionVector, FCubeFace& DominantFace);
 
+  
+  /** Returns the face whose inverted normal is closest to the provided vector (in local space).
+	  E.G - local vector (0,0,1) will return Bottom (as that side's normal is (0,0,-1)).
+	  Will only return faces that are not +-X
+	*/
+  UFUNCTION(BlueprintPure, Category = "Raymarcher")
+	  static void GetDominantFaceNotX(FVector LocalDirectionVector, FCubeFace& DominantFace);
+
+
   /** 
   */
   UFUNCTION(BlueprintPure, Category = "Raymarcher")
 	  static void GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal);
+
+
+ UFUNCTION(BlueprintPure, Category = "Raymarcher")
+	  static void GetRightFaceAlongNegX(FCubeFace CubeFace, FCubeFace& RightCubeFace);
 };

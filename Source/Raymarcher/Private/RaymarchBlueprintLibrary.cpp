@@ -572,8 +572,40 @@ void URaymarchBlueprintLibrary::GetDominantFace(FVector LocalDirectionVector,
   DominantFace = axes.FaceWeight[0].first;
 }
 
+void URaymarchBlueprintLibrary::GetDominantFaceNotX(FVector LocalDirectionVector, FCubeFace& DominantFace) {
+  FMajorAxes axes = GetMajorAxes(LocalDirectionVector);
+  if (axes.FaceWeight[0].first != FCubeFace::Left && axes.FaceWeight[0].first != FCubeFace::Right) {
+    DominantFace = axes.FaceWeight[0].first;
+  }
+  else {
+    DominantFace = axes.FaceWeight[1].first;
+  }
+}
+
 void URaymarchBlueprintLibrary::GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal) {
   FaceNormalLocal = FCubeFaceNormals[(uint8)CubeFace];
+}
+
+
+
+void URaymarchBlueprintLibrary::GetRightFaceAlongNegX(FCubeFace CubeFace, FCubeFace& RightCubeFace) {
+	switch (CubeFace)
+	{
+	case FCubeFace::Right:
+	case FCubeFace::Left: // Fail! There's no "right" along X for these faces
+		break;
+	case FCubeFace::Front: RightCubeFace = FCubeFace::Top;
+		break;
+	case FCubeFace::Back: RightCubeFace = FCubeFace::Bottom;
+		break;
+	case FCubeFace::Top:RightCubeFace = FCubeFace::Front;
+		break;
+	case FCubeFace::Bottom:RightCubeFace = FCubeFace::Back;
+		break;
+	default:
+		break;
+	}
+
 }
 
 #undef LOCTEXT_NAMESPACE
