@@ -33,10 +33,10 @@ void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
   const long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
 
   uint8* InitMemory = (uint8*)FMemory::Malloc(TotalSize);
-  FMemory::Memset(InitMemory, 0, TotalSize);
+  FMemory::Memset(InitMemory, 200, TotalSize);
 
   // FMemory::Memset(InitMemory, 1, TotalSize);
-  UpdateVolumeTextureAsset(LightVolume, PixelFormat, Dimensions, InitMemory, false, false, true);
+  UpdateVolumeTextureAsset(LightVolume, PixelFormat, Dimensions, InitMemory, true, false, true);
 
   FMemory::Free(InitMemory);
 

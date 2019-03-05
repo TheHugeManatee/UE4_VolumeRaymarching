@@ -5,6 +5,7 @@
 #include "AssetRegistryModule.h"
 #include "RenderCore/Public/RenderUtils.h"
 #include "Renderer/Public/VolumeRendering.h"
+#include "TextureHelperFunctions.h"
 
 #define LOCTEXT_NAMESPACE "RaymarchPlugin"
 
@@ -63,11 +64,13 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate & RHICmdList, FRH
 
 void ULabelVolumeLibrary::CreateNewLabelingVolumeAsset(FString AssetName, FIntVector Dimensions, UVolumeTexture*& OutTexture)
 {
-	unsigned TotalSize = (long)Dimensions.X * (long)Dimensions.Y * (long)Dimensions.Z * 4;
+    EPixelFormat PixelFormat = PF_G8;
+    const long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
+	
 	uint8* dummy = (uint8*)FMemory::Malloc(TotalSize);
 	FMemory::Memset(dummy, 0, TotalSize);
 
-	if (!CreateVolumeTextureAsset(AssetName, PF_B8G8R8A8, Dimensions, dummy, OutTexture, false, false, true)) {
+	if (!CreateVolumeTextureAsset(AssetName, PixelFormat, Dimensions, dummy, OutTexture, false, false, true)) {
 		GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, "Failed creating the labeling volume.");
 	}
 
@@ -76,11 +79,12 @@ void ULabelVolumeLibrary::CreateNewLabelingVolumeAsset(FString AssetName, FIntVe
 
 void ULabelVolumeLibrary::InitLabelingVolume(UVolumeTexture* LabelVolumeAsset, FIntVector Dimensions)
 {
-	unsigned TotalSize = (long)Dimensions.X * (long)Dimensions.Y * (long)Dimensions.Z * 4;
-	uint8* dummy = (uint8*)FMemory::Malloc(TotalSize);
+  EPixelFormat PixelFormat = PF_G8;
+  const long TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
+  uint8* dummy = (uint8*)FMemory::Malloc(TotalSize);
 	
 	FMemory::Memset(dummy, 0, TotalSize);
-	if (!UpdateVolumeTextureAsset(LabelVolumeAsset, PF_B8G8R8A8, Dimensions, dummy, false, false, true)) {
+	if (!UpdateVolumeTextureAsset(LabelVolumeAsset, PixelFormat, Dimensions, dummy, true, false, true)) {
 		GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, "Failed initializing the labeling volume.");
 	}
 

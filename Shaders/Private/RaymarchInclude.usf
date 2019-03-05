@@ -7,11 +7,35 @@ bool IsCurPosClipped(float3 CurPos, float3 ClippingCenter, float3 ClippingDirect
     return (dot(CurPos - ClippingCenter, ClippingDirection) < 0);
 }
 
+//// Samples a Label volume and corrects the opacity to account for StepSize and volume size.
+//float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler)
+//{
+//    float4 RetVal = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0);
+//    RetVal.a = 1.0 - pow(1.0 - RetVal.a, (StepSize) * RAYMARCH_MAGIC_NUMBER);
+//    return RetVal;
+//}
+
 // Samples a Label volume and corrects the opacity to account for StepSize and volume size.
-float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler) {
-    float4 RetVal = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0);
-    RetVal.a = 1.0 - pow(1.0 - RetVal.a, (StepSize) * RAYMARCH_MAGIC_NUMBER);
-    return RetVal;
+
+// TODO LABEEEELS!
+// Switches on G8 will be faster than reading a full color volume. Also we need to export the labels eventually and color might not be the best way to do that.
+float4 GetColorFromLabelValue(uint LabelValue)
+{
+    switch (LabelValue)
+    {
+        case 0: return float4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    return float4(1.0f, 1.0f, 1.0f, 1.0f);
+}
+
+float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler)
+{
+    uint RetVal = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
+
+    float4 Color = GetColorFromLabelValue(RetVal);
+    Color.a = 1.0 - pow(1.0 - Color.a, (StepSize) * RAYMARCH_MAGIC_NUMBER);
+    return Color;
 }
 
 // Adds current sampled light to the LightEnergy and Opacity
