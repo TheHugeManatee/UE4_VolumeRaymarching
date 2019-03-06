@@ -12,6 +12,17 @@
 // A constant density setting determining how opaque a volume is. Higher means more opaque.
 #define RAYMARCH_MAGIC_NUMBER 200.0
 
+// Convert a uint in one byte range (0-255) to a corresponding U8 float.
+float CharToFloat(uint inChar)
+{
+    return 255.0 / (float) inChar;
+}
+
+// Convert a normalized 0-1 float to a 0-255 uint;
+uint FloatToChar(float inFloat)
+{
+    return (uint) inFloat * 255;
+}
 
 float RemapIntensity(float intensity, float2 TFIntensityDomain)
 {

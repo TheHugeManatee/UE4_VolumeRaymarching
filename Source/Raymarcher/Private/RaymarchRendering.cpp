@@ -189,7 +189,8 @@ ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat) {
 	// THIS IS UNTESTED FOR FORMATS OTHER THAN G8 AND R16G16B16A16_SNORM!
 	// USE AT YOUR OWN PERIL!
 	switch (PixelFormat) {
-	case PF_G8: return TSF_G8;
+	case PF_G8: 
+	case PF_R8_UINT: return TSF_G8;
 
 	case PF_B8G8R8A8: return TSF_BGRA8;
 	case PF_R8G8B8A8: return TSF_RGBA8;

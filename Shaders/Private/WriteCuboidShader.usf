@@ -1,14 +1,15 @@
 #include "/Engine/Private/Common.ush"
+#include "DirLightCommon.usf"
 
 // Thx Temaran for original HLSL & usage example
 
-RWTexture3D<float4> MarkedVolume;
+RWTexture3D<float> MarkedVolume;
 
 int3 CuboidCenter;
 
 int3 CuboidSize;
 
-float4 WrittenValue;
+uint WrittenValue;
 
 [numthreads(1, 1, 1)]
 void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
@@ -16,9 +17,7 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
     int3 myPos = CuboidCenter - (CuboidSize / 2) + ThreadId;
     int3 myPosRelative = myPos - CuboidCenter;
     float3 myPosLocal = myPosRelative / (float3) CuboidSize;
-    if (length(myPosLocal)   <= 0.5 ){
-        MarkedVolume[myPos] = WrittenValue;
+    if (length(myPosLocal) <= 0.5 ){
+        MarkedVolume[myPos] = CharToFloat(WrittenValue);
     }
-
-
 }

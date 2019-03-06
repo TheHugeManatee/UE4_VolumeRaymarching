@@ -21,19 +21,30 @@ bool IsCurPosClipped(float3 CurPos, float3 ClippingCenter, float3 ClippingDirect
 // Switches on G8 will be faster than reading a full color volume. Also we need to export the labels eventually and color might not be the best way to do that.
 float4 GetColorFromLabelValue(uint LabelValue)
 {
-    switch (LabelValue)
+     switch (LabelValue)
     {
-        case 0: return float4(0.0f, 0.0f, 0.0f, 0.0f);
+        case 1: // Risk
+            return float4(1.0f, 0.0f, 0.0f, 0.02f);
+        case 2: // Target
+            return float4(0.0f, 1.0f, 0.0f, 0.01f);
+        case 3: // Potential Risk
+            return float4(1.0f, 0.0f, 0.0f, 0.02f);
+        case 4: // Potential Target
+            return float4(0.0f, 1.0f, 0.0f, 0.01f);
+        default: // Clear or unknown.
+            return float4(0.0f, 0.0f, 0.0f, 0.0f);
     }
-
-    return float4(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
-float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler)
+float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume)
 {
-    uint RetVal = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
-
-    float4 Color = GetColorFromLabelValue(RetVal);
+    int x, y, z;
+    Volume.GetDimensions(x, y, z);
+    int3 pos = int3(x, y, z);
+    // We don't want to interpolate here
+    uint SS = Volume.Load(int4(pos * CurPos, 0));
+    float4 Color = GetColorFromLabelValue(SS);
+    // GetColorFromLabelValue(RetVal);
     Color.a = 1.0 - pow(1.0 - Color.a, (StepSize) * RAYMARCH_MAGIC_NUMBER);
     return Color;
 }
