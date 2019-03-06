@@ -24,15 +24,17 @@ float4 GetColorFromLabelValue(uint LabelValue)
      switch (LabelValue)
     {
         case 1: // Risk
-            return float4(1.0f, 0.0f, 0.0f, 0.02f);
+            return float4(1.0f, 0.0f, 0.0f, 0.06f);
         case 2: // Target
-            return float4(0.0f, 1.0f, 0.0f, 0.01f);
+            return float4(0.0f, 1.0f, 0.0f, 0.03f);
         case 3: // Potential Risk
-            return float4(1.0f, 0.0f, 0.0f, 0.02f);
+            return float4(1.0f, 0.0f, 0.0f, 0.06f);
         case 4: // Potential Target
-            return float4(0.0f, 1.0f, 0.0f, 0.01f);
-        default: // Clear or unknown.
+            return float4(0.0f, 1.0f, 0.0f, 0.03f);
+        case 0: // Clear 
             return float4(0.0f, 0.0f, 0.0f, 0.0f);
+        default: // Unknown.
+            return float4(0.0f, 0.0f, 0.0f, 1.0f);
     }
 }
 
@@ -42,8 +44,8 @@ float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume)
     Volume.GetDimensions(x, y, z);
     int3 pos = int3(x, y, z);
     // We don't want to interpolate here
-    uint SS = Volume.Load(int4(pos * CurPos, 0));
-    float4 Color = GetColorFromLabelValue(SS);
+    float SS = Volume.Load(int4(pos * CurPos, 0)).r;
+    float4 Color = GetColorFromLabelValue(FloatToChar(SS));
     // GetColorFromLabelValue(RetVal);
     Color.a = 1.0 - pow(1.0 - Color.a, (StepSize) * RAYMARCH_MAGIC_NUMBER);
     return Color;

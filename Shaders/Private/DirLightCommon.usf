@@ -15,13 +15,13 @@
 // Convert a uint in one byte range (0-255) to a corresponding U8 float.
 float CharToFloat(uint inChar)
 {
-    return 255.0 / (float) inChar;
+    return ((float) inChar) / 255.0;
 }
 
 // Convert a normalized 0-1 float to a 0-255 uint;
 uint FloatToChar(float inFloat)
 {
-    return (uint) inFloat * 255;
+    return (uint) round(inFloat * 255.0);
 }
 
 float RemapIntensity(float intensity, float2 TFIntensityDomain)
