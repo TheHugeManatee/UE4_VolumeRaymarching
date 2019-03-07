@@ -140,12 +140,13 @@ USTRUCT(BlueprintType) struct FRaymarchWorldParameters {
 
 // Enum for indexes for cube faces - used to discern axes for light propagation shader.
 // Also used for deciding vectors provided into cutting plane material.
+// The axis convention is - you are looking along positive Y axis in UE.
 UENUM(BlueprintType)
 enum class FCubeFace : uint8 {
   Right = 0,  // +X
   Left = 1,   // -X
-  Front = 2,  // +Y
-  Back = 3,   // -Y
+  Back = 2,  // +Y
+  Front = 3,   // -Y
   Top = 4,    // +Z
   Bottom = 5  // -Z
 };
@@ -154,8 +155,8 @@ static FString GetDirectionName(FCubeFace face) {
   switch (face) {
     case FCubeFace::Right: return FString("+X");
     case FCubeFace::Left: return FString("-X");
-    case FCubeFace::Front: return FString("+Y");
-    case FCubeFace::Back: return FString("-Y");
+    case FCubeFace::Back: return FString("+Y");
+    case FCubeFace::Front: return FString("-Y");
     case FCubeFace::Top: return FString("+Z");
     case FCubeFace::Bottom: return FString("-Z");
     default: return FString("Something went wrong here!");

@@ -548,14 +548,14 @@ void URaymarchBlueprintLibrary::GetCutplaneMaterialParams(FCubeFace DominantFace
       break;
       // Back = going from back -> dominant face is at -Y,  so slices going along +Y, U coordinate
       // decreases Z)
-    case FCubeFace::Back:
+    case FCubeFace::Front:
       Origin = FVector(0, 0, 1);
       UMultiplier = FVector(0, 0, -1);
       SliceMultiplier = FVector(0, 1, 0);
       break;
       // Front = going from Front -> dominant face is at +Y, so slices going along -Y, U coordinate
       // increases Z))
-    case FCubeFace::Front:
+    case FCubeFace::Back:
       Origin = FVector(0, 1, 0);
       UMultiplier = FVector(0, 0, 1);
       SliceMultiplier = FVector(0, -1, 0);
@@ -592,10 +592,10 @@ void URaymarchBlueprintLibrary::GetRightFaceAlongNegX(FCubeFace CubeFace,
     case FCubeFace::Right:
     case FCubeFace::Left:  // Fail! There's no "right" along X for these faces
       break;
-    case FCubeFace::Front: RightCubeFace = FCubeFace::Top; break;
     case FCubeFace::Back: RightCubeFace = FCubeFace::Bottom; break;
-    case FCubeFace::Top: RightCubeFace = FCubeFace::Front; break;
-    case FCubeFace::Bottom: RightCubeFace = FCubeFace::Back; break;
+    case FCubeFace::Front: RightCubeFace = FCubeFace::Top; break;
+    case FCubeFace::Top: RightCubeFace = FCubeFace::Back; break;
+    case FCubeFace::Bottom: RightCubeFace = FCubeFace::Front; break;
     default: break;
   }
 }

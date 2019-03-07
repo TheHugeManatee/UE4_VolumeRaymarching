@@ -270,11 +270,11 @@ FVector2D GetUVOffset(FCubeFace Axis, FVector LightPosition, FIntVector Transpos
       normLightPosition /= -normLightPosition.X;
       RetVal = FVector2D(normLightPosition.Y, normLightPosition.Z);
       break;
-    case FCubeFace::Front:  // +Y
+    case FCubeFace::Back:  // +Y
       normLightPosition /= normLightPosition.Y;
       RetVal = FVector2D(normLightPosition.X, normLightPosition.Z);
       break;
-    case FCubeFace::Back:  // -Y
+    case FCubeFace::Front:  // -Y
       normLightPosition /= -normLightPosition.Y;
       RetVal = FVector2D(normLightPosition.X, normLightPosition.Z);
       break;
@@ -309,8 +309,8 @@ void GetStepSizeAndUVWOffset(FCubeFace Axis, FVector LightPosition, FIntVector T
   switch (Axis) {
     case FCubeFace::Right:  // +-X
     case FCubeFace::Left: OutUVWOffset /= abs(LightPosition.X) * TransposedDimensions.Z; break;
-    case FCubeFace::Front:  // +-Y
-    case FCubeFace::Back: OutUVWOffset /= abs(LightPosition.Y) * TransposedDimensions.Z; break;
+    case FCubeFace::Back:  // +-Y
+    case FCubeFace::Front: OutUVWOffset /= abs(LightPosition.Y) * TransposedDimensions.Z; break;
     case FCubeFace::Top:  // +-Z
     case FCubeFace::Bottom: OutUVWOffset /= abs(LightPosition.Z) * TransposedDimensions.Z; break;
     default: check(false); ;

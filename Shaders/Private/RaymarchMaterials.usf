@@ -11,7 +11,7 @@
 
 // Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
 // and thickness of the cube in alpha. All values returned are in UVW space.
-float4 PerformRaymarchCubeSetup(float Steps, float PlaneAlignment, FMaterialPixelParameters MaterialParameters)
+float4 PerformRaymarchCubeSetup(float Steps, FMaterialPixelParameters MaterialParameters)
 {
     // Get scene depth at this pixel.
     float LocalSceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(MaterialParameters)));
@@ -248,7 +248,7 @@ float4 PerformIntensityRaymarchLabeled(Texture3D DataVolume, SamplerState DataVo
 	    // Once we hit the volume, raymarching is over. Take the sample as a fully opaque one, mix in the current label color and return.
         if (!IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection))
         {
-            float GrayScale = DataVolume.SampleLevel(DataVolumeSampler, CurPos, 0).r;
+            float GrayScale = DataVolume.SampleLevel(DataVolumeSampler, saturate(CurPos), 0).r;
             AccumulateLightEnergy(LightEnergy, float4(GrayScale, GrayScale, GrayScale, 1.0));
             return LightEnergy;
         }
@@ -264,7 +264,7 @@ float4 PerformIntensityRaymarchLabeled(Texture3D DataVolume, SamplerState DataVo
     }
 
     // Handle FinalStep (only if we went through all the previous steps and the final step size is above eps)
-    if (i == MaxSteps && FinalStep > 0.05f)
+    if (i == MaxSteps && FinalStep > 0.01f)
     {
         CurPos -= LocalCamVec * (FinalStep);
         // Accumulate label.
@@ -272,7 +272,7 @@ float4 PerformIntensityRaymarchLabeled(Texture3D DataVolume, SamplerState DataVo
         // If the final step is clipped, don't do anything.
         if (!IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection))
         {
-            float GrayScale = DataVolume.SampleLevel(DataVolumeSampler, CurPos, 0).r;
+            float GrayScale = DataVolume.SampleLevel(DataVolumeSampler, saturate(CurPos), 0).r;
             AccumulateLightEnergy(LightEnergy, float4(GrayScale, GrayScale, GrayScale, 1.0));
         }
     }
