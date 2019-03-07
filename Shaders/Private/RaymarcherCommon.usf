@@ -1,0 +1,174 @@
+// This file contains both files used by ligt propagation shaders and material shaders used in-editor.
+// After changing anything in this, the shaders in-editor need to be recompiled manually! (no file change detection there)
+
+#pragma once
+
+// The maximum distance when a voxel might be cut away partially by the cutting plane.
+#define SQRT_3_HALF 0.86602540378f
+
+// The maximum distance when a voxel might be cut away partially by the cutting plane.
+#define SQRT_3 1.73205080757f
+
+// The multiplier to use with the SQRT_3_HALF to get values fitting to a range of 0-1.
+#define ONE_OVER_SQRT_3 0.57735026919f
+
+// A constant density setting determining how opaque a volume is. Higher means more opaque.
+#define RAYMARCH_FIXED_DENSITY 200.0
+
+
+// Returns true if CurPos is clipped by the clipping plane defined by the center and direction.
+// (Volume is clipped away in the clipping direction)
+bool IsCurPosClipped(float3 CurPos, float3 ClippingCenter, float3 ClippingDirection)
+{
+    return (dot(CurPos - ClippingCenter, ClippingDirection) <= 0.0);
+}
+
+// Convert a uint in one byte range (0-255) to a corresponding U8 float (0 - 1 normalized).
+float CharToFloat(uint inChar)
+{
+    return ((float) inChar) / 255.0;
+}
+
+// Convert a normalized 0-1 float to a 0-255 uint;
+uint FloatToChar(float inFloat)
+{
+    return (uint) round(inFloat * 255.0);
+}
+
+// Remaps the input intensity to fit inside the intensity domain.
+void RemapIntensity(inout float intensity, float2 TFIntensityDomain)
+{
+    intensity = clamp((intensity - TFIntensityDomain.x) / (TFIntensityDomain.y - TFIntensityDomain.x), 0, 1);
+}
+
+// Transforms pixel position into UVWs of the given pixel's center (center is why we add 0.5)
+float3 GetUVW(uint3 pos, float3 dimensions)
+{
+    return (pos + float3(0.5, 0.5, 0.5)) / dimensions;
+}
+
+// Transforms pixel position into UVW of that exact point (not centered).
+float3 GetUVWFixed(float3 pos, float3 dimensions)
+{
+    return pos / dimensions;
+}
+
+// Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize.
+float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
+{
+    float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, 0).r;
+    RemapIntensity(VolumeSample, TFIntensityDomain);
+
+    float4 ColorSample = TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
+    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize * RAYMARCH_FIXED_DENSITY);
+    return ColorSample;
+}
+
+// Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize (in World units).
+float4 SampleDataVolumeWorldSS(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
+{
+    float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, 0).r;
+    RemapIntensity(VolumeSample, TFIntensityDomain);
+
+    float4 ColorSample = TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
+    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize);
+    return ColorSample;
+}
+
+
+// Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize.
+float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain, float LOD)
+{
+    float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, LOD).r;
+    RemapIntensity(VolumeSample, TFIntensityDomain);
+    float4 ColorSample = TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
+
+    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize * RAYMARCH_FIXED_DENSITY);
+    return ColorSample;
+}
+
+// Samples a Data volume at CurPos and given LOD;
+float SampleDataIntensityLoded(float3 CurPos, Texture3D Volume, SamplerState VolumeSampler, float LOD)
+{
+    return Volume.SampleLevel(VolumeSampler, saturate(CurPos), LOD).r;
+}
+
+// Samples a Data volume, transforms it to fit the TF Intensity domain and thand transforms it by the TF. Does not take into account the step size
+float4 SampleDataVolumeUniformStep(float3 CurPos, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
+{
+    float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, 0).r;
+    RemapIntensity(VolumeSample, TFIntensityDomain);
+    return TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
+}
+
+float CorrectForStepSize(float Intensity, float StepSize)
+{
+    return 1.0 - pow(1.0 - Intensity, StepSize * RAYMARCH_FIXED_DENSITY);
+}
+
+
+
+///
+/// Obsolete functions for multicolored lights. Eventually we might reipmlement them.
+///
+
+//void RemoveAndAddColor(int3 pos, float4 removedColor, float4 addedColor, float4 oldColor,
+//RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<float> BLightVolume, RWTexture3D<float> ALightVolume)
+//{
+//	// Substract "removed" alpha from original alpha
+//    float currentAlpha = oldColor.a - removedColor.a;
+//	// Get current weight of color components relative to old alpha.
+//    float currentRed = oldColor.r * oldColor.a;
+//    float currentGreen = oldColor.g * oldColor.a;
+//    float currentBlue = oldColor.b * oldColor.a;
+
+//	// Get the weights of colors after removing the removed color (these are already relative to the currentAlpha)
+//    // As in - if they are now (0.1, 0.1, 0.1, 0.1), it is actually full white at 0.1 intensity
+//    float afterRemoveRed = currentRed - (removedColor.r * removedColor.a);
+//    float afterRemoveGreen = currentGreen - (removedColor.g * removedColor.a);
+//    float afterRemoveBlue = currentBlue - (removedColor.b * removedColor.a);
+
+//	// Now we have subtracted the color. Start adding the added one.
+//    currentAlpha = currentAlpha + addedColor.a;
+
+//	// We can assume currentAlpha will be nonzero now, as otherwise we'd be adding a 0 intensity light
+//	// (Actually, TODO add a check to C code to return on lights with 0 intensity)...
+//    ALightVolume[pos] = currentAlpha;
+//    RLightVolume[pos] = (afterRemoveRed + (addedColor.r * addedColor.a)) / currentAlpha;
+//    GLightVolume[pos] = (afterRemoveGreen + (addedColor.g * addedColor.a)) / currentAlpha;
+//    BLightVolume[pos] = (afterRemoveBlue + (addedColor.b * addedColor.a)) / currentAlpha;
+
+//	// TODO
+//	//
+//	// Optimize this!
+//}
+
+//void AddColor(int3 pos, float4 addedColor, float4 oldColor,
+//RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<float> BLightVolume, RWTexture3D<float> ALightVolume)
+//{
+//    float totalAlpha = oldColor.a + addedColor.a;
+
+//    float currentRed = oldColor.r * oldColor.a;
+//    float currentGreen = oldColor.g * oldColor.a;
+//    float currentBlue = oldColor.b * oldColor.a;
+
+//    ALightVolume[pos] = totalAlpha;
+
+//    if (totalAlpha == 0)
+//    {
+//		// Division by zero is baaaad, mmkey?
+//		// Don't need to set the other colors - since alpha is zero, currentXXX will always equal zero on next add anyways.
+//        return;
+//    }
+
+//    RLightVolume[pos] = (currentRed + (addedColor.r * addedColor.a)) / totalAlpha;
+//    GLightVolume[pos] = (currentGreen + (addedColor.g * addedColor.a)) / totalAlpha;
+//    BLightVolume[pos] = (currentBlue + (addedColor.b * addedColor.a)) / totalAlpha;
+//    // Todo? LERP instead of explicit?
+//}
+
+
+//float4 GetColor(int3 pos, RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<float> BLightVolume, RWTexture3D<float> ALightVolume)
+//{
+//    return float4(RLightVolume[pos], GLightVolume[pos], BLightVolume[pos], ALightVolume[pos]);
+//}

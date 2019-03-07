@@ -1,4 +1,4 @@
-#include "DirLightCommon.usf"
+#include "RaymarcherCommon.usf"
 
 // This shader takes the lower mip UAV 2x2x2 neighborhood and saves the max value
 // into the higher level mip.

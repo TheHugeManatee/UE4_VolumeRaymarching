@@ -13,10 +13,11 @@ IMPLEMENT_SHADER_TYPE(, FVolumePS, TEXT("/Plugin/VolumeRaymarching/Private/Rayma
                       TEXT("PassthroughPS"), SF_Pixel)
 
 IMPLEMENT_SHADER_TYPE(, FAddDirLightShaderSingle,
-                      TEXT("/Plugin/VolumeRaymarching/Private/DirLightShaderSingle.usf"),
+                      TEXT("/Plugin/VolumeRaymarching/Private/AddDirLightShader.usf"),
                       TEXT("MainComputeShader"), SF_Compute)
+
 IMPLEMENT_SHADER_TYPE(, FChangeDirLightShaderSingle,
-                      TEXT("/Plugin/VolumeRaymarching/Private/ChangeDirLightShaderSingle.usf"),
+                      TEXT("/Plugin/VolumeRaymarching/Private/ChangeDirLightShader.usf"),
                       TEXT("MainComputeShader"), SF_Compute)
 
 IMPLEMENT_SHADER_TYPE(, FClearVolumeTextureShader,

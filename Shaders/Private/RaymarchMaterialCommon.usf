@@ -1,0 +1,113 @@
+// This file contains functions used for raymarching in in-game materials, not for precomputing. 
+
+# pragma once
+
+#include "RaymarcherCommon.usf"
+
+// Gets color from a uint label value.
+// Switches on G8 will be faster than reading a full color volume. Also we need to export the labels eventually and color might not be the best way to do that.
+float4 GetColorFromLabelValue(uint LabelValue)
+{
+    switch (LabelValue)
+    {
+        case 1: // Risk
+            return float4(1.0f, 0.0f, 0.0f, 0.06f);
+        case 2: // Target
+            return float4(0.0f, 1.0f, 0.0f, 0.03f);
+        case 3: // Potential Risk
+            return float4(1.0f, 0.0f, 0.0f, 0.06f);
+        case 4: // Potential Target
+            return float4(0.0f, 1.0f, 0.0f, 0.03f);
+        case 0: // Clear 
+            return float4(0.0f, 0.0f, 0.0f, 0.0f);
+        default: // Unknown - return full black so it's visible.
+            return float4(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+}
+
+// Samples a Label volume, gets the corresponding color and corrects the opacity to account for StepSize.
+float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume)
+{
+    int x, y, z;
+    Volume.GetDimensions(x, y, z);
+    // Decrease dimensions by 1, because with any UVW coord being == 1, we would load one after the array length
+    // E.G - with X dimension == 2, U == 1, we want to sample x[1], not x[2] (as that doesn't exist)
+    int3 Dimensions = int3(x - 1, y - 1, z - 1);
+    // We don't want to interpolate here, use load instead of sample.
+    float LabelValue = Volume.Load(int4(round(Dimensions * CurPos), 0)).r;
+    float4 Color = GetColorFromLabelValue(FloatToChar(LabelValue));
+    // GetColorFromLabelValue(RetVal);
+    Color.a = 1.0 - pow(1.0 - Color.a, StepSize);
+    return Color;
+}
+
+
+// Jitter position by random temporal jitter (in the direction of the camera).
+void JitterEntryPos(inout float3 EntryPos, float3 LocalCamVec, FMaterialPixelParameters MaterialParameters)
+{
+    int3 RandomPos = int3(MaterialParameters.SvPosition.xy, View.StateFrameIndexMod8);
+    float rand = float(Rand3DPCG16(RandomPos).x) / 0xffff;
+    EntryPos += LocalCamVec * rand.x;
+}
+
+// Adds current sampled color and opacity to the accumulated LightEnergy
+void AccumulateLightEnergy(inout float4 LightEnergy, in float4 CurrentSample)
+{
+    // Affect the color depending on how much opaque the current sample is and how strong the existing accumulated Light Energy is.
+    LightEnergy.rgb = LightEnergy.rgb + (CurrentSample.rgb * CurrentSample.a * (1.0 - LightEnergy.a));
+    // Affect the accumulated light energy strength.
+    LightEnergy.a = LightEnergy.a + (CurrentSample.a * (1.0 - LightEnergy.a));
+}
+
+// Performs one raymarch step and accumulates the result to the existing Accumulated Light Energy.
+void AccumulateOneRaymarchStep(inout float4 AccumulatedLightEnergy, float3 CurPos, Texture3D DataVolume, SamplerState DataVolumeSampler,
+                               Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain,
+                               Texture3D LightVolume, SamplerState LightVolumeSampler, float StepSize)
+{
+    // Sample intensity from the volume and get corresponding color-opacity from transfer function.
+    float4 ColorSample = SampleDataVolumeWorldSS(CurPos, StepSize, DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain);
+    
+    // Get lighting information from illumination volume for current position and
+    // Multiply sampled color with light color to adjust intensity according to light strength.
+    ColorSample.rgb = ColorSample.rgb * LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
+        // Accumulate current colored sample to the final values.
+    AccumulateLightEnergy(AccumulatedLightEnergy, ColorSample);
+}
+
+// Performs one raymarch step in a label volume and accumulates the result to the existing Accumulated Light Energy.
+void AccumulateOneRaymarchLabelStep(inout float4 AccumulatedLightEnergy, float3 CurPos, Texture3D LabelVolume, float StepSize)
+{
+    // Sample intensity from the volume and get corresponding color-opacity from transfer function.
+    float4 ColorSample = SampleLabelVolume(CurPos, StepSize, LabelVolume);
+    // Accumulate colored label sample to the final values.
+    AccumulateLightEnergy(AccumulatedLightEnergy, ColorSample);
+}
+
+// Gets the Distance Field light multiplier (even though it's named GetDFShadow, the return value is actualy the opposite - the amount of light preserved)
+// Notice we're using FMaterialPixelParameters and Primitive, which are not defined by us. 
+// Since this file is only used in materials, we know that these structs are defined and provided to us 
+// by the magical shader compiler environment. Lurk through the generated HLSL file to see other nice structs that can be stolen like this.
+float GetDFShadow(float3 CurPos, int DFSteps, float LightTangent, float3 LightVectorWS, FMaterialPixelParameters MaterialParameters)
+{
+    float3 DFPos = 2 * (CurPos - 0.5) * Primitive.LocalObjectBoundsMax.x;
+    DFPos = TransformLocalPositionToWorld(MaterialParameters, DFPos).xyz;
+
+    float dftracedist = 1;
+
+    float dfshadow = 1;
+    float curdist = 0;
+    float DistanceAlongCone = 0;
+
+    for (int d = 0; d < DFSteps; d++)
+    {
+        DistanceAlongCone += curdist;
+        curdist = GetDistanceToNearestSurfaceGlobal(DFPos.xyz);
+
+        float SphereSize = DistanceAlongCone * LightTangent;
+        dfshadow = min(saturate(curdist / SphereSize), dfshadow);
+
+        DFPos.xyz += LightVectorWS * dftracedist * curdist;
+        dftracedist *= 1.0001;
+    }
+    return dfshadow;
+}
