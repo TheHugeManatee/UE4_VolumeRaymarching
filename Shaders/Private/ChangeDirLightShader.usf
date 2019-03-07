@@ -90,7 +90,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
         // of a pixel cut away will decrease with the distance to the cutting plane.
         // If the distance of the center of the voxel to the cutting plane is  0, then exactly half is cut away.
         float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
-        float CurrentSample = SampleDataVolumeWorldSS(CurrentUVW, StepSize, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a * AlphaWeight;
+        float CurrentSample = SampleDataVolume(CurrentUVW, StepSize, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a * AlphaWeight;
         // Both lights have different step sizes (because the direction of the light is different, but we're stepping uniformly layer by layer).
         PreviousRemovedLightAlpha *= (1 - CurrentSample);
         PreviousAddedLightAlpha *= (1 - CurrentSample);
@@ -103,7 +103,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     }
     else // Case of being not cut away at all.
     {
-        float CurrentSample = SampleDataVolumeWorldSS(CurrentUVW, StepSize, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
+        float CurrentSample = SampleDataVolume(CurrentUVW, StepSize, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         // Both lights have different step sizes (because the direction of the light is different, but we're stepping uniformly layer by layer).
         PreviousRemovedLightAlpha *= (1 - CurrentSample);
         PreviousAddedLightAlpha *= (1 - CurrentSample);

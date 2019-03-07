@@ -13,7 +13,9 @@
 #define ONE_OVER_SQRT_3 0.57735026919f
 
 // A constant density setting determining how opaque a volume is. Higher means more opaque.
-#define RAYMARCH_FIXED_DENSITY 200.0
+// Currently unused because using Unreal world units gives nice results for our purposes.
+// If you want denser volumes, multiply StepSize by this in SampleDataVolume / CorrectForStepSize.
+#define RAYMARCH_FIXED_DENSITY 20.0
 
 
 // Returns true if CurPos is clipped by the clipping plane defined by the center and direction.
@@ -47,25 +49,8 @@ float3 GetUVW(uint3 pos, float3 dimensions)
     return (pos + float3(0.5, 0.5, 0.5)) / dimensions;
 }
 
-// Transforms pixel position into UVW of that exact point (not centered).
-float3 GetUVWFixed(float3 pos, float3 dimensions)
-{
-    return pos / dimensions;
-}
-
-// Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize.
-float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
-{
-    float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, 0).r;
-    RemapIntensity(VolumeSample, TFIntensityDomain);
-
-    float4 ColorSample = TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
-    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize * RAYMARCH_FIXED_DENSITY);
-    return ColorSample;
-}
-
 // Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize (in World units).
-float4 SampleDataVolumeWorldSS(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
+float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
 {
     float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, 0).r;
     RemapIntensity(VolumeSample, TFIntensityDomain);
@@ -75,17 +60,6 @@ float4 SampleDataVolumeWorldSS(float3 CurPos, float StepSize, Texture3D Volume, 
     return ColorSample;
 }
 
-
-// Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize.
-float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain, float LOD)
-{
-    float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, LOD).r;
-    RemapIntensity(VolumeSample, TFIntensityDomain);
-    float4 ColorSample = TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
-
-    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize * RAYMARCH_FIXED_DENSITY);
-    return ColorSample;
-}
 
 // Samples a Data volume at CurPos and given LOD;
 float SampleDataIntensityLoded(float3 CurPos, Texture3D Volume, SamplerState VolumeSampler, float LOD)
@@ -101,9 +75,10 @@ float4 SampleDataVolumeUniformStep(float3 CurPos, Texture3D Volume, SamplerState
     return TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
 }
 
+// Returns intensity corrected for stepsize.
 float CorrectForStepSize(float Intensity, float StepSize)
 {
-    return 1.0 - pow(1.0 - Intensity, StepSize * RAYMARCH_FIXED_DENSITY);
+    return 1.0 - pow(1.0 - Intensity, StepSize);
 }
 
 
