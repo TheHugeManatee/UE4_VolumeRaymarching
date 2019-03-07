@@ -39,4 +39,3 @@ public:
 
   FString ToString() const;
 };
-

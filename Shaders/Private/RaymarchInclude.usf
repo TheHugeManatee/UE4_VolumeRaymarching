@@ -3,25 +3,16 @@
 #include "DirLightCommon.usf"
 
 // Returns true if CurPos is clipped by the clipping plane defined by the center and direction.
-bool IsCurPosClipped(float3 CurPos, float3 ClippingCenter, float3 ClippingDirection) {
+bool IsCurPosClipped(float3 CurPos, float3 ClippingCenter, float3 ClippingDirection)
+{
     return (dot(CurPos - ClippingCenter, ClippingDirection) < 0);
 }
 
-//// Samples a Label volume and corrects the opacity to account for StepSize and volume size.
-//float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler)
-//{
-//    float4 RetVal = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0);
-//    RetVal.a = 1.0 - pow(1.0 - RetVal.a, (StepSize) * RAYMARCH_MAGIC_NUMBER);
-//    return RetVal;
-//}
-
 // Samples a Label volume and corrects the opacity to account for StepSize and volume size.
-
-// TODO LABEEEELS!
 // Switches on G8 will be faster than reading a full color volume. Also we need to export the labels eventually and color might not be the best way to do that.
 float4 GetColorFromLabelValue(uint LabelValue)
 {
-     switch (LabelValue)
+    switch (LabelValue)
     {
         case 1: // Risk
             return float4(1.0f, 0.0f, 0.0f, 0.06f);
@@ -44,7 +35,8 @@ float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume)
     Volume.GetDimensions(x, y, z);
     int3 pos = int3(x, y, z);
     // We don't want to interpolate here
-    float SS = Volume.Load(int4(pos * CurPos, 0)).r;
+    float SS = Volume.Load(int4((pos * saturate(CurPos) - 0.5), 0)).
+    r;
     float4 Color = GetColorFromLabelValue(FloatToChar(SS));
     // GetColorFromLabelValue(RetVal);
     Color.a = 1.0 - pow(1.0 - Color.a, (StepSize) * RAYMARCH_MAGIC_NUMBER);
@@ -52,13 +44,15 @@ float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume)
 }
 
 // Adds current sampled light to the LightEnergy and Opacity
-void AddLightAndOpacity(inout float3 LightEnergy, inout float Opacity, in float4 CurrentSample) {
+void AddLightAndOpacity(inout float3 LightEnergy, inout float Opacity, in float4 CurrentSample)
+{
     LightEnergy = LightEnergy + (CurrentSample.rgb * CurrentSample.a * (1.0 - Opacity));
     Opacity = Opacity + (CurrentSample.a * (1.0 - Opacity));
 }
 
 // Gets the Distance Field light multiplier (even though it's named GetDFShadow, the return value is actualy the opposite - the amount of light preserved)
-float GetDFShadow(float3 CurPos, int DFSteps, float LightTangent, float3 LightVectorWS, FMaterialPixelParameters MaterialParameters) {
+float GetDFShadow(float3 CurPos, int DFSteps, float LightTangent, float3 LightVectorWS, FMaterialPixelParameters MaterialParameters)
+{
     float3 DFPos = 2 * (CurPos - 0.5) * Primitive.LocalObjectBoundsMax.x;
     DFPos = TransformLocalPositionToWorld(MaterialParameters, DFPos).xyz;
 
@@ -68,16 +62,16 @@ float GetDFShadow(float3 CurPos, int DFSteps, float LightTangent, float3 LightVe
     float curdist = 0;
     float DistanceAlongCone = 0;
 
-		for (int d = 0;d < DFSteps; d++)
-		{
-			DistanceAlongCone += curdist;
-			curdist = GetDistanceToNearestSurfaceGlobal(DFPos.xyz);
+    for (int d = 0; d < DFSteps; d++)
+    {
+        DistanceAlongCone += curdist;
+        curdist = GetDistanceToNearestSurfaceGlobal(DFPos.xyz);
 
-            float SphereSize = DistanceAlongCone * LightTangent;
-			dfshadow = min( saturate(curdist / SphereSize) , dfshadow);
+        float SphereSize = DistanceAlongCone * LightTangent;
+        dfshadow = min(saturate(curdist / SphereSize), dfshadow);
 
-			DFPos.xyz += LightVectorWS * dftracedist * curdist;
-			dftracedist*= 1.0001;
-		}
+        DFPos.xyz += LightVectorWS * dftracedist * curdist;
+        dftracedist *= 1.0001;
+    }
     return dfshadow;
 }

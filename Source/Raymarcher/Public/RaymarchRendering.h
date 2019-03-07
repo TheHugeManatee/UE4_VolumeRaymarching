@@ -5,13 +5,13 @@
 
 #include "CoreMinimal.h"
 
+#include "Engine.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/VolumeTexture.h"
 #include "Engine/World.h"
-#include "Kismet/BlueprintFunctionLibrary.h"
-#include "Engine.h"
 #include "GlobalShader.h"
 #include "Internationalization/Internationalization.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
 #include "Logging/MessageLog.h"
 #include "PipelineStateCache.h"
 #include "RHIStaticStates.h"
@@ -99,7 +99,8 @@ struct OneAxisReadWriteBufferResources {
   FUnorderedAccessViewRHIRef UAVs[4];
 };
 
-/** A structure holding all resources related to a single raymarchable volume - its texture ref, the TF texture ref and TF Range parameters,
+/** A structure holding all resources related to a single raymarchable volume - its texture ref, the
+   TF texture ref and TF Range parameters,
     light volume texture ref, and read-write buffers used for propagating along all axes. */
 USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
   GENERATED_BODY()
@@ -116,7 +117,7 @@ USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
   UVolumeTexture* ALightVolumeRef;
   UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources")
   FTransferFunctionRangeParameters TFRangeParameters;
-  UPROPERTY(BlueprintReadOnly, Category = "Basic Raymarch Rendering Resources") 
+  UPROPERTY(BlueprintReadOnly, Category = "Basic Raymarch Rendering Resources")
   bool LightVolumeHalfResolution;
   // Not visible in BPs.
   FUnorderedAccessViewRHIRef ALightVolumeUAVRef;
@@ -124,7 +125,7 @@ USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
 };
 
 /** Structure containing the world parameters required for light propagation shaders - these include
-	the volume's world transform, clipping plane parameters and bounds of the mesh
+  the volume's world transform, clipping plane parameters and bounds of the mesh
 */
 USTRUCT(BlueprintType) struct FRaymarchWorldParameters {
   GENERATED_BODY()
@@ -136,7 +137,6 @@ USTRUCT(BlueprintType) struct FRaymarchWorldParameters {
   UPROPERTY(BlueprintReadWrite, Category = "Raymarch Rendering World Parameters")
   FVector MeshMaxBounds;
 };
-
 
 // Enum for indexes for cube faces - used to discern axes for light propagation shader.
 // Also used for deciding vectors provided into cutting plane material.
@@ -151,16 +151,15 @@ enum class FCubeFace : uint8 {
 };
 
 static FString GetDirectionName(FCubeFace face) {
-	switch (face) {
-	case FCubeFace::Right :  return FString("+X");
-	case FCubeFace::Left : return FString("-X");
-	case FCubeFace::Front :return FString("+Y");
-	case FCubeFace::Back : return FString("-Y");
-	case FCubeFace::Top : return FString("+Z");
-	case FCubeFace::Bottom : return FString("-Z");
-	default : return FString("Something went wrong here!");
-	}
-
+  switch (face) {
+    case FCubeFace::Right: return FString("+X");
+    case FCubeFace::Left: return FString("-X");
+    case FCubeFace::Front: return FString("+Y");
+    case FCubeFace::Back: return FString("-Y");
+    case FCubeFace::Top: return FString("+Z");
+    case FCubeFace::Bottom: return FString("-Z");
+    default: return FString("Something went wrong here!");
+  }
 }
 
 // Normals of corresponding cube faces in object-space.
@@ -173,8 +172,8 @@ const FVector FCubeFaceNormals[6] = {
     {0.0, 0.0, -1.0}   // bottom
 };
 
-/** Structure corresponding to the 3 major axes to propagate a light-source along with their respective
-    weights. */
+/** Structure corresponding to the 3 major axes to propagate a light-source along with their
+   respective weights. */
 struct FMajorAxes {
   // The 3 major axes indexes
   std::vector<std::pair<FCubeFace, float>> FaceWeight;
@@ -199,16 +198,15 @@ static FMajorAxes GetMajorAxes(FVector LightPos) {
     // Dot^2 for non-negative faces will always sum up to 1.
     weight = (weight > 0 ? weight * weight : 0);
     RetVal.FaceWeight.push_back(std::make_pair(FCubeFace(i), weight));
-/*
-    float dot = FVector::DotProduct(FCubeFaceNormals[i], LightPos);
-    float weight = 1 - (2 * acos(dot) / PI);
-    RetVal.FaceWeight.push_back(std::make_pair(FCubeFace(i), weight));*/
+    /*
+        float dot = FVector::DotProduct(FCubeFaceNormals[i], LightPos);
+        float weight = 1 - (2 * acos(dot) / PI);
+        RetVal.FaceWeight.push_back(std::make_pair(FCubeFace(i), weight));*/
   }
   // Sort so that the 3 major axes are the first.
   std::sort(RetVal.FaceWeight.begin(), RetVal.FaceWeight.end(), SortDescendingWeights);
   return RetVal;
 };
-
 
 // Pixel shader for writing to a Volume Texture.
 class FVolumePS : public FGlobalShader {
@@ -236,8 +234,8 @@ void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVec
 
 FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt);
 
-uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsigned index);
-
+uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes MajorAxes,
+                               unsigned index);
 
 void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                                  FBasicRaymarchRenderingResources Resources,
@@ -245,19 +243,24 @@ void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICm
                                                  const bool Added,
                                                  const FRaymarchWorldParameters WorldParameters);
 
-void ChangeDirLightInSingleLightVolume_RenderThread(
-    FRHICommandListImmediate& RHICmdList, FBasicRaymarchRenderingResources Resources,
-    const FDirLightParameters OldLightParameters, const FDirLightParameters NewLightParameters,
-    const FRaymarchWorldParameters WorldParameters);
+void ChangeDirLightInSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
+                                                    FBasicRaymarchRenderingResources Resources,
+                                                    const FDirLightParameters OldLightParameters,
+                                                    const FDirLightParameters NewLightParameters,
+                                                    const FRaymarchWorldParameters WorldParameters);
 
-void ClearSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
+void ClearVolumeTexture_RenderThread(FRHICommandListImmediate& RHICmdList,
                                          FRHITexture3D* ALightVolumeResource, float ClearValue);
 
-void GenerateVolumeTextureMipLevels_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
-	FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc);
+void GenerateVolumeTextureMipLevels_RenderThread(FRHICommandListImmediate& RHICmdList,
+                                                 FIntVector Dimensions,
+                                                 FRHITexture3D* VolumeResource,
+                                                 FRHITexture2D* TransferFunc);
 
-void GenerateDistanceField_RenderThread (FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
-	FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc, FRHITexture3D* DistanceFieldResource,float localSphereDiameter, float threshold);
+void GenerateDistanceField_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
+                                        FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc,
+                                        FRHITexture3D* DistanceFieldResource,
+                                        float localSphereDiameter, float threshold);
 
 //
 // Shaders for single (alpha) light volume follow.
@@ -276,7 +279,7 @@ public:
   FGenericSingleLightVolumeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
     : FGlobalShader(Initializer) {
     // Bind Light Volume resource parameters
-    ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"));
+    ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"), SPF_Mandatory);
   }
 
   virtual void SetLightVolumeUAV(FRHICommandListImmediate& RHICmdList,
@@ -311,579 +314,579 @@ protected:
   FShaderResourceParameter ALightVolume;
 };
 
-// Shader used for fast resetting of light volumes. Just fills zeros everywhere.
-class FClearSingleLightVolumeShader : public FGenericSingleLightVolumeShader {
-  DECLARE_SHADER_TYPE(FClearSingleLightVolumeShader, Global)
+// Shader used for fast clearing of volume textures.
+// TODO - template on texture format, now only float-typable textures (which is most formats anyways)
+class FClearVolumeTextureShader : public FGlobalShader {
+  DECLARE_SHADER_TYPE(FClearVolumeTextureShader, Global)
 
 public:
   static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
     return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
   }
 
-  FClearSingleLightVolumeShader(){};
+  FClearVolumeTextureShader(){};
 
-  // Don't need any more bindings than the 4 volumes from generic shader, so just call parent
-  // constructor.
-  FClearSingleLightVolumeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-    : FGenericSingleLightVolumeShader(Initializer) {
-    AClearValue.Bind(Initializer.ParameterMap, TEXT("AClearValue"));
-    ZSize.Bind(Initializer.ParameterMap, TEXT("ZSize"));
+  FClearVolumeTextureShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FGlobalShader(Initializer) {
+    Volume.Bind(Initializer.ParameterMap, TEXT("Volume"), SPF_Mandatory);
+    ClearValue.Bind(Initializer.ParameterMap, TEXT("ClearValue"), SPF_Mandatory);
+    ZSize.Bind(Initializer.ParameterMap, TEXT("ZSize"), SPF_Mandatory);
   }
 
-  virtual void SetParameters(FRHICommandListImmediate& RHICmdList, float clearColor,
+  virtual void SetParameters(FRHICommandListImmediate& RHICmdList, 
+	   FUnorderedAccessViewRHIParamRef VolumeRef,
+	  float clearColor,
                              int ZSizeParam) {
     FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
-    SetShaderValue(RHICmdList, ShaderRHI, AClearValue, clearColor);
+    SetUAVParameter(RHICmdList, ShaderRHI, Volume, VolumeRef);
+    SetShaderValue(RHICmdList, ShaderRHI, ClearValue, clearColor);
     SetShaderValue(RHICmdList, ShaderRHI, ZSize, ZSizeParam);
   }
 
+  void UnbindUAV(FRHICommandList& RHICmdList) {
+    SetUAVParameter(RHICmdList, GetComputeShader(), Volume, FUnorderedAccessViewRHIParamRef());
+  }
+
   virtual bool Serialize(FArchive& Ar) override {
-    bool bShaderHasOutdatedParameters = FGenericSingleLightVolumeShader::Serialize(Ar);
-    Ar << AClearValue << ZSize;
+    bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+    Ar << Volume << ClearValue << ZSize;
     return bShaderHasOutdatedParameters;
   }
 
 protected:
   // Float values to be set to the alpha volume.
-  FShaderParameter AClearValue;
+  FShaderResourceParameter Volume;
+  FShaderParameter ClearValue;
   FShaderParameter ZSize;
 };
 
 // Declare compute shader for clearing a single-channel float UAV texture
-class FClearFloatRWTextureCS : public FGlobalShader{
-	DECLARE_SHADER_TYPE(FClearFloatRWTextureCS, Global);
+class FClearFloatRWTextureCS : public FGlobalShader {
+  DECLARE_SHADER_TYPE(FClearFloatRWTextureCS, Global);
+
 public:
-	FClearFloatRWTextureCS() {}
-	FClearFloatRWTextureCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FGlobalShader(Initializer)
-	{
-		ClearValue.Bind(Initializer.ParameterMap, TEXT("ClearValue"), SPF_Mandatory);
-		ClearTexture2DRW.Bind(Initializer.ParameterMap, TEXT("ClearTextureRW"), SPF_Mandatory);
-	}
+  FClearFloatRWTextureCS() {}
+  FClearFloatRWTextureCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FGlobalShader(Initializer) {
+    ClearValue.Bind(Initializer.ParameterMap, TEXT("ClearValue"), SPF_Mandatory);
+    ClearTexture2DRW.Bind(Initializer.ParameterMap, TEXT("ClearTextureRW"), SPF_Mandatory);
+  }
 
-	// FShader interface.
-	virtual bool Serialize(FArchive& Ar) override
-	{
-		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << ClearValue << ClearTexture2DRW;
-		return bShaderHasOutdatedParameters;
-	}
+  // FShader interface.
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+    Ar << ClearValue << ClearTexture2DRW;
+    return bShaderHasOutdatedParameters;
+  }
 
-	void SetParameters(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIParamRef TextureRW, float Value) 
-	{
-		SetUAVParameter(RHICmdList, GetComputeShader(), ClearTexture2DRW, TextureRW);
-		SetShaderValue(RHICmdList, GetComputeShader(), ClearValue, Value);
-	}
+  void SetParameters(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIParamRef TextureRW,
+                     float Value) {
+    SetUAVParameter(RHICmdList, GetComputeShader(), ClearTexture2DRW, TextureRW);
+    SetShaderValue(RHICmdList, GetComputeShader(), ClearValue, Value);
+  }
 
-	void UnbindUAV(FRHICommandList& RHICmdList) {
-		SetUAVParameter(RHICmdList, GetComputeShader(), ClearTexture2DRW, FUnorderedAccessViewRHIParamRef());
-	}
+  void UnbindUAV(FRHICommandList& RHICmdList) {
+    SetUAVParameter(RHICmdList, GetComputeShader(), ClearTexture2DRW,
+                    FUnorderedAccessViewRHIParamRef());
+  }
 
-	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
-	{
-		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-	}
-	
-	const FShaderParameter& GetClearColorParameter()
-	{
-		return ClearValue;
-	}
+  static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
+    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+  }
 
-	const FShaderResourceParameter& GetClearTextureRWParameter()
-	{
-		return ClearTexture2DRW;
-	}
+  const FShaderParameter& GetClearColorParameter() { return ClearValue; }
+
+  const FShaderResourceParameter& GetClearTextureRWParameter() { return ClearTexture2DRW; }
 
 protected:
-	FShaderParameter ClearValue;
-	FShaderResourceParameter ClearTexture2DRW;
+  FShaderResourceParameter ClearTexture2DRW;
+  FShaderParameter ClearValue;
 };
 
-
 class FRaymarchVolumeShader : public FGlobalShader {
-
 public:
-	FRaymarchVolumeShader() : FGlobalShader() {}
+  FRaymarchVolumeShader() : FGlobalShader() {}
 
-	FRaymarchVolumeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FGlobalShader(Initializer) {
-		Volume.Bind(Initializer.ParameterMap, TEXT("Volume"));
-		VolumeSampler.Bind(Initializer.ParameterMap, TEXT("VolumeSampler"));
+  FRaymarchVolumeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FGlobalShader(Initializer) {
+    Volume.Bind(Initializer.ParameterMap, TEXT("Volume"), SPF_Mandatory);
+    VolumeSampler.Bind(Initializer.ParameterMap, TEXT("VolumeSampler"), SPF_Mandatory);
 
-		TransferFunc.Bind(Initializer.ParameterMap, TEXT("TransferFunc"));
-		TransferFuncSampler.Bind(Initializer.ParameterMap, TEXT("TransferFuncSampler"));
-		LocalClippingCenter.Bind(Initializer.ParameterMap, TEXT("LocalClippingCenter"));
-		LocalClippingDirection.Bind(Initializer.ParameterMap, TEXT("LocalClippingDirection"));
+    TransferFunc.Bind(Initializer.ParameterMap, TEXT("TransferFunc"), SPF_Mandatory);
+    TransferFuncSampler.Bind(Initializer.ParameterMap, TEXT("TransferFuncSampler"), SPF_Mandatory);
+    LocalClippingCenter.Bind(Initializer.ParameterMap, TEXT("LocalClippingCenter"), SPF_Mandatory);
+    LocalClippingDirection.Bind(Initializer.ParameterMap, TEXT("LocalClippingDirection"), SPF_Mandatory);
 
-		TFIntensityDomain.Bind(Initializer.ParameterMap, TEXT("TFIntensityDomain"));
-		StepSize.Bind(Initializer.ParameterMap, TEXT("StepSize"));
-	}
+    TFIntensityDomain.Bind(Initializer.ParameterMap, TEXT("TFIntensityDomain"), SPF_Mandatory);
+    StepSize.Bind(Initializer.ParameterMap, TEXT("StepSize"), SPF_Mandatory);
+  }
 
-	void SetRaymarchResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, const FTexture3DRHIRef pVolume,
-		const FTexture2DRHIRef pTransferFunc) {
-		// Create a static sampler reference and bind it together with the volume texture + TF.
+  void SetRaymarchResources(FRHICommandListImmediate& RHICmdList,
+                            FComputeShaderRHIParamRef ShaderRHI, const FTexture3DRHIRef pVolume,
+                            const FTexture2DRHIRef pTransferFunc) {
+    // Create a static sampler reference and bind it together with the volume texture + TF.
 
-		FLinearColor VolumeClearColor = FLinearColor(0.0, 0.0, 0.0, 0.0);
-		const uint32 BorderColorInt = VolumeClearColor.ToFColor(false).ToPackedARGB();
+    FLinearColor VolumeClearColor = FLinearColor(0.0, 0.0, 0.0, 0.0);
+    const uint32 BorderColorInt = VolumeClearColor.ToFColor(false).ToPackedARGB();
 
-		FSamplerStateRHIRef SamplerRef = RHICreateSamplerState(FSamplerStateInitializerRHI(SF_Trilinear, AM_Border, AM_Border,
-			AM_Border, 0, 1, 0, 0, BorderColorInt));
+    FSamplerStateRHIRef SamplerRef = RHICreateSamplerState(FSamplerStateInitializerRHI(
+        SF_Trilinear, AM_Border, AM_Border, AM_Border, 0, 1, 0, 0, BorderColorInt));
 
-		/*FSamplerStateRHIRef SamplerRef = TStaticSamplerState<SF_Trilinear, AM_Border, AM_Border,
-			AM_Border, 0, 1, 0>::GetRHI();
-*/
+    FSamplerStateRHIRef
+        TFSamplerRef =  // GetBufferSamplerRef(VolumeClearColor.ToFColor(true).ToPackedARGB());
+        TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+    SetTextureParameter(RHICmdList, ShaderRHI, Volume, VolumeSampler, SamplerRef, pVolume);
+    SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, TransferFuncSampler, TFSamplerRef,
+                        pTransferFunc);
+  }
 
-		FSamplerStateRHIRef TFSamplerRef = // GetBufferSamplerRef(VolumeClearColor.ToFColor(true).ToPackedARGB());
-			TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
-		SetTextureParameter(RHICmdList, ShaderRHI, Volume, VolumeSampler, SamplerRef, pVolume);
-		SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, TransferFuncSampler, TFSamplerRef,
-			pTransferFunc);
-	}
+  virtual void UnbindResources(FRHICommandListImmediate& RHICmdList,
+                               FComputeShaderRHIParamRef ShaderRHI) {
+    SetTextureParameter(RHICmdList, ShaderRHI, Volume, FTextureRHIParamRef());
+    SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, FTextureRHIParamRef());
+  }
 
-	virtual void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) {
-		SetTextureParameter(RHICmdList, ShaderRHI, Volume, FTextureRHIParamRef());
-		SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, FTextureRHIParamRef());
-	}
+  // Sets the shader uniforms in the pipeline.
+  void SetRaymarchParameters(FRHICommandListImmediate& RHICmdList,
+                             FComputeShaderRHIParamRef ShaderRHI,
+                             FClippingPlaneParameters LocalClippingParams, FVector2D TFDomain) {
+    SetShaderValue(RHICmdList, ShaderRHI, LocalClippingCenter, LocalClippingParams.Center);
+    SetShaderValue(RHICmdList, ShaderRHI, LocalClippingDirection, LocalClippingParams.Direction);
+    SetShaderValue(RHICmdList, ShaderRHI, TFIntensityDomain, TFDomain);
+  }
 
-	// Sets the shader uniforms in the pipeline.
-	void SetRaymarchParameters(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
-		FClippingPlaneParameters LocalClippingParams, FVector2D TFDomain) {
-		SetShaderValue(RHICmdList, ShaderRHI, LocalClippingCenter, LocalClippingParams.Center);
-		SetShaderValue(RHICmdList, ShaderRHI, LocalClippingDirection, LocalClippingParams.Direction);
-		SetShaderValue(RHICmdList, ShaderRHI, TFIntensityDomain, TFDomain);
-	}
+  void SetStepSize(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                   float pStepSize) {
+    SetShaderValue(RHICmdList, ShaderRHI, StepSize, pStepSize);
+  }
 
-	void SetStepSize(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, float pStepSize) {
-	/*	FString debugMsg = "Setting StepSize = " + FString::SanitizeFloat(pStepSize);
-		GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, debugMsg); 
-	*/	SetShaderValue(RHICmdList, ShaderRHI, StepSize, pStepSize);
-	}
-
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << Volume << VolumeSampler << TransferFunc << TransferFuncSampler << LocalClippingCenter 
-			<< LocalClippingDirection << TFIntensityDomain << StepSize;
-		return bShaderHasOutdatedParameters;
-	}
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+    Ar << Volume << VolumeSampler << TransferFunc << TransferFuncSampler << LocalClippingCenter
+       << LocalClippingDirection << TFIntensityDomain << StepSize;
+    return bShaderHasOutdatedParameters;
+  }
 
 protected:
-	// Volume texture + transfer function resource parameters
-	FShaderResourceParameter Volume;
-	FShaderResourceParameter VolumeSampler;
-	FShaderResourceParameter TransferFunc;
-	FShaderResourceParameter TransferFuncSampler;
-	// Clipping uniforms
-	FShaderParameter LocalClippingCenter;
-	FShaderParameter LocalClippingDirection;
-	// TF intensity Domain
-	FShaderParameter TFIntensityDomain;
-	// Step size taken each iteration
-	FShaderParameter StepSize;
-
+  // Volume texture + transfer function resource parameters
+  FShaderResourceParameter Volume;
+  FShaderResourceParameter VolumeSampler;
+  FShaderResourceParameter TransferFunc;
+  FShaderResourceParameter TransferFuncSampler;
+  // Clipping uniforms
+  FShaderParameter LocalClippingCenter;
+  FShaderParameter LocalClippingDirection;
+  // TF intensity Domain
+  FShaderParameter TFIntensityDomain;
+  // Step size taken each iteration
+  FShaderParameter StepSize;
 };
 
 class FLightPropagationShader : public FRaymarchVolumeShader {
-
 public:
-	FLightPropagationShader() : FRaymarchVolumeShader() {}
+  FLightPropagationShader() : FRaymarchVolumeShader() {}
 
-	FLightPropagationShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FRaymarchVolumeShader(Initializer) {
-		// Volume texture + Transfer function uniforms
-		Loop.Bind(Initializer.ParameterMap, TEXT("Loop"), SPF_Mandatory);
-		PermutationMatrix.Bind(Initializer.ParameterMap, TEXT("PermutationMatrix"), SPF_Mandatory);
+  FLightPropagationShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FRaymarchVolumeShader(Initializer) {
+    // Volume texture + Transfer function uniforms
+    Loop.Bind(Initializer.ParameterMap, TEXT("Loop"), SPF_Mandatory);
+    PermutationMatrix.Bind(Initializer.ParameterMap, TEXT("PermutationMatrix"), SPF_Mandatory);
 
-		ReadBuffer.Bind(Initializer.ParameterMap, TEXT("ReadBuffer"), SPF_Mandatory);
-		ReadBufferSampler.Bind(Initializer.ParameterMap, TEXT("ReadBufferSampler"), SPF_Mandatory);
+    ReadBuffer.Bind(Initializer.ParameterMap, TEXT("ReadBuffer"), SPF_Mandatory);
+    ReadBufferSampler.Bind(Initializer.ParameterMap, TEXT("ReadBufferSampler"), SPF_Mandatory);
 
-		// Light uniforms
-		WriteBuffer.Bind(Initializer.ParameterMap, TEXT("WriteBuffer"), SPF_Mandatory);
-	}
-	
-	// Sets loop-dependent uniforms in the pipeline.
-	void SetLoop(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
-		const unsigned loopIndex, const FTexture2DRHIRef pReadBuffer,
-		const FSamplerStateRHIRef pReadBuffSampler,
-		const FUnorderedAccessViewRHIRef pWriteBuffer) {
-		// Actually sets the shader uniforms in the pipeline.
-		SetShaderValue(RHICmdList, ShaderRHI, Loop, loopIndex);
-		// Set read/write buffers.
-		SetUAVParameter(RHICmdList, ShaderRHI, WriteBuffer, pWriteBuffer);
-		SetTextureParameter(RHICmdList, ShaderRHI, ReadBuffer, ReadBufferSampler, pReadBuffSampler,
-			pReadBuffer);
-	}
+    // Light uniforms
+    WriteBuffer.Bind(Initializer.ParameterMap, TEXT("WriteBuffer"), SPF_Mandatory);
+  }
 
-	void SetPermutationMatrix(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FMatrix PermMatrix) {
-		SetShaderValue(RHICmdList, ShaderRHI, PermutationMatrix, PermMatrix);
-	}
+  // Sets loop-dependent uniforms in the pipeline.
+  void SetLoop(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+               const unsigned loopIndex, const FTexture2DRHIRef pReadBuffer,
+               const FSamplerStateRHIRef pReadBuffSampler,
+               const FUnorderedAccessViewRHIRef pWriteBuffer) {
+    // Actually sets the shader uniforms in the pipeline.
+    SetShaderValue(RHICmdList, ShaderRHI, Loop, loopIndex);
+    // Set read/write buffers.
+    SetUAVParameter(RHICmdList, ShaderRHI, WriteBuffer, pWriteBuffer);
+    SetTextureParameter(RHICmdList, ShaderRHI, ReadBuffer, ReadBufferSampler, pReadBuffSampler,
+                        pReadBuffer);
+  }
 
-	virtual void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) override {
-		// Unbind volume buffer.	
-		FRaymarchVolumeShader::UnbindResources(RHICmdList, ShaderRHI);
-		SetUAVParameter(RHICmdList, ShaderRHI, WriteBuffer, FUnorderedAccessViewRHIParamRef());
-		SetTextureParameter(RHICmdList, ShaderRHI, ReadBuffer, FTextureRHIParamRef());
-	}
+  void SetPermutationMatrix(FRHICommandListImmediate& RHICmdList,
+                            FComputeShaderRHIParamRef ShaderRHI, FMatrix PermMatrix) {
+    SetShaderValue(RHICmdList, ShaderRHI, PermutationMatrix, PermMatrix);
+  }
 
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FRaymarchVolumeShader::Serialize(Ar);
-		Ar << Loop << PermutationMatrix << ReadBuffer << ReadBufferSampler << WriteBuffer;
-		return bShaderHasOutdatedParameters;
-	}
+  virtual void UnbindResources(FRHICommandListImmediate& RHICmdList,
+                               FComputeShaderRHIParamRef ShaderRHI) override {
+    // Unbind volume buffer.
+    FRaymarchVolumeShader::UnbindResources(RHICmdList, ShaderRHI);
+    SetUAVParameter(RHICmdList, ShaderRHI, WriteBuffer, FUnorderedAccessViewRHIParamRef());
+    SetTextureParameter(RHICmdList, ShaderRHI, ReadBuffer, FTextureRHIParamRef());
+  }
+
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FRaymarchVolumeShader::Serialize(Ar);
+    Ar << Loop << PermutationMatrix << ReadBuffer << ReadBufferSampler << WriteBuffer;
+    return bShaderHasOutdatedParameters;
+  }
 
 protected:
-	// Volume texture + transfer function resource parameters
-	FShaderParameter Loop;
-	FShaderParameter PermutationMatrix;
-	// Read buffer texture and sampler.
-	FShaderResourceParameter ReadBuffer;
-	FShaderResourceParameter ReadBufferSampler;
-	// Write buffer UAV.
-	FShaderResourceParameter WriteBuffer;
+  // Volume texture + transfer function resource parameters
+  FShaderParameter Loop;
+  FShaderParameter PermutationMatrix;
+  // Read buffer texture and sampler.
+  FShaderResourceParameter ReadBuffer;
+  FShaderResourceParameter ReadBufferSampler;
+  // Write buffer UAV.
+  FShaderResourceParameter WriteBuffer;
 };
 
 class FDirLightPropagationShader : public FLightPropagationShader {
 public:
+  FDirLightPropagationShader() : FLightPropagationShader() {}
 
-	FDirLightPropagationShader(): FLightPropagationShader() {}
+  FDirLightPropagationShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FLightPropagationShader(Initializer) {
+    // Volume texture + Transfer function uniforms
+    PrevPixelOffset.Bind(Initializer.ParameterMap, TEXT("PrevPixelOffset"), SPF_Mandatory);
+  }
 
+  void SetUVOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                   FVector2D PixelOffset) {
+    SetShaderValue(RHICmdList, ShaderRHI, PrevPixelOffset, PixelOffset);
+  }
 
-	FDirLightPropagationShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FLightPropagationShader(Initializer) {
-		// Volume texture + Transfer function uniforms
-		PrevPixelOffset.Bind(Initializer.ParameterMap, TEXT("PrevPixelOffset"), SPF_Mandatory);
-	}
-
-	void SetUVOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FVector2D PixelOffset) {
-		SetShaderValue(RHICmdList, ShaderRHI, PrevPixelOffset, PixelOffset);
-	}
-
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FLightPropagationShader::Serialize(Ar);
-		Ar << PrevPixelOffset;
-		return bShaderHasOutdatedParameters;
-	}
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FLightPropagationShader::Serialize(Ar);
+    Ar << PrevPixelOffset;
+    return bShaderHasOutdatedParameters;
+  }
 
 protected:
-	// Tells the shader the pixel offset for reading from the previous loop's buffer
-	FShaderParameter PrevPixelOffset;
+  // Tells the shader the pixel offset for reading from the previous loop's buffer
+  FShaderParameter PrevPixelOffset;
 };
 
 class FAddDirLightShader : public FDirLightPropagationShader {
-
 public:
-	FAddDirLightShader() : FDirLightPropagationShader() {}
+  FAddDirLightShader() : FDirLightPropagationShader() {}
 
-	FAddDirLightShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FDirLightPropagationShader(Initializer) {
-		// Volume texture + Transfer function uniforms
-		bAdded.Bind(Initializer.ParameterMap, TEXT("bAdded"), SPF_Mandatory);
-	}
+  FAddDirLightShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FDirLightPropagationShader(Initializer) {
+    // Volume texture + Transfer function uniforms
+    bAdded.Bind(Initializer.ParameterMap, TEXT("bAdded"), SPF_Mandatory);
+  }
 
-	void SetLightAdded(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, bool bLightAdded) {
-		// Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
-		SetShaderValue(RHICmdList, ShaderRHI, bAdded, bLightAdded ? 1 : -1);
-	}
+  void SetLightAdded(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                     bool bLightAdded) {
+    // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
+    SetShaderValue(RHICmdList, ShaderRHI, bAdded, bLightAdded ? 1 : -1);
+  }
 
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FDirLightPropagationShader::Serialize(Ar);
-		Ar << bAdded;
-		return bShaderHasOutdatedParameters;
-	}
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FDirLightPropagationShader::Serialize(Ar);
+    Ar << bAdded;
+    return bShaderHasOutdatedParameters;
+  }
 
 protected:
-	// Tells the shader the pixel offset for reading from the previous loop's buffer
-	FShaderParameter bAdded;
+  // Tells the shader the pixel offset for reading from the previous loop's buffer
+  FShaderParameter bAdded;
 };
 
-
 class FChangeDirLightShader : public FDirLightPropagationShader {
-
 public:
-	FChangeDirLightShader() : FDirLightPropagationShader() {}
+  FChangeDirLightShader() : FDirLightPropagationShader() {}
 
-	FChangeDirLightShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FDirLightPropagationShader(Initializer) {
-		// Volume texture + Transfer function uniforms
-		RemovedPrevPixelOffset.Bind(Initializer.ParameterMap, TEXT("RemovedPrevPixelOffset"), SPF_Mandatory);
-		RemovedReadBuffer.Bind(Initializer.ParameterMap, TEXT("RemovedReadBuffer"), SPF_Mandatory);
-		RemovedReadBufferSampler.Bind(Initializer.ParameterMap, TEXT("RemovedReadBufferSampler"), SPF_Mandatory);
-		RemovedWriteBuffer.Bind(Initializer.ParameterMap, TEXT("RemovedWriteBuffer"), SPF_Mandatory);
-	}
+  FChangeDirLightShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FDirLightPropagationShader(Initializer) {
+    // Volume texture + Transfer function uniforms
+    RemovedPrevPixelOffset.Bind(Initializer.ParameterMap, TEXT("RemovedPrevPixelOffset"),
+                                SPF_Mandatory);
+    RemovedReadBuffer.Bind(Initializer.ParameterMap, TEXT("RemovedReadBuffer"), SPF_Mandatory);
+    RemovedReadBufferSampler.Bind(Initializer.ParameterMap, TEXT("RemovedReadBufferSampler"),
+                                  SPF_Mandatory);
+    RemovedWriteBuffer.Bind(Initializer.ParameterMap, TEXT("RemovedWriteBuffer"), SPF_Mandatory);
+  }
 
-	// Sets loop-dependent uniforms in the pipeline.
-	void SetLoop(FRHICommandListImmediate& RHICmdList, 
-		FComputeShaderRHIParamRef ShaderRHI,
-		const unsigned loopIndex, 
-		const FTexture2DRHIRef pRemovedReadBuffer,
-		const FSamplerStateRHIRef pRemovedReadBuffSampler,
-		const FUnorderedAccessViewRHIRef pRemovedWriteBuffer,
-		const FTexture2DRHIRef pAddedReadBuffer,
-		const FSamplerStateRHIRef pAddedReadBuffSampler,
-		const FUnorderedAccessViewRHIRef pAddedWriteBuffer) {
-		// Actually sets the shader uniforms in the pipeline.
-		FLightPropagationShader::SetLoop(RHICmdList, ShaderRHI, loopIndex, pAddedReadBuffer, pAddedReadBuffSampler, pAddedWriteBuffer);
-		// Set read/write buffers for removed light.
-		SetUAVParameter(RHICmdList, ShaderRHI, RemovedWriteBuffer, pRemovedWriteBuffer);
-		SetTextureParameter(RHICmdList, ShaderRHI, RemovedReadBuffer, RemovedReadBufferSampler, pRemovedReadBuffSampler,
-			pRemovedReadBuffer);
-	}
+  // Sets loop-dependent uniforms in the pipeline.
+  void SetLoop(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+               const unsigned loopIndex, const FTexture2DRHIRef pRemovedReadBuffer,
+               const FSamplerStateRHIRef pRemovedReadBuffSampler,
+               const FUnorderedAccessViewRHIRef pRemovedWriteBuffer,
+               const FTexture2DRHIRef pAddedReadBuffer,
+               const FSamplerStateRHIRef pAddedReadBuffSampler,
+               const FUnorderedAccessViewRHIRef pAddedWriteBuffer) {
+    // Actually sets the shader uniforms in the pipeline.
+    FLightPropagationShader::SetLoop(RHICmdList, ShaderRHI, loopIndex, pAddedReadBuffer,
+                                     pAddedReadBuffSampler, pAddedWriteBuffer);
+    // Set read/write buffers for removed light.
+    SetUAVParameter(RHICmdList, ShaderRHI, RemovedWriteBuffer, pRemovedWriteBuffer);
+    SetTextureParameter(RHICmdList, ShaderRHI, RemovedReadBuffer, RemovedReadBufferSampler,
+                        pRemovedReadBuffSampler, pRemovedReadBuffer);
+  }
 
-	void SetRemovedPixelOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FVector2D PixelOffset) {
-		// Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
-		SetShaderValue(RHICmdList, ShaderRHI, RemovedPrevPixelOffset, PixelOffset);
-	}
+  void SetRemovedPixelOffset(FRHICommandListImmediate& RHICmdList,
+                             FComputeShaderRHIParamRef ShaderRHI, FVector2D PixelOffset) {
+    // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
+    SetShaderValue(RHICmdList, ShaderRHI, RemovedPrevPixelOffset, PixelOffset);
+  }
 
-	void SetPixelOffsets(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FVector2D RemovedPixelOffset, FVector2D AddedPixelOffset)
-	{
-		SetShaderValue(RHICmdList, ShaderRHI, RemovedPrevPixelOffset, RemovedPixelOffset);
-		SetShaderValue(RHICmdList, ShaderRHI, PrevPixelOffset, AddedPixelOffset);
-	}
+  void SetPixelOffsets(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                       FVector2D RemovedPixelOffset, FVector2D AddedPixelOffset) {
+    SetShaderValue(RHICmdList, ShaderRHI, RemovedPrevPixelOffset, RemovedPixelOffset);
+    SetShaderValue(RHICmdList, ShaderRHI, PrevPixelOffset, AddedPixelOffset);
+  }
 
-	void SetStepSizes(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, float pRemovedStepSize, float pAddedStepSize)
-	{
-		SetShaderValue(RHICmdList, ShaderRHI, RemovedStepSize, pRemovedStepSize);
-		SetShaderValue(RHICmdList, ShaderRHI, StepSize, pAddedStepSize);
-	}
+  void SetStepSizes(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                    float pRemovedStepSize, float pAddedStepSize) {
+    SetShaderValue(RHICmdList, ShaderRHI, RemovedStepSize, pRemovedStepSize);
+    SetShaderValue(RHICmdList, ShaderRHI, StepSize, pAddedStepSize);
+  }
 
-	virtual void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) override {
-		// Unbind parent and also our added parameters.
-		FDirLightPropagationShader::UnbindResources(RHICmdList, ShaderRHI);
-		SetUAVParameter(RHICmdList, ShaderRHI, RemovedWriteBuffer, FUnorderedAccessViewRHIParamRef());
-		SetTextureParameter(RHICmdList, ShaderRHI, RemovedReadBuffer, FTextureRHIParamRef());
-	}
+  virtual void UnbindResources(FRHICommandListImmediate& RHICmdList,
+                               FComputeShaderRHIParamRef ShaderRHI) override {
+    // Unbind parent and also our added parameters.
+    FDirLightPropagationShader::UnbindResources(RHICmdList, ShaderRHI);
+    SetUAVParameter(RHICmdList, ShaderRHI, RemovedWriteBuffer, FUnorderedAccessViewRHIParamRef());
+    SetTextureParameter(RHICmdList, ShaderRHI, RemovedReadBuffer, FTextureRHIParamRef());
+  }
 
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FDirLightPropagationShader::Serialize(Ar);
-		Ar << RemovedPrevPixelOffset << RemovedReadBuffer << RemovedReadBufferSampler << RemovedWriteBuffer << RemovedStepSize;
-		return bShaderHasOutdatedParameters;
-	}
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FDirLightPropagationShader::Serialize(Ar);
+    Ar << RemovedPrevPixelOffset << RemovedReadBuffer << RemovedReadBufferSampler
+       << RemovedWriteBuffer << RemovedStepSize;
+    return bShaderHasOutdatedParameters;
+  }
 
 protected:
-	// Same collection of parameters as for a dir light shader, but these ones are the ones of the removed light.
+  // Same collection of parameters as for a dir light shader, but these ones are the ones of the
+  // removed light.
 
-	// Tells the shader the pixel offset for reading from the previous loop's buffer
-	FShaderParameter RemovedPrevPixelOffset;
+  // Tells the shader the pixel offset for reading from the previous loop's buffer
+  FShaderParameter RemovedPrevPixelOffset;
 
-    FShaderResourceParameter RemovedReadBuffer;
-	FShaderResourceParameter RemovedReadBufferSampler;
-	// Write buffer UAV.
-	FShaderResourceParameter RemovedWriteBuffer;
-	// Removed light step size (is different than added one's)
-	FShaderParameter RemovedStepSize;
-
+  FShaderResourceParameter RemovedReadBuffer;
+  FShaderResourceParameter RemovedReadBufferSampler;
+  // Write buffer UAV.
+  FShaderResourceParameter RemovedWriteBuffer;
+  // Removed light step size (is different than added one's)
+  FShaderParameter RemovedStepSize;
 };
 
 class FAddDirLightShaderSingle : public FAddDirLightShader {
+  DECLARE_SHADER_TYPE(FAddDirLightShaderSingle, Global)
+public:
+  static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
+    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+  }
 
-	DECLARE_SHADER_TYPE(FAddDirLightShaderSingle, Global)
-	public:
-		static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
-			return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-		}
+  FAddDirLightShaderSingle() : FAddDirLightShader() {}
 
-	FAddDirLightShaderSingle() : FAddDirLightShader() {}
+  FAddDirLightShaderSingle(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FAddDirLightShader(Initializer) {
+    // Volume texture + Transfer function uniforms
+    ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"), SPF_Mandatory);
+    UVWOffset.Bind(Initializer.ParameterMap, TEXT("UVWOffset"), SPF_Mandatory);
+  }
 
-	FAddDirLightShaderSingle(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FAddDirLightShader(Initializer) {
-		// Volume texture + Transfer function uniforms
-		ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"), SPF_Mandatory);
-		UVWOffset.Bind(Initializer.ParameterMap, TEXT("UVWOffset"), SPF_Mandatory);
-	}
+  void SetALightVolume(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                       FUnorderedAccessViewRHIRef pALightVolume) {
+    // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
+    SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pALightVolume);
+  }
 
-	void SetALightVolume(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FUnorderedAccessViewRHIRef pALightVolume) {
-		// Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
-		SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pALightVolume);
-	}
+  void SetUVWOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                    FVector pUVWOffset) {
+    SetShaderValue(RHICmdList, ShaderRHI, UVWOffset, pUVWOffset);
+  }
 
-	void SetUVWOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FVector pUVWOffset) {
-		SetShaderValue(RHICmdList, ShaderRHI, UVWOffset, pUVWOffset);
-	}
+  virtual void UnbindResources(FRHICommandListImmediate& RHICmdList,
+                               FComputeShaderRHIParamRef ShaderRHI) override {
+    // Unbind parent and also our added parameter.
+    FAddDirLightShader::UnbindResources(RHICmdList, ShaderRHI);
+    SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, FUnorderedAccessViewRHIParamRef());
+  }
 
-	virtual void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) override {
-		// Unbind parent and also our added parameter.
-		FAddDirLightShader::UnbindResources(RHICmdList, ShaderRHI);
-		SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, FUnorderedAccessViewRHIParamRef());
-	}
-
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FAddDirLightShader::Serialize(Ar);
-		Ar << ALightVolume << UVWOffset;
-		return bShaderHasOutdatedParameters;
-	}
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FAddDirLightShader::Serialize(Ar);
+    Ar << ALightVolume << UVWOffset;
+    return bShaderHasOutdatedParameters;
+  }
 
 protected:
-	// Tells the shader the pixel offset for reading from the previous loop's buffer
-	FShaderResourceParameter ALightVolume;
-	FShaderParameter UVWOffset;
+  // Tells the shader the pixel offset for reading from the previous loop's buffer
+  FShaderResourceParameter ALightVolume;
+  FShaderParameter UVWOffset;
 };
-
 
 class FChangeDirLightShaderSingle : public FChangeDirLightShader {
-	DECLARE_SHADER_TYPE(FChangeDirLightShaderSingle, Global)
+  DECLARE_SHADER_TYPE(FChangeDirLightShaderSingle, Global)
 public:
-	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
-		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-	}
+  static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
+    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+  }
 
-	FChangeDirLightShaderSingle() : FChangeDirLightShader() {}
+  FChangeDirLightShaderSingle() : FChangeDirLightShader() {}
 
-	FChangeDirLightShaderSingle(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FChangeDirLightShader(Initializer) {
-		// Volume texture + Transfer function uniforms
-		ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"), SPF_Mandatory);
-	}
+  FChangeDirLightShaderSingle(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FChangeDirLightShader(Initializer) {
+    // Volume texture + Transfer function uniforms
+    ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"), SPF_Mandatory);
+  }
 
-	void SetALightVolume(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FUnorderedAccessViewRHIRef pALightVolume) {
-		// Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
-		SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pALightVolume);
-	}
+  void SetALightVolume(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                       FUnorderedAccessViewRHIRef pALightVolume) {
+    // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
+    SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pALightVolume);
+  }
 
-	virtual void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) override {
-		// Unbind parent and also our added parameter.
-		FChangeDirLightShader::UnbindResources(RHICmdList, ShaderRHI);
-		SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, FUnorderedAccessViewRHIParamRef());
-	}
+  virtual void UnbindResources(FRHICommandListImmediate& RHICmdList,
+                               FComputeShaderRHIParamRef ShaderRHI) override {
+    // Unbind parent and also our added parameter.
+    FChangeDirLightShader::UnbindResources(RHICmdList, ShaderRHI);
+    SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, FUnorderedAccessViewRHIParamRef());
+  }
 
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FChangeDirLightShader::Serialize(Ar);
-		Ar << ALightVolume;
-		return bShaderHasOutdatedParameters;
-	}
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FChangeDirLightShader::Serialize(Ar);
+    Ar << ALightVolume;
+    return bShaderHasOutdatedParameters;
+  }
 
 protected:
-	// Tells the shader the pixel offset for reading from the previous loop's buffer
-	FShaderResourceParameter ALightVolume;
+  // Tells the shader the pixel offset for reading from the previous loop's buffer
+  FShaderResourceParameter ALightVolume;
 };
-
-
 
 class FMakeMaxMipsShader : public FGlobalShader {
-	DECLARE_SHADER_TYPE(FMakeMaxMipsShader, Global)
+  DECLARE_SHADER_TYPE(FMakeMaxMipsShader, Global)
 public:
-	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
-		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-	}
+  static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
+    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+  }
 
-	FMakeMaxMipsShader() : FGlobalShader() {}
+  FMakeMaxMipsShader() : FGlobalShader() {}
 
-	FMakeMaxMipsShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FGlobalShader(Initializer) {
-		// Volume texture + Transfer function uniforms
-		VolumeLowMip.Bind(Initializer.ParameterMap, TEXT("VolumeLowMip"), SPF_Mandatory);
-		VolumeHighMip.Bind(Initializer.ParameterMap, TEXT("VolumeHighMip"), SPF_Mandatory);
-		TransferFunc.Bind(Initializer.ParameterMap, TEXT("TransferFunc"), SPF_Optional);
-		UsingTF.Bind(Initializer.ParameterMap, TEXT("UsingTF"), SPF_Mandatory);
-	}
+  FMakeMaxMipsShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FGlobalShader(Initializer) {
+    // Volume texture + Transfer function uniforms
+    VolumeLowMip.Bind(Initializer.ParameterMap, TEXT("VolumeLowMip"), SPF_Mandatory);
+    VolumeHighMip.Bind(Initializer.ParameterMap, TEXT("VolumeHighMip"), SPF_Mandatory);
+    TransferFunc.Bind(Initializer.ParameterMap, TEXT("TransferFunc"), SPF_Optional);
+    UsingTF.Bind(Initializer.ParameterMap, TEXT("UsingTF"), SPF_Mandatory);
+  }
 
-	void SetResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, FUnorderedAccessViewRHIRef pVolumeLowMip,
-		FUnorderedAccessViewRHIRef pVolumeHighMip, const FTexture2DRHIRef pTransferFunc = nullptr) {
-		// Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
-		SetUAVParameter(RHICmdList, ShaderRHI, VolumeLowMip, pVolumeLowMip);
-		SetUAVParameter(RHICmdList, ShaderRHI, VolumeHighMip, pVolumeHighMip);
+  void SetResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                    FUnorderedAccessViewRHIRef pVolumeLowMip,
+                    FUnorderedAccessViewRHIRef pVolumeHighMip,
+                    const FTexture2DRHIRef pTransferFunc = nullptr) {
+    // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
+    SetUAVParameter(RHICmdList, ShaderRHI, VolumeLowMip, pVolumeLowMip);
+    SetUAVParameter(RHICmdList, ShaderRHI, VolumeHighMip, pVolumeHighMip);
 
-		SetShaderValue(RHICmdList, ShaderRHI, UsingTF, pTransferFunc != nullptr);
-		if (pTransferFunc) {
-			SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, pTransferFunc);
-		}
-	}
+    SetShaderValue(RHICmdList, ShaderRHI, UsingTF, pTransferFunc != nullptr);
+    if (pTransferFunc) {
+      SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, pTransferFunc);
+    }
+  }
 
-	void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) {
-		// Unbind parent and also our added parameter.
-		SetUAVParameter(RHICmdList, ShaderRHI, VolumeLowMip, FUnorderedAccessViewRHIParamRef());
-		SetUAVParameter(RHICmdList, ShaderRHI, VolumeHighMip, FUnorderedAccessViewRHIParamRef());
-		SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, FTexture2DRHIRef());
-	}
+  void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) {
+    // Unbind parent and also our added parameter.
+    SetUAVParameter(RHICmdList, ShaderRHI, VolumeLowMip, FUnorderedAccessViewRHIParamRef());
+    SetUAVParameter(RHICmdList, ShaderRHI, VolumeHighMip, FUnorderedAccessViewRHIParamRef());
+    SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, FTexture2DRHIRef());
+  }
 
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << VolumeLowMip << VolumeHighMip << TransferFunc << UsingTF;
-		return bShaderHasOutdatedParameters;
-	}
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+    Ar << VolumeLowMip << VolumeHighMip << TransferFunc << UsingTF;
+    return bShaderHasOutdatedParameters;
+  }
 
 protected:
-	// Tells the shader the pixel offset for reading from the previous loop's buffer
-	FShaderResourceParameter VolumeLowMip;
-	FShaderResourceParameter VolumeHighMip;
+  // Tells the shader the pixel offset for reading from the previous loop's buffer
+  FShaderResourceParameter VolumeLowMip;
+  FShaderResourceParameter VolumeHighMip;
 
-	FShaderResourceParameter TransferFunc;
-	FShaderParameter UsingTF;
+  FShaderResourceParameter TransferFunc;
+  FShaderParameter UsingTF;
 };
-
 
 class FMakeDistanceFieldShader : public FGlobalShader {
-	DECLARE_SHADER_TYPE(FMakeDistanceFieldShader, Global)
+  DECLARE_SHADER_TYPE(FMakeDistanceFieldShader, Global)
 public:
-	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
-		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-	}
+  static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
+    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+  }
 
-	FMakeDistanceFieldShader() : FGlobalShader() {}
+  FMakeDistanceFieldShader() : FGlobalShader() {}
 
-	FMakeDistanceFieldShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FGlobalShader(Initializer) {
-		// Volume texture + Transfer function uniforms
-		Volume.Bind(Initializer.ParameterMap, TEXT("Volume"), SPF_Mandatory);
-		VolumeSampler.Bind(Initializer.ParameterMap, TEXT("VolumeSampler"), SPF_Mandatory);
-		TransferFunc.Bind(Initializer.ParameterMap, TEXT("TransferFunc"), SPF_Mandatory);
-		TransferFuncSampler.Bind(Initializer.ParameterMap, TEXT("TransferFuncSampler"), SPF_Mandatory);
-		DistanceFieldVolume.Bind(Initializer.ParameterMap, TEXT("DistanceFieldVolume"), SPF_Mandatory);
-		CuboidSize.Bind(Initializer.ParameterMap, TEXT("CuboidSize"), SPF_Mandatory);
-		Threshold.Bind(Initializer.ParameterMap, TEXT("Threshold"), SPF_Mandatory);
-		MaxDistance.Bind(Initializer.ParameterMap, TEXT("MaxDistance"), SPF_Mandatory);
-		ZOffset.Bind(Initializer.ParameterMap, TEXT("ZOffset"), SPF_Mandatory);
-		
-	}
+  FMakeDistanceFieldShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FGlobalShader(Initializer) {
+    // Volume texture + Transfer function uniforms
+    Volume.Bind(Initializer.ParameterMap, TEXT("Volume"), SPF_Mandatory);
+    VolumeSampler.Bind(Initializer.ParameterMap, TEXT("VolumeSampler"), SPF_Mandatory);
+    TransferFunc.Bind(Initializer.ParameterMap, TEXT("TransferFunc"), SPF_Mandatory);
+    TransferFuncSampler.Bind(Initializer.ParameterMap, TEXT("TransferFuncSampler"), SPF_Mandatory);
+    DistanceFieldVolume.Bind(Initializer.ParameterMap, TEXT("DistanceFieldVolume"), SPF_Mandatory);
+    CuboidSize.Bind(Initializer.ParameterMap, TEXT("CuboidSize"), SPF_Mandatory);
+    Threshold.Bind(Initializer.ParameterMap, TEXT("Threshold"), SPF_Mandatory);
+    MaxDistance.Bind(Initializer.ParameterMap, TEXT("MaxDistance"), SPF_Mandatory);
+    ZOffset.Bind(Initializer.ParameterMap, TEXT("ZOffset"), SPF_Mandatory);
+  }
 
-	void SetResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, 
-		FUnorderedAccessViewRHIRef pDistanceFieldVolume, FTexture3DRHIRef pVolume, 
-	  FTexture2DRHIRef pTransferFunc, FIntVector pCuboidSize, float pThreshold, float pMaxDistance) {
-		// Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
-		SetUAVParameter(RHICmdList, ShaderRHI, DistanceFieldVolume, pDistanceFieldVolume);
-		
-		// Read the Volume and TF @ the closest point, do not interpolate
-		FSamplerStateRHIParamRef SamplerRef =
-			TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
-		SetTextureParameter(RHICmdList, ShaderRHI, Volume, VolumeSampler, SamplerRef, pVolume);
-		SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, TransferFuncSampler, SamplerRef, pTransferFunc);
-		
-		SetShaderValue(RHICmdList, ShaderRHI, CuboidSize, pCuboidSize);
-		SetShaderValue(RHICmdList, ShaderRHI, Threshold, pThreshold);
-		SetShaderValue(RHICmdList, ShaderRHI, MaxDistance, pMaxDistance);
+  void SetResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                    FUnorderedAccessViewRHIRef pDistanceFieldVolume, FTexture3DRHIRef pVolume,
+                    FTexture2DRHIRef pTransferFunc, FIntVector pCuboidSize, float pThreshold,
+                    float pMaxDistance) {
+    // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
+    SetUAVParameter(RHICmdList, ShaderRHI, DistanceFieldVolume, pDistanceFieldVolume);
 
-	}
+    // Read the Volume and TF @ the closest point, do not interpolate
+    FSamplerStateRHIParamRef SamplerRef =
+        TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+    SetTextureParameter(RHICmdList, ShaderRHI, Volume, VolumeSampler, SamplerRef, pVolume);
+    SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, TransferFuncSampler, SamplerRef,
+                        pTransferFunc);
 
-	void SetZOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI, unsigned pZOffset) {
-		SetShaderValue(RHICmdList, ShaderRHI, ZOffset, pZOffset);
-	}
+    SetShaderValue(RHICmdList, ShaderRHI, CuboidSize, pCuboidSize);
+    SetShaderValue(RHICmdList, ShaderRHI, Threshold, pThreshold);
+    SetShaderValue(RHICmdList, ShaderRHI, MaxDistance, pMaxDistance);
+  }
 
-	void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) {
-		// Unbind parent and also our added parameter.
-		SetUAVParameter(RHICmdList, ShaderRHI, DistanceFieldVolume, FUnorderedAccessViewRHIParamRef());
-		SetTextureParameter(RHICmdList, ShaderRHI, Volume, FTexture2DRHIRef());
-		SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, FTexture2DRHIRef());
-	}
+  void SetZOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                  unsigned pZOffset) {
+    SetShaderValue(RHICmdList, ShaderRHI, ZOffset, pZOffset);
+  }
 
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << Volume << VolumeSampler << TransferFunc << TransferFuncSampler<< DistanceFieldVolume<< 
-			CuboidSize<< Threshold<< MaxDistance << ZOffset;
-		return bShaderHasOutdatedParameters;
-	}
+  void UnbindResources(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI) {
+    // Unbind parent and also our added parameter.
+    SetUAVParameter(RHICmdList, ShaderRHI, DistanceFieldVolume, FUnorderedAccessViewRHIParamRef());
+    SetTextureParameter(RHICmdList, ShaderRHI, Volume, FTexture2DRHIRef());
+    SetTextureParameter(RHICmdList, ShaderRHI, TransferFunc, FTexture2DRHIRef());
+  }
+
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+    Ar << Volume << VolumeSampler << TransferFunc << TransferFuncSampler << DistanceFieldVolume
+       << CuboidSize << Threshold << MaxDistance << ZOffset;
+    return bShaderHasOutdatedParameters;
+  }
 
 protected:
-	// Tells the shader the pixel offset for reading from the previous loop's buffer
-	FShaderResourceParameter Volume;
-	FShaderResourceParameter VolumeSampler;
+  // Tells the shader the pixel offset for reading from the previous loop's buffer
+  FShaderResourceParameter Volume;
+  FShaderResourceParameter VolumeSampler;
 
-	FShaderResourceParameter TransferFunc;
-	FShaderResourceParameter TransferFuncSampler;
+  FShaderResourceParameter TransferFunc;
+  FShaderResourceParameter TransferFuncSampler;
 
-	FShaderResourceParameter DistanceFieldVolume;
+  FShaderResourceParameter DistanceFieldVolume;
 
-	FShaderParameter CuboidSize;
-	FShaderParameter Threshold;
-	FShaderParameter MaxDistance;
-	FShaderParameter ZOffset;
+  FShaderParameter CuboidSize;
+  FShaderParameter Threshold;
+  FShaderParameter MaxDistance;
+  FShaderParameter ZOffset;
 };
-
-

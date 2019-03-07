@@ -68,7 +68,7 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
 
   FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
   ComputeShader->SetMarkedVolumeUAV(RHICmdList, cs, MarkedVolumeUAV);
-// As the label enum class is based on uint8 anyways, the cast is probably redundant.
+  // As the label enum class is based on uint8 anyways, the cast is probably redundant.
   ComputeShader->SetParameters(RHICmdList, cs, localCenterIntCoords, brush, (uint8)WrittenValue);
 
   DispatchComputeShader(RHICmdList, *ComputeShader, brush.X, brush.Y, brush.Z);
@@ -121,8 +121,8 @@ float SurgeryLabelToFloat(const FSurgeryLabel label) {
     case FSurgeryLabel::SL_Target: return (2.0 / 255.0);
     case FSurgeryLabel::SL_PotentialRisk: return (3.0 / 255.0);
     case FSurgeryLabel::SL_PotentialTarget: return (4.0 / 255.0);
-	// This shouldn't happen -> assert
-	default: check(0); return 0.0;
+    // This shouldn't happen -> assert
+    default: check(0); return 0.0;
   }
 }
 
@@ -134,11 +134,12 @@ void ULabelVolumeLibrary::LabelSphereInVolumeWorld(UVolumeTexture* MarkedVolume,
   if (MarkedVolume->Resource == NULL) return;
   // Call the actual rendering code on RenderThread.
 
-      ENQUEUE_RENDER_COMMAND(CaptureCommand)([=](FRHICommandListImmediate& RHICmdList) {
-        WriteSphereToVolume_RenderThread(
-            RHICmdList, MarkedVolume->Resource->TextureRHI->GetTexture3D(), BrushWorldCenter,
-            SphereRadiusWorld, WorldParameters, WrittenValue);
-      });
+  ENQUEUE_RENDER_COMMAND(CaptureCommand)
+  ([=](FRHICommandListImmediate& RHICmdList) {
+    WriteSphereToVolume_RenderThread(RHICmdList, MarkedVolume->Resource->TextureRHI->GetTexture3D(),
+                                     BrushWorldCenter, SphereRadiusWorld, WorldParameters,
+                                     WrittenValue);
+  });
 }
 
 #undef LOCTEXT_NAMESPACE
