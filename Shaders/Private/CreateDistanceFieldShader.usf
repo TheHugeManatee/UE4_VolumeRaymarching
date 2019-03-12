@@ -55,7 +55,7 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 
                 CurPos = GetUVW(pos, uResolution);
                 CurSample = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
-                CurSample = TransferFunc.SampleLevel(TransferFuncSampler, CurSample, 0).a;
+                CurSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurSample, 0.5), 0).a;
                 //ColorSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurSample, 0.5), 0).r;
 
                 // If color sample is above threshould, check if it is the closest one yet. If it is, save the distance.
@@ -86,7 +86,7 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 
                 CurPos = GetUVW(pos, uResolution);
                 CurSample = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
-                CurSample = TransferFunc.SampleLevel(TransferFuncSampler, CurSample, 0).a;
+                CurSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurSample, 0.5), 0).a;
                 //ColorSample = TransferFunc.SampleLevel(TransferFuncSampler, float2(CurSample, 0.5), 0).r;
 
                 // If color sample is above threshould, check if it is the closest one yet. If it is, save the distance.
