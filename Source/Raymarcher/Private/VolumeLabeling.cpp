@@ -81,36 +81,18 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
 
 void ULabelVolumeLibrary::CreateNewLabelingVolumeAsset(FString AssetName, FIntVector Dimensions,
                                                        UVolumeTexture*& OutTexture) {
-  EPixelFormat PixelFormat = PF_G8;
-  const long TotalSize =
-      Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
-
-  uint8* dummy = (uint8*)FMemory::Malloc(TotalSize);
-  FMemory::Memset(dummy, (uint8)0, TotalSize);
-
-  if (!CreateVolumeTextureAsset(AssetName, PixelFormat, Dimensions, dummy, OutTexture, false, false,
+  if (!CreateVolumeTextureAsset(AssetName, PF_G8, Dimensions, OutTexture, nullptr, false, false,
                                 true)) {
     GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow, "Failed creating the labeling volume.");
   }
-
-  FMemory::Free(dummy);
 }
 
 void ULabelVolumeLibrary::InitLabelingVolume(UVolumeTexture* LabelVolumeAsset,
                                              FIntVector Dimensions) {
-  EPixelFormat PixelFormat = PF_G8;
-  const long TotalSize =
-      Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
-  uint8* dummy = (uint8*)FMemory::Malloc(TotalSize);
-
-  FMemory::Memset(dummy, (uint8)0, TotalSize);
-  if (!UpdateVolumeTextureAsset(LabelVolumeAsset, PixelFormat, Dimensions, dummy, false, false,
-                                true)) {
+  if (!UpdateVolumeTextureAsset(LabelVolumeAsset, PF_G8, Dimensions, nullptr, false, false, true)) {
     GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow,
                                      "Failed initializing the labeling volume.");
   }
-
-  FMemory::Free(dummy);
 }
 
 float SurgeryLabelToFloat(const FSurgeryLabel label) {

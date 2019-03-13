@@ -145,8 +145,8 @@ UENUM(BlueprintType)
 enum class FCubeFace : uint8 {
   Right = 0,  // +X
   Left = 1,   // -X
-  Back = 2,  // +Y
-  Front = 3,   // -Y
+  Back = 2,   // +Y
+  Front = 3,  // -Y
   Top = 4,    // +Z
   Bottom = 5  // -Z
 };
@@ -233,6 +233,11 @@ public:
 void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Size,
                                    UVolumeTexture* inTexture);
 
+/** Writes a single layer (along X axis) of a volume texture to a 2D texture.*/
+void WriteVolumeTextureSlice_RenderThread(FRHICommandListImmediate& RHICmdList,
+                                          UVolumeTexture* VolumeTexture,
+                                          UTexture2D* WrittenSliceTexture, int Layer);
+
 FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt);
 
 uint32 GetBorderColorIntSingle(FDirLightParameters LightParams, FMajorAxes MajorAxes,
@@ -251,7 +256,7 @@ void ChangeDirLightInSingleLightVolume_RenderThread(FRHICommandListImmediate& RH
                                                     const FRaymarchWorldParameters WorldParameters);
 
 void ClearVolumeTexture_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                         FRHITexture3D* ALightVolumeResource, float ClearValue);
+                                     FRHITexture3D* ALightVolumeResource, float ClearValue);
 
 void GenerateVolumeTextureMipLevels_RenderThread(FRHICommandListImmediate& RHICmdList,
                                                  FIntVector Dimensions,
@@ -316,7 +321,8 @@ protected:
 };
 
 // Shader used for fast clearing of volume textures.
-// TODO - template on texture format, now only float-typable textures (which is most formats anyways)
+// TODO - template on texture format, now only float-typable textures (which is most formats
+// anyways)
 class FClearVolumeTextureShader : public FGlobalShader {
   DECLARE_SHADER_TYPE(FClearVolumeTextureShader, Global)
 
@@ -334,9 +340,8 @@ public:
     ZSize.Bind(Initializer.ParameterMap, TEXT("ZSize"), SPF_Mandatory);
   }
 
-  virtual void SetParameters(FRHICommandListImmediate& RHICmdList, 
-	   FUnorderedAccessViewRHIParamRef VolumeRef,
-	  float clearColor,
+  virtual void SetParameters(FRHICommandListImmediate& RHICmdList,
+                             FUnorderedAccessViewRHIParamRef VolumeRef, float clearColor,
                              int ZSizeParam) {
     FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
     SetUAVParameter(RHICmdList, ShaderRHI, Volume, VolumeRef);
@@ -359,6 +364,49 @@ protected:
   FShaderResourceParameter Volume;
   FShaderParameter ClearValue;
   FShaderParameter ZSize;
+};
+
+// Shader used for fast drawing of a single layer from a volume texture to a 2D texture
+class FWriteSliceToTextureShader : public FGlobalShader {
+  DECLARE_SHADER_TYPE(FWriteSliceToTextureShader, Global)
+
+public:
+  static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
+    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+  }
+
+  FWriteSliceToTextureShader(){};
+
+  FWriteSliceToTextureShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FGlobalShader(Initializer) {
+    Volume.Bind(Initializer.ParameterMap, TEXT("Volume"), SPF_Mandatory);
+    TextureUAV.Bind(Initializer.ParameterMap, TEXT("TextureUAV"), SPF_Mandatory);
+    Layer.Bind(Initializer.ParameterMap, TEXT("Layer"), SPF_Mandatory);
+  }
+
+  virtual void SetParameters(FRHICommandListImmediate& RHICmdList, FTexture3DRHIRef VolumeRef,
+                             FUnorderedAccessViewRHIParamRef TextureUAVRef, int pLayer) {
+    FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
+    SetUAVParameter(RHICmdList, ShaderRHI, TextureUAV, TextureUAVRef);
+    SetTextureParameter(RHICmdList, ShaderRHI, Volume, VolumeRef);
+    SetShaderValue(RHICmdList, ShaderRHI, Layer, pLayer);
+  }
+
+  void UnbindUAV(FRHICommandList& RHICmdList) {
+    SetUAVParameter(RHICmdList, GetComputeShader(), TextureUAV, FUnorderedAccessViewRHIParamRef());
+  }
+
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+    Ar << Volume << TextureUAV << Layer;
+    return bShaderHasOutdatedParameters;
+  }
+
+protected:
+  // Float values to be set to the alpha volume.
+  FShaderResourceParameter Volume;
+  FShaderResourceParameter TextureUAV;
+  FShaderParameter Layer;
 };
 
 // Declare compute shader for clearing a single-channel float UAV texture
@@ -416,7 +464,8 @@ public:
     TransferFunc.Bind(Initializer.ParameterMap, TEXT("TransferFunc"), SPF_Mandatory);
     TransferFuncSampler.Bind(Initializer.ParameterMap, TEXT("TransferFuncSampler"), SPF_Mandatory);
     LocalClippingCenter.Bind(Initializer.ParameterMap, TEXT("LocalClippingCenter"), SPF_Mandatory);
-    LocalClippingDirection.Bind(Initializer.ParameterMap, TEXT("LocalClippingDirection"), SPF_Mandatory);
+    LocalClippingDirection.Bind(Initializer.ParameterMap, TEXT("LocalClippingDirection"),
+                                SPF_Mandatory);
 
     TFIntensityDomain.Bind(Initializer.ParameterMap, TEXT("TFIntensityDomain"), SPF_Mandatory);
     StepSize.Bind(Initializer.ParameterMap, TEXT("StepSize"), SPF_Mandatory);

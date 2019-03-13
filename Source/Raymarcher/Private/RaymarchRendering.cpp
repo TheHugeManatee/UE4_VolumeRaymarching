@@ -36,6 +36,10 @@ IMPLEMENT_SHADER_TYPE(, FMakeDistanceFieldShader,
                       TEXT("/Plugin/VolumeRaymarching/Private/CreateDistanceFieldShader.usf"),
                       TEXT("MainComputeShader"), SF_Compute)
 
+IMPLEMENT_SHADER_TYPE(, FWriteSliceToTextureShader,
+                      TEXT("/Plugin/VolumeRaymarching/Private/WriteSliceToTextureShader.usf"),
+                      TEXT("MainComputeShader"), SF_Compute)
+
 #define NUM_THREADS_PER_GROUP_DIMENSION \
   32  // This has to be the same as in the compute shader's spec [X, X, 1]
 
@@ -366,7 +370,7 @@ FClippingPlaneParameters GetLocalClippingParameters(
                         WorldParameters.ClippingPlaneParameters.Center) /
                     (WorldParameters.MeshMaxBounds)) /
                    2.0) +
-                  0.5;
+                   0.5;
   // Get clipping direction in local space - here we don't care about the mesh size (as long as
   // it's a cube, which it really bloody better be).
 
@@ -382,6 +386,38 @@ FClippingPlaneParameters GetLocalClippingParameters(
   //  FColor::Yellow, debug);
 
   return RetVal;
+}
+
+/** Writes a single layer (along X axis) of a volume texture to a 2D texture.*/
+void WriteVolumeTextureSlice_RenderThread(FRHICommandListImmediate& RHICmdList,
+                                          UVolumeTexture* VolumeTexture,
+                                          UTexture2D* WrittenSliceTexture, int Layer) {
+  TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
+  TShaderMapRef<FWriteSliceToTextureShader> ComputeShader(GlobalShaderMap);
+
+  RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
+  // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+  // LightVolumeResource);
+  FUnorderedAccessViewRHIRef TextureUAV = RHICreateUnorderedAccessView(WrittenSliceTexture->Resource->TextureRHI);
+
+  // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
+  // no race conditions But we definitely need to transition the resource to Compute-shader
+  // accessible, otherwise the renderer might touch our textures while we're writing them.
+  RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
+                                EResourceTransitionPipeline::EGfxToCompute, TextureUAV);
+
+  ComputeShader->SetParameters(RHICmdList, VolumeTexture->Resource->TextureRHI->GetTexture3D(), TextureUAV, Layer);
+
+  uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)WrittenSliceTexture->GetSizeX(),
+                                              NUM_THREADS_PER_GROUP_DIMENSION);
+  uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)WrittenSliceTexture->GetSizeY(),
+                                              NUM_THREADS_PER_GROUP_DIMENSION);
+
+  DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
+  ComputeShader->UnbindUAV(RHICmdList);
+
+  RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
+                                EResourceTransitionPipeline::EComputeToGfx, TextureUAV);
 }
 
 FSamplerStateRHIRef GetBufferSamplerRef(uint32 BorderColorInt) {
@@ -799,7 +835,7 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
 }
 
 void ClearVolumeTexture_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                         FRHITexture3D* VolumeResourceRef, float ClearValues) {
+                                     FRHITexture3D* VolumeResourceRef, float ClearValues) {
   TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
   TShaderMapRef<FClearVolumeTextureShader> ComputeShader(GlobalShaderMap);
 
@@ -818,7 +854,8 @@ void ClearVolumeTexture_RenderThread(FRHICommandListImmediate& RHICmdList,
   RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
                                 EResourceTransitionPipeline::EGfxToCompute, VolumeUAVRef);
 
-  ComputeShader->SetParameters(RHICmdList, VolumeUAVRef, ClearValues, VolumeResourceRef->GetSizeZ());
+  ComputeShader->SetParameters(RHICmdList, VolumeUAVRef, ClearValues,
+                               VolumeResourceRef->GetSizeZ());
 
   uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)VolumeResourceRef->GetSizeX(),
                                               NUM_THREADS_PER_GROUP_DIMENSION);

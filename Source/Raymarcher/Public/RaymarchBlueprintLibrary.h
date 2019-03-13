@@ -208,10 +208,36 @@ public:
   static void GetDominantFaceNotX(FVector LocalDirectionVector, FCubeFace& DominantFace);
 
   /**
+    Returns a face normal in local space.
    */
   UFUNCTION(BlueprintPure, Category = "Raymarcher")
   static void GetFaceNormal(FCubeFace CubeFace, FVector& FaceNormalLocal);
 
+  /**
+  Returns a face that is to the right of the input face, when the cube is set with negative X
+  facing upwards and we're looking from the front.
+  */
   UFUNCTION(BlueprintPure, Category = "Raymarcher")
   static void GetRightFaceAlongNegX(FCubeFace CubeFace, FCubeFace& RightCubeFace);
+
+  /**
+  Initializes the provided 2D texture to be compatible with writing a slice of the provided
+  Volume Texture along X.
+  */
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+  static void Initialize2DTextureForSliceWrite(UVolumeTexture* VolumeTexture,
+                                               UTexture2D* WrittenSliceTexture);
+  /**
+  Writes the specified layer of the	volume texture into the provided 2D Texture.
+  Will fail if VolumeTexture doesn't have that many layers or if WrittenSliceTexture is
+  not UAV compatible.
+  */
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+  static void WriteVolumeTextureSlice(UVolumeTexture* VolumeTexture,
+                                      UTexture2D* WrittenSliceTexture, int Layer);
+
+  /**
+   Given a volume texture, this will copy the current texture content into the texture source.   This causes the current contents of the texture to be saved when you hit the save button,   instead of the source content this texture was created with.  */
+  // UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+  // static void UpdateVolumeTextureSource(UVolumeTexture* VolumeTexture);
 };

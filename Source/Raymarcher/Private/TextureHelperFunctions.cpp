@@ -4,7 +4,7 @@
 #include "TextureHelperFunctions.h"
 
 bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntVector Dimensions,
-                              uint8* BulkData, UVolumeTexture*& LoadedTexture, bool Persistent,
+                              UVolumeTexture*& LoadedTexture, uint8* BulkData, bool Persistent,
                               bool SaveNow, bool UAVCompatible) {
   FString PackageName = TEXT("/Game/GeneratedTextures/");
   PackageName += AssetName;
@@ -41,7 +41,12 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
   mip->BulkData.Lock(LOCK_READ_WRITE);
   // Allocate memory in the mip and copy the actual texture data inside
   uint8* ByteArray = (uint8*)mip->BulkData.Realloc(TotalSize);
-  FMemory::Memcpy(ByteArray, BulkData, TotalSize);
+
+  if (BulkData) {
+    FMemory::Memcpy(ByteArray, BulkData, TotalSize);
+  } else {
+    FMemory::Memset(ByteArray, 0, TotalSize);
+  }
 
   mip->BulkData.Unlock();
   // Add the new MIP to the list of mips.
@@ -50,7 +55,7 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
   // If saving fails because of unsupported source format when we want persistent, texture will be
   // updated, but false returned. This is a bit weird.
   bool RetVal =
-      HandleVolumeTextureEditorData(VolumeTexture, PixelFormat, Persistent, Dimensions, ByteArray);
+      HandleTextureEditorData(VolumeTexture, PixelFormat, Persistent, Dimensions, ByteArray);
 
   // Set the texture to be UAV Compatible if requested. Beware! Not all formats support this
   // (notably anything compressed).
@@ -142,14 +147,18 @@ bool UpdateVolumeTextureAsset(UVolumeTexture* VolumeTexture, EPixelFormat PixelF
   Mip->BulkData.Lock(LOCK_READ_WRITE);
   // Allocate memory in the mip and copy the actual texture data inside
   uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
-  FMemory::Memcpy(ByteArray, BulkData, TotalSize);
 
+  if (BulkData) {
+    FMemory::Memcpy(ByteArray, BulkData, TotalSize);
+  } else {
+    FMemory::Memset(ByteArray, 0, TotalSize);
+  }
   Mip->BulkData.Unlock();
 
   // If saving fails because of unsupported source format when we want persistent, texture will be
   // updated, but false returned. This is a bit weird.
   bool RetVal =
-      HandleVolumeTextureEditorData(VolumeTexture, PixelFormat, Persistent, Dimensions, ByteArray);
+      HandleTextureEditorData(VolumeTexture, PixelFormat, Persistent, Dimensions, ByteArray);
 
   // Set the texture to be UAV Compatible if requested. Beware! Not all formats support this
   // (notably anything compressed).
@@ -160,20 +169,20 @@ bool UpdateVolumeTextureAsset(UVolumeTexture* VolumeTexture, EPixelFormat PixelF
   return RetVal;
 }
 
-bool HandleVolumeTextureEditorData(UVolumeTexture* VolumeTexture, const EPixelFormat PixelFormat,
-                                   const bool Persistent, const FIntVector Dimensions,
-                                   const uint8* BulkData) {
+bool HandleTextureEditorData(UTexture* Texture, const EPixelFormat PixelFormat,
+                             const bool Persistent, const FIntVector Dimensions,
+                             const uint8* BulkData) {
   // Handle persistency and mipgens only if we're in editor!
 #if WITH_EDITORONLY_DATA
   // Todo - figure out how to tell the Texture Builder to REALLY LEAVE THE BLOODY MIPS ALONE
   // when setting TMGS_LeaveExistingMips and being persistent. Until then, we simply don't support
   // mips on generated textures. (We could support it on non-persistent textures, the code at the
   // bottom of this function shows how we could do that if needed.).
-  VolumeTexture->MipGenSettings = TMGS_NoMipmaps;
+  Texture->MipGenSettings = TMGS_NoMipmaps;
 
   // CompressionNone assures the texture is actually saved as we want when it is made persistent and
   // not in DXT1 format. Todo: Saving without compression does not work, figure out why.
-  VolumeTexture->CompressionNone = true;
+  Texture->CompressionNone = true;
 
   // If asset is to be persistent, handle creating the Source structure for it.
   if (Persistent) {
@@ -185,14 +194,35 @@ bool HandleVolumeTextureEditorData(UVolumeTexture* VolumeTexture, const EPixelFo
       return false;
     }
     // Otherwise initialize the source struct with our size and bulk data.
-    VolumeTexture->Source.Init(Dimensions.X, Dimensions.Y, Dimensions.Z, 1, TextureSourceFormat,
-                               BulkData);
+    Texture->Source.Init(Dimensions.X, Dimensions.Y, Dimensions.Z, 1, TextureSourceFormat,
+                         BulkData);
   }
 #endif  // WITH_EDITORONLY_DATA
   return true;
 }
 
-uint8* LoadFileIntoArray(const FString FileName, const int64 BytesToLoad) {
+void UpdateVolumeTextureSource_Impl(UVolumeTexture* Texture) {
+#if WITH_EDITORONLY_DATA
+  // If asset is to be persistent, handle creating the Source structure for it.
+  // If using a format that's not supported as Source format, fail.
+  ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(Texture->GetPixelFormat());
+  if (TextureSourceFormat == TSF_Invalid) {
+    GEngine->AddOnScreenDebugMessage(
+        0, 10, FColor::Red, "Trying to create persistent asset with unsupported pixel format!");
+    return;
+  }
+
+  FTexture2DMipMap& Mip = Texture->PlatformData->Mips[0];  // A reference
+  uint8* Data = (uint8*)Mip.BulkData.Lock(LOCK_READ_WRITE);
+
+  // Otherwise initialize the source struct with our size and bulk data.
+  Texture->Source.Init(Texture->GetSizeX(), Texture->GetSizeY(), Texture->GetSizeZ(), 1,
+                       TextureSourceFormat, Data);
+  Mip.BulkData.Unlock();
+#endif  // WITH_EDITORONLY_DATA
+}
+
+uint8* LoadRawFileIntoArray(const FString FileName, const int64 BytesToLoad) {
   IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
   // Try opening as absolute path.
   IFileHandle* FileHandle = PlatformFile.OpenRead(*FileName);
@@ -226,14 +256,8 @@ uint8* LoadFileIntoArray(const FString FileName, const int64 BytesToLoad) {
 }
 
 bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
-                          uint8* BulkData, bool SaveNow, TextureAddress TilingX,
-                          TextureAddress TilingY) {
-  ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
-
-  if (TextureSourceFormat == TSF_Invalid) {
-    return false;
-  }
-
+                          uint8* BulkData, bool Persistent, bool UAVCompatible, bool SaveNow,
+                          TextureAddress TilingX, TextureAddress TilingY) {
   const long TotalSize = (long)Dimensions.X * Dimensions.Y * GPixelFormats[PixelFormat].BlockBytes;
 
   FString PackageName = TEXT("/Game/GeneratedTextures/");
@@ -264,12 +288,19 @@ bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint
   Mip->BulkData.Lock(LOCK_READ_WRITE);
 
   uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
-  FMemory::Memcpy(ByteArray, BulkData, TotalSize);
 
+  if (BulkData) {
+    FMemory::Memcpy(ByteArray, BulkData, TotalSize);
+  } else {
+    FMemory::Memset(ByteArray, 0, TotalSize);
+  }
   Mip->BulkData.Unlock();
-#if WITH_EDITORONLY_DATA
-  NewTexture->Source.Init(Dimensions.X, Dimensions.Y, 1, 1, TextureSourceFormat, ByteArray);
-#endif
+
+  FIntVector Dimensions3D = FIntVector(Dimensions.X, Dimensions.Y, 1);
+  bool RetVal =
+      HandleTextureEditorData(NewTexture, PixelFormat, Persistent, Dimensions3D, ByteArray);
+
+  NewTexture->bUAVCompatible = UAVCompatible;
   NewTexture->UpdateResource();
   Package->MarkPackageDirty();
   FAssetRegistryModule::AssetCreated(NewTexture);
@@ -287,23 +318,35 @@ bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint
 }
 
 bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoint Dimensions,
-                          uint8* BulkData, bool Persistent, TextureAddress TilingX,
-                          TextureAddress TilingY) {
+                          uint8* BulkData, bool Persistent, bool UAVCompatible,
+                          TextureAddress TilingX, TextureAddress TilingY) {
   if (!Texture || !Texture->PlatformData) {
     return false;
   }
-  const long TotalSize = (long)Dimensions.X * Dimensions.Y * GPixelFormats[PixelFormat].BlockBytes;
+  // Unlike Volume texture, when releasing the resource, there is a check if the resource and
+  // texture mip sizes match, so release the resource now, when the sizes still match. Calling
+  // UpdateResource at the end of this function without releasing the resource here runs into an
+  // engine assert if the size of the texture changed.
+  Texture->ReleaseResource();
 
+  int PixelByteSize = GPixelFormats[PixelFormat].BlockBytes;
+  const long long TotalSize = (long long)Dimensions.X * Dimensions.Y * PixelByteSize;
+  // Set basic properties.
+  // NewTexture->PlatformData = new FTexturePlatformData();
   Texture->PlatformData->SizeX = Dimensions.X;
   Texture->PlatformData->SizeY = Dimensions.Y;
   Texture->PlatformData->NumSlices = 1;
+
   Texture->PlatformData->PixelFormat = PixelFormat;
 
-  Texture->AddressX = TA_Clamp;
-  Texture->AddressY = TA_Clamp;
-  Texture->CompressionSettings = TC_Default;
-  Texture->SRGB = false;
+  Texture->AddressX = TilingX;
+  Texture->AddressY = TilingY;
 
+  Texture->CompressionNone = true;
+  Texture->SRGB = false;
+  Texture->NeverStream = true;
+
+  // Create or get the one and only mip in this texture.
   FTexture2DMipMap* Mip;
   // If texture doesn't have a single mip, create it.
   if (!Texture->PlatformData->Mips.IsValidIndex(0)) {
@@ -311,26 +354,35 @@ bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoi
   } else {
     Mip = &Texture->PlatformData->Mips[0];
   }
+
   Mip->SizeX = Dimensions.X;
   Mip->SizeY = Dimensions.Y;
   Mip->SizeZ = 1;
 
+  // This probably doesn't need to be locked, since nobody else has the pointer to the mip as of
+  // now, but it's good manners...
   Mip->BulkData.Lock(LOCK_READ_WRITE);
-
+  // Allocate memory in the mip and copy the actual texture data inside
   uint8* ByteArray = (uint8*)Mip->BulkData.Realloc(TotalSize);
-  FMemory::Memcpy(ByteArray, BulkData, TotalSize);
 
-  Mip->BulkData.Unlock();
-#if WITH_EDITORONLY_DATA
-
-  if (Persistent) {
-    ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(PixelFormat);
-    if (TextureSourceFormat == TSF_Invalid) {
-      return false;
-    }
-    Texture->Source.Init(Dimensions.X, Dimensions.Y, 1, 1, TextureSourceFormat, ByteArray);
+  if (BulkData) {
+    FMemory::Memcpy(ByteArray, BulkData, TotalSize);
+  } else {
+    FMemory::Memset(ByteArray, 0, TotalSize);
   }
-#endif
+  Mip->BulkData.Unlock();
+
+  // If saving fails because of unsupported source format when we want persistent, texture will be
+  // updated, but false returned. This is a bit weird.
+
+  FIntVector Dimensions3D = FIntVector(Dimensions.X, Dimensions.Y, 1);
+  bool RetVal = HandleTextureEditorData(Texture, PixelFormat, Persistent, Dimensions3D, ByteArray);
+
+  // Set the texture to be UAV Compatible if requested. Beware! Not all formats support this
+  // (notably anything compressed).
+  Texture->bUAVCompatible = UAVCompatible;
+  // Update resource, mark that the folder needs to be rescan and notify editor about asset
+  // creation.
   Texture->UpdateResource();
-  return true;
+  return RetVal;
 }

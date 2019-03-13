@@ -1,0 +1,17 @@
+#include "/Engine/Private/Common.ush"
+
+RWTexture2D<float> TextureUAV;
+
+Texture3D Volume;
+
+int Layer;
+
+[numthreads(32, 32, 1)]
+void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
+{
+    int3 LoadingPos;
+    LoadingPos.x = Layer;
+    LoadingPos.y = ThreadId.x;
+    LoadingPos.z = ThreadId.y;
+    TextureUAV[ThreadId.xy] = Volume.Load(int4(LoadingPos, 0)).r;
+}

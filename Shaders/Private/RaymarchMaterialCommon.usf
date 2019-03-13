@@ -11,13 +11,13 @@ float4 GetColorFromLabelValue(uint LabelValue)
     switch (LabelValue)
     {
         case 1: // Risk
-            return float4(1.0f, 0.0f, 0.0f, 0.06f);
+            return float4(1.0f, 0.0f, 0.0f, 0.1f);
         case 2: // Target
-            return float4(0.0f, 1.0f, 0.0f, 0.03f);
+            return float4(0.0f, 1.0f, 0.0f, 0.05f);
         case 3: // Potential Risk
-            return float4(1.0f, 0.0f, 0.0f, 0.06f);
+            return float4(1.0f, 0.0f, 0.0f, 0.1f);
         case 4: // Potential Target
-            return float4(0.0f, 1.0f, 0.0f, 0.03f);
+            return float4(0.0f, 1.0f, 0.0f, 0.05f);
         case 0: // Clear 
             return float4(0.0f, 0.0f, 0.0f, 0.0f);
         default: // Unknown - return full black so it's visible.

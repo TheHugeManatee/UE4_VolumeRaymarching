@@ -30,17 +30,8 @@ void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
     return;
   }
 
-  EPixelFormat PixelFormat = PF_G8;
-  const long TotalSize =
-      Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
-
-  uint8* InitMemory = (uint8*)FMemory::Malloc(TotalSize);
-  FMemory::Memset(InitMemory, 200, TotalSize);
-
   // FMemory::Memset(InitMemory, 1, TotalSize);
-  UpdateVolumeTextureAsset(LightVolume, PixelFormat, Dimensions, InitMemory, true, false, true);
-
-  FMemory::Free(InitMemory);
+  UpdateVolumeTextureAsset(LightVolume, PF_G8, Dimensions, nullptr, true, false, true);
 }
 
 void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
@@ -148,14 +139,14 @@ void URaymarchBlueprintLibrary::LoadRawIntoVolumeTextureAsset(FString RawFileNam
                                                               bool Persistent) {
   const int64 TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
 
-  uint8* TempArray = LoadFileIntoArray(RawFileName, TotalSize);
+  uint8* TempArray = LoadRawFileIntoArray(RawFileName, TotalSize);
   if (!TempArray) {
     return;
   }
 
   // Actually update the asset.
-  bool Success = UpdateVolumeTextureAsset(inTexture, EPixelFormat::PF_G8, Dimensions, TempArray,
-                                          Persistent, false);
+  bool Success =
+      UpdateVolumeTextureAsset(inTexture, EPixelFormat::PF_G8, Dimensions, TempArray, Persistent);
 
   // Delete temp data.
   delete[] TempArray;
@@ -168,14 +159,14 @@ void URaymarchBlueprintLibrary::LoadRawIntoNewVolumeTextureAsset(FString RawFile
                                                                  UVolumeTexture*& LoadedTexture) {
   const int64 TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
 
-  uint8* TempArray = LoadFileIntoArray(RawFileName, TotalSize);
+  uint8* TempArray = LoadRawFileIntoArray(RawFileName, TotalSize);
   if (!TempArray) {
     return;
   }
 
   // Actually create the asset.
-  bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions, TempArray,
-                                          LoadedTexture, Persistent, false, false);
+  bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions,
+                                          LoadedTexture, TempArray, Persistent);
 
   // Ddelete temp data.
   delete[] TempArray;
@@ -254,6 +245,7 @@ void URaymarchBlueprintLibrary::ColorCurveToTexture(UCurveLinearColor* Curve, UT
   delete[] samples;  // Don't forget to free the memory here
   return;
 }
+
 void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(
     UCurveLinearColor* Curve, UTexture2D* Texture, FTransferFunctionRangeParameters Parameters) {
   if (Parameters.IntensityDomain.Y <= Parameters.IntensityDomain.X ||
@@ -420,18 +412,8 @@ void URaymarchBlueprintLibrary::CheckBasicRaymarchingResources(
 
 void URaymarchBlueprintLibrary::CreateLightVolumeAsset(FString TextureName, FIntVector Dimensions,
                                                        UVolumeTexture*& CreatedVolume) {
-  EPixelFormat PixelFormat = PF_G8;
-  const long TotalSize =
-      Dimensions.X * Dimensions.Y * Dimensions.Z * GPixelFormats[PixelFormat].BlockBytes;
-
-  uint8* InitMemory = (uint8*)FMemory::Malloc(TotalSize);
-  FMemory::Memset(InitMemory, 0, TotalSize);
-
-  // FMemory::Memset(InitMemory, 1, TotalSize);
-  bool Success = CreateVolumeTextureAsset(TextureName, PixelFormat, Dimensions, (uint8*)InitMemory,
-                                          CreatedVolume, false, false, true);
-
-  FMemory::Free(InitMemory);
+  CreateVolumeTextureAsset(TextureName, PF_G8, Dimensions, CreatedVolume, nullptr, false, false,
+                           true);
 }
 
 void URaymarchBlueprintLibrary::ReadTransferFunctionFromFile(FString TextFileName,
@@ -598,6 +580,42 @@ void URaymarchBlueprintLibrary::GetRightFaceAlongNegX(FCubeFace CubeFace,
     case FCubeFace::Bottom: RightCubeFace = FCubeFace::Front; break;
     default: break;
   }
+}
+
+void URaymarchBlueprintLibrary::Initialize2DTextureForSliceWrite(UVolumeTexture* VolumeTexture,
+																 UTexture2D* WrittenSliceTexture) {
+  if (!VolumeTexture || !WrittenSliceTexture) {
+    MY_LOG("Failed initializing texture for slice write. Volume or Slice texture not provided!");
+    return;  
+  }
+
+  FIntPoint Texture2DSize = FIntPoint(VolumeTexture->GetSizeY(), VolumeTexture->GetSizeZ());
+  Update2DTextureAsset(WrittenSliceTexture, VolumeTexture->GetPixelFormat(), Texture2DSize, nullptr, true, true);
+}
+
+void URaymarchBlueprintLibrary::WriteVolumeTextureSlice(UVolumeTexture* VolumeTexture,
+                                                        UTexture2D* WrittenSliceTexture,
+                                                        int Layer) {
+
+  if (!VolumeTexture || !VolumeTexture->Resource || !WrittenSliceTexture) {
+    MY_LOG("Failed writing volume texture slice. Volume or Slice texture not provided!");
+    return;
+  }
+  if (Layer > VolumeTexture->GetSizeX() - 1 || Layer < 0) {
+    MY_LOG(
+        "Failed writing volume texture slice. Invalid layer id (above VolumeTexture.X or below 0.");
+    return;
+  }
+
+  EPixelFormat PixelFormat = VolumeTexture->GetPixelFormat();
+  // We are slicing along X, so make sure the other 2 dimensions match (slice X = volume Y, slice Y = volume Z)
+  check(WrittenSliceTexture->GetSizeX() == VolumeTexture->GetSizeY() &&
+        WrittenSliceTexture->GetSizeY() == VolumeTexture->GetSizeZ())
+
+      // Call the actual rendering code on RenderThread.
+      ENQUEUE_RENDER_COMMAND(CaptureCommand)([=](FRHICommandListImmediate& RHICmdList) {
+        WriteVolumeTextureSlice_RenderThread(RHICmdList, VolumeTexture, WrittenSliceTexture, Layer);
+      });
 }
 
 #undef LOCTEXT_NAMESPACE
