@@ -24,22 +24,29 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
         (WorldParameters.MeshMaxBounds)) /
        2.0) +
       0.5;
-  // Get local center in integer space
 
   float localSphereDiameter =
       ((WorldParameters.VolumeTransform.InverseTransformVector(FVector(SphereRadiusWorld, 0, 0)) /
         (WorldParameters.MeshMaxBounds * 2)))
           .Size() *
       2;
+  /**
+  This would be for making the sphere actually round in world space. Currently, let's prefer the sphere being round in the 
+  square window for displaying the labeled data.
 
-  int32 x = localCenter.X * MarkedVolume->GetSizeX();
-  int32 y = localCenter.Y * MarkedVolume->GetSizeY();
-  int32 z = localCenter.Z * MarkedVolume->GetSizeZ();
+  FVector VolumeDimensions(MarkedVolume->GetSizeXYZ());
+  FVector VoxelSize = WorldParameters.VolumeTransform.GetScale3D() / FVector(VolumeDimensions);
+  FVector BrushSize = ((FVector(SphereRadiusWorld) / VoxelSize) * 2) + 1;
 
-  FIntVector localCenterIntCoords;
-  localCenterIntCoords.X = x;
-  localCenterIntCoords.Y = y;
-  localCenterIntCoords.Z = z;
+  FIntVector BrushSizeInt(FMath::RoundToInt(BrushSize.X), FMath::RoundToInt(BrushSize.Y),
+                          FMath::RoundToInt(BrushSize.Z));
+
+  FIntVector LocalCenterIntCoords = FIntVector(LocalCenterUVW * VolumeDimensions);
+
+  */
+
+  // Get local center in integer space
+  FIntVector localCenterIntCoords = FIntVector(localCenter * FVector(MarkedVolume->GetSizeXYZ()));
 
   // Get shader ref from GlobalShaderMap
   TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
@@ -55,16 +62,16 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                 EResourceTransitionPipeline::EGfxToCompute, MarkedVolumeUAV);
 
   // Get brush size in texture space.
-  FIntVector brush = FIntVector(localSphereDiameter * MarkedVolume->GetSizeX(),
-                                localSphereDiameter * MarkedVolume->GetSizeY(),
-                                localSphereDiameter * MarkedVolume->GetSizeZ());
+  FIntVector brush = FIntVector(localSphereDiameter * MarkedVolume->GetSizeX() + 1,
+                                localSphereDiameter * MarkedVolume->GetSizeY() + 1,
+                                localSphereDiameter * MarkedVolume->GetSizeZ() + 1);
 
-  FString kkt = "at " + localCenter.ToString() + ", local = " + FString::FromInt(x) + " " +
-                FString::FromInt(y) + " " + FString::FromInt(z) +
-                ", local intvec = " + localCenterIntCoords.ToString() +
-                ", brush local = " + brush.ToString();
+  //FString kkt = "at " + localCenter.ToString() + ", local = " + FString::FromInt(x) + " " +
+  //              FString::FromInt(y) + " " + FString::FromInt(z) +
+  //              ", local intvec = " + localCenterIntCoords.ToString() +
+  //              ", brush local = " + brush.ToString();
 
-  GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
+  //GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
 
   FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
   ComputeShader->SetMarkedVolumeUAV(RHICmdList, cs, MarkedVolumeUAV);

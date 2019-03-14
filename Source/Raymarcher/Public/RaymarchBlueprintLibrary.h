@@ -237,7 +237,10 @@ public:
                                       UTexture2D* WrittenSliceTexture, int Layer);
 
   /**
-   Given a volume texture, this will copy the current texture content into the texture source.   This causes the current contents of the texture to be saved when you hit the save button,   instead of the source content this texture was created with.  */
+   Given a volume texture, this will copy the current texture content into the texture source.
+   This causes the current contents of the texture to be saved when you hit the save button,
+   instead of the source content this texture was created with.
+  */
   // UFUNCTION(BlueprintCallable, Category = "Raymarcher")
   // static void UpdateVolumeTextureSource(UVolumeTexture* VolumeTexture);
 };
