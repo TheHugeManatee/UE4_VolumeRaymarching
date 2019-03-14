@@ -11,16 +11,37 @@ float4 GetColorFromLabelValue(uint LabelValue)
     switch (LabelValue)
     {
         case 1: // Risk
-            return float4(1.0f, 0.0f, 0.0f, 0.1f);
+            return float4(1.0f, 0.0f, 0.0f, 0.3f);
         case 2: // Target
-            return float4(0.0f, 1.0f, 0.0f, 0.05f);
+            return float4(0.0f, 1.0f, 0.0f, 0.15f);
         case 3: // Potential Risk
-            return float4(1.0f, 0.0f, 0.0f, 0.1f);
+            return float4(1.0f, 0.0f, 0.0f, 0.3f);
         case 4: // Potential Target
-            return float4(0.0f, 1.0f, 0.0f, 0.05f);
+            return float4(0.0f, 1.0f, 0.0f, 0.15f);
         case 0: // Clear 
             return float4(0.0f, 0.0f, 0.0f, 0.0f);
-        default: // Unknown - return full black so it's visible.
+        default: // Unknown - return full black so bugs are visible.
+            return float4(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+}
+
+// Gets color from a uint label value. Used in UI functions.
+// Switches on G8 will be faster than reading a full color volume. Also we need to export the labels eventually and color might not be the best way to do that.
+float4 GetColorFromLabelValueUI(uint LabelValue)
+{
+    switch (LabelValue)
+    {
+        case 1: // Risk
+            return float4(1.0f, 0.0f, 0.0f, 0.5f);
+        case 2: // Target
+            return float4(0.0f, 1.0f, 0.0f, 0.5f);
+        case 3: // Potential Risk
+            return float4(1.0f, 0.0f, 0.0f, 0.25f);
+        case 4: // Potential Target
+            return float4(0.0f, 1.0f, 0.0f, 0.30f);
+        case 0: // Clear 
+            return float4(0.0f, 0.0f, 0.0f, 0.0f);
+        default: // Unknown - return full black so bugs are visible.
             return float4(0.0f, 0.0f, 0.0f, 1.0f);
     }
 }
@@ -39,6 +60,20 @@ float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume)
     // GetColorFromLabelValue(RetVal);
     Color.a = 1.0 - pow(1.0 - Color.a, StepSize);
     return Color;
+}
+
+
+// Samples a Label volume, gets the corresponding color for UI and returns it.
+float4 SampleLabelVolumeUI(float3 CurPos, float StepSize, Texture3D Volume)
+{
+    int x, y, z;
+    Volume.GetDimensions(x, y, z);
+    // Decrease dimensions by 1, because with any UVW coord being == 1, we would load one after the array length
+    // E.G - with X dimension == 2, U == 1, we want to sample x[1], not x[2] (as that doesn't exist)
+    int3 Dimensions = int3(x - 1, y - 1, z - 1);
+    // We don't want to interpolate here, use load instead of sample.
+    float LabelValue = Volume.Load(int4(round(Dimensions * saturate(CurPos)), 0)).r;
+    return GetColorFromLabelValueUI(FloatToChar(LabelValue));
 }
 
 
