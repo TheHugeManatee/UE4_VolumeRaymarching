@@ -618,4 +618,14 @@ void URaymarchBlueprintLibrary::WriteVolumeTextureSlice(UVolumeTexture* VolumeTe
       });
 }
 
+void URaymarchBlueprintLibrary::LocalToTextureCoords(FVector LocalCoords, FVector& TextureCoords)
+{
+	TextureCoords = (LocalCoords / 2.0f) + 0.5f;
+}
+
+void URaymarchBlueprintLibrary::TextureToLocalCoords(FVector TextureCoors, FVector& LocalCoords)
+{
+	LocalCoords = (TextureCoors - 0.5f) * 2.0f;
+}
+
 #undef LOCTEXT_NAMESPACE

@@ -237,6 +237,17 @@ public:
                                       UTexture2D* WrittenSliceTexture, int Layer);
 
   /**
+	Transforms Local (-1 to 1) coords to UV coords (0 to 1) coords. (The values are not clamped to the range).
+  */
+  static void LocalToTextureCoords(FVector LocalCoords, FVector& TextureCoords);
+
+  /**
+	Transforms UV coords (0 to 1) to Local (-1 to 1) coords. (The values are not clamped to the range).
+  */
+  static void TextureToLocalCoords(FVector TextureCoors, FVector& LocalCoords);
+
+
+  /**
    Given a volume texture, this will copy the current texture content into the texture source.
    This causes the current contents of the texture to be saved when you hit the save button,
    instead of the source content this texture was created with.
