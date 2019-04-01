@@ -342,7 +342,6 @@ bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoi
   Texture->AddressX = TilingX;
   Texture->AddressY = TilingY;
 
-  Texture->CompressionNone = true;
   Texture->SRGB = false;
   Texture->NeverStream = true;
 
