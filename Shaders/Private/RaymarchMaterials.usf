@@ -11,7 +11,7 @@
 
 // Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
 // and thickness of the cube in alpha. All values returned are in UVW space.
-float4 PerformRaymarchCubeSetup(float Steps, FMaterialPixelParameters MaterialParameters)
+float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
 {
     // Get scene depth at this pixel.
     float LocalSceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(MaterialParameters)));
@@ -98,7 +98,7 @@ float4 PerformRaymarchCubeSetup(float Steps, FMaterialPixelParameters MaterialPa
 
 // Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
 // and thickness of the cube in alpha. All values returned are in UVW space.
-float4 PerformOffsetRaymarchCubeSetup(float Steps, float4x4 CubeTransformW2L, FMaterialPixelParameters MaterialParameters)
+float4 PerformOffsetRaymarchCubeSetup(float4x4 CubeTransformW2L, FMaterialPixelParameters MaterialParameters)
 {
     // Get scene depth at this pixel.
     float LocalSceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(MaterialParameters)));
