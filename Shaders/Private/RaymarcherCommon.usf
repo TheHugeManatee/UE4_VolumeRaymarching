@@ -82,7 +82,6 @@ float CorrectForStepSize(float Intensity, float StepSize)
 }
 
 
-
 ///
 /// Obsolete functions for multicolored lights. Eventually we might reipmlement them.
 ///

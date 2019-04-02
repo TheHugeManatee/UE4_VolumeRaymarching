@@ -68,6 +68,103 @@ float4 PerformRaymarchCubeSetup(float Steps, FMaterialPixelParameters MaterialPa
     return float4(EntryPos, BoxThickness);
 }
 
+//float4 PerformOffRaymarchCubeSetup
+//{
+
+//float4x4 WorldToVolumeLocal = float4x4(
+//W2V_X0.x, W2V_X0.y, W2V_X0.z, 0,
+//W2V_X1.x, W2V_X1.y, W2V_X1.z, 0,
+//W2V_X2.x, W2V_X2.y, W2V_X2.z, 0,
+//W2V_X3.x, W2V_X3.y, W2V_X3.z, 1);
+
+//// Get cam pos and vector into local space too.
+//float3 localcampos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), WorldToVolumeLocal).xyz;
+//float3 localcamvec = -normalize(mul(float4(ResolvedView.WorldCameraOrigin + Parameters.CameraVector, 1.00000000), WorldToVolumeLocal).xyz - localcampos);
+
+
+//float2 intersect = LineBoxIntersect(localcampos, localcampos + localcamvec * 10000, -VolumeLocalBounds / 2, VolumeLocalBounds / 2);
+//float3 entryposOnCube = localcampos + intersect.x * localcamvec * 10000;
+
+//float3 entrypos = (entryposOnCube + VolumeLocalBounds / 2) / VolumeLocalBounds;
+
+//float boxthickness = max(0, intersect.y - intersect.x);
+
+//if(boxthickness == 0.0) return float4(0.0, 0.0, 0.0, 0.0);
+//return float4(entrypos, 1.0);//boxthickness);
+
+//}
+
+
+
+// Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
+// and thickness of the cube in alpha. All values returned are in UVW space.
+float4 PerformOffsetRaymarchCubeSetup(float Steps, float4x4 CubeTransformW2L, FMaterialPixelParameters MaterialParameters)
+{
+    // Get scene depth at this pixel.
+    float LocalSceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(MaterialParameters)));
+
+    // Get camera forward vector in world space.
+    float3 CameraFWDVecWorld = mul(float3(0.00000000, 0.00000000, 1.00000000), ResolvedView.ViewToTranslatedWorld);
+
+    // Get world space vector going from camera center to current scene depth.
+    float3 WorldDepthVec = normalize(MaterialParameters.CameraVector) * LocalSceneDepth;
+
+    // Transform this vector into the box's local space
+    WorldDepthVec = mul(WorldDepthVec, CubeTransformW2L);
+
+    // Get actual depth in local space, account for mesh bounds (by default, we use a centered 1x1x1 cube mesh, so this is unnecessary)
+    LocalSceneDepth = length(WorldDepthVec);
+
+    // Account for difference between camera center vector and camera-to-pixel depth
+    LocalSceneDepth /= abs(dot(CameraFWDVecWorld, MaterialParameters.CameraVector));
+
+    // Get cam pos and vector into local space too.
+    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), CubeTransformW2L).xyz;
+//    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, CubeTransformW2L));
+
+    float3 LocalCamVec = -normalize(mul(float4(ResolvedView.WorldCameraOrigin + MaterialParameters.CameraVector, 1.00000000), CubeTransformW2L).xyz - LocalCamPos);
+
+
+    // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
+    LocalCamPos = (LocalCamPos) + 0.5;
+    float3 InverseRayDirVec = 1 / LocalCamVec;
+       
+    // Get intersections
+    float3 FirstIntersections = (0 - LocalCamPos) * InverseRayDirVec;
+    float3 SecondIntersections = (1 - LocalCamPos) * InverseRayDirVec;
+
+    // Find closest and furthest intersections
+    float3 ClosestIntersections = min(FirstIntersections, SecondIntersections);
+    float3 FurthestIntersections = max(FirstIntersections, SecondIntersections);
+
+    // T0 (entry) = the farthest of the closest intersections
+    float t0 = max(ClosestIntersections.x, max(ClosestIntersections.y, ClosestIntersections.z));
+    // T1 (exit) = the closest of the furthest intersections
+    float t1 = min(FurthestIntersections.x, min(FurthestIntersections.y, FurthestIntersections.z));
+
+    // Make sure the entry point is not behind the camera
+    t0 = max(0, t0);
+
+    // Make sure the exit point is not behind other scene geometry.
+    t1 = min(t1, LocalSceneDepth);
+
+    // Calculate box thickness at this pixel (in local space).
+    float BoxThickness = max(0, t1 - t0);
+
+    // Get entry position in local space.
+    float3 EntryPos = LocalCamPos + (t0 * LocalCamVec);
+    
+    if (BoxThickness == 0.0f)
+    {
+        return float4(0.0, 0.0, 0.0, 0.0);
+    }
+    else
+    {
+        return float4(EntryPos, 1.0); //boxthickness);}
+
+    }
+}
+
 // Performs lit raymarch for the current pixel. The lighting information is taken from a precomputed light volume.
 float4 PerformLitRaymarch(Texture3D DataVolume, SamplerState DataVolumeSampler, // Data Volume and Sampler
                           Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain, // Transfer func, sampler and intensity domain modifier
@@ -279,3 +376,7 @@ float4 PerformIntensityRaymarchLabeled(Texture3D DataVolume, SamplerState DataVo
 
     return LightEnergy;
 }
+
+
+
+
