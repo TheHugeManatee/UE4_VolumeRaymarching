@@ -28,7 +28,6 @@ public class Raymarcher : ModuleRules
 			{
 				"Core",
                 "RenderCore",
-                "ShaderCore",
                 "RHI",
 				"AssetRegistry" // ... add other public dependencies that you statically link with here ...
 			}

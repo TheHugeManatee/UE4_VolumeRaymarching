@@ -66,12 +66,10 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                 localSphereDiameter * MarkedVolume->GetSizeY() + 1,
                                 localSphereDiameter * MarkedVolume->GetSizeZ() + 1);
 
-  //FString kkt = "at " + localCenter.ToString() + ", local = " + FString::FromInt(x) + " " +
-  //              FString::FromInt(y) + " " + FString::FromInt(z) +
-  //              ", local intvec = " + localCenterIntCoords.ToString() +
-  //              ", brush local = " + brush.ToString();
+  FString kkt = "Written texture size = " + MarkedVolume->GetSizeXYZ().ToString() + "\nLocalCenter =" + localCenter.ToString() + ", in ints = " + localCenterIntCoords.ToString() +
+                "\nLocal Sphere diameter = " + FString::SanitizeFloat(localSphereDiameter) + ", brush size in ints = " + brush.ToString();
 
-  //GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
+  GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
 
   FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
   ComputeShader->SetMarkedVolumeUAV(RHICmdList, cs, MarkedVolumeUAV);
@@ -96,7 +94,7 @@ void ULabelVolumeLibrary::CreateNewLabelingVolumeAsset(FString AssetName, FIntVe
 
 void ULabelVolumeLibrary::InitLabelingVolume(UVolumeTexture* LabelVolumeAsset,
                                              FIntVector Dimensions) {
-  if (!UpdateVolumeTextureAsset(LabelVolumeAsset, PF_G8, Dimensions, nullptr, false, false, true)) {
+  if (!UpdateVolumeTextureAsset(LabelVolumeAsset, PF_G8, Dimensions, nullptr, true, false, true)) {
     GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow,
                                      "Failed initializing the labeling volume.");
   }

@@ -23,21 +23,21 @@ float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
     float3 WorldDepthVec = normalize(MaterialParameters.CameraVector) * LocalSceneDepth;
 
     // Transform this vector into the box's local space
-    WorldDepthVec = mul(WorldDepthVec, Primitive.WorldToLocal);
+    WorldDepthVec = mul(WorldDepthVec, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal);
 
     // Get actual depth in local space, account for mesh bounds (by default, we use a centered 1x1x1 cube mesh, so this is unnecessary)
     LocalSceneDepth = length(WorldDepthVec);
-    LocalSceneDepth /= (Primitive.LocalObjectBoundsMax.x * 2);
+    LocalSceneDepth /= (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax.x * 2);
 
     // Account for difference between camera center vector and camera-to-pixel depth
     LocalSceneDepth /= abs(dot(CameraFWDVecWorld, MaterialParameters.CameraVector));
 
     // Get cam pos and vector into local space too.
-    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), (Primitive.WorldToLocal)).xyz;
-    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, Primitive.WorldToLocal));
+    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), (GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)).xyz;
+    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
 
     // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
-    LocalCamPos = (LocalCamPos / (Primitive.LocalObjectBoundsMax * 2)) + 0.5;
+    LocalCamPos = (LocalCamPos / (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax * 2)) + 0.5;
     float3 InverseRayDirVec = 1 / LocalCamVec;
 
     // Get intersections
@@ -174,9 +174,9 @@ float4 PerformLitRaymarch(Texture3D DataVolume, SamplerState DataVolumeSampler, 
                           FMaterialPixelParameters MaterialParameters)                      // Material Parameters
 {
     // Get camera vector in local space and multiply it by step size.
-    float3 LocalCamVec = normalize(mul(MaterialParameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+    float3 LocalCamVec = normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
     // Get step size in world units to be consistent with compute shaders' opacity calculations.
-    float StepSizeWorld = length(mul(LocalCamVec, Primitive.LocalToWorld));
+    float StepSizeWorld = length(mul(LocalCamVec, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
     // Initialize accumulated light energy.
     float4 LightEnergy = 0;
     // Jitter Entry position to avoid artifacts.
@@ -224,7 +224,7 @@ float4 PerformIntensityRaymarch(Texture3D DataVolume, SamplerState DataVolumeSam
                                   FMaterialPixelParameters MaterialParameters)                      // Material Parameters
 {
     // Get camera vector in local space and multiply it by step size.
-    float3 LocalCamVec = normalize(mul(MaterialParameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+    float3 LocalCamVec = normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
     // Jitter Entry position to avoid artifacts.
     JitterEntryPos(CurPos, LocalCamVec, MaterialParameters);
 
@@ -274,9 +274,9 @@ float4 PerformLitRaymarchLabeled(Texture3D DataVolume, SamplerState DataVolumeSa
                                  FMaterialPixelParameters MaterialParameters)                    // Material Parameters
 {
     // Get camera vector in local space and multiply it by step size.
-    float3 LocalCamVec = normalize(mul(MaterialParameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+    float3 LocalCamVec = normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
     // Get step size in world units to be consistent with compute shaders' opacity calculations.
-    float StepSizeWorld = length(mul(LocalCamVec, Primitive.LocalToWorld));
+    float StepSizeWorld = length(mul(LocalCamVec, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
     // Initialize accumulated light energy.
     float4 LightEnergy = 0;
     // Jitter Entry position to avoid artifacts.
@@ -329,9 +329,9 @@ float4 PerformIntensityRaymarchLabeled(Texture3D DataVolume, SamplerState DataVo
                                         FMaterialPixelParameters MaterialParameters)                    // Material Parameters
 {
     // Get camera vector in local space and multiply it by step size.
-    float3 LocalCamVec = normalize(mul(MaterialParameters.CameraVector, Primitive.WorldToLocal)) * StepSize;
+    float3 LocalCamVec = normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
     // Get step size in world units to be consistent with compute shaders' opacity calculations.
-    float StepSizeWorld = length(mul(LocalCamVec, Primitive.LocalToWorld));
+    float StepSizeWorld = length(mul(LocalCamVec, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
     // Initialize accumulated light energy.
     float4 LightEnergy = 0;
     // Jitter Entry position to avoid artifacts.
@@ -378,5 +378,84 @@ float4 PerformIntensityRaymarchLabeled(Texture3D DataVolume, SamplerState DataVo
 }
 
 
+float4 PerformShadowRaymarch(Texture3D LightVolume, SamplerState LightVolumeSampler, // Light Volume
+                                 float3 CurPos, float MaxSteps, float StepSize, float FinalStep, // Position of ray entry to cube, number of steps, size of a step and a 0-1 value of how big the final step is compared to regular steps 
+                                 FMaterialPixelParameters MaterialParameters)
+{
+
+     // Get camera vector in local space and multiply it by step size.
+    float3 LocalCamVec = normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
+    // Get step size in world units to be consistent with compute shaders' opacity calculations.
+    float StepSizeWorld = length(mul(LocalCamVec, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
+    // Initialize accumulated light energy.
+    float4 LightEnergy = 0;
+    // Jitter Entry position to avoid artifacts.
+    JitterEntryPos(CurPos, LocalCamVec, MaterialParameters);
+
+    int i = 0;
+    for (i = 0; i < MaxSteps; i++)
+    {
+        float ShadowValue = 1 - LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
+        AccumulateLightEnergy(LightEnergy, float4(ShadowValue, ShadowValue, ShadowValue, ShadowValue));
+
+        // Exit early if light energy (opacity) is already very high (so future steps would have almost no impact on color).
+        // TODO - not sure how useful this is here, unless we have a lot of very opaque labels, this will almost never happen.
+        if (LightEnergy.a > 0.99f)
+        {
+            LightEnergy.a = 1.0f;
+            break;
+        }
+        CurPos -= LocalCamVec;
+    }
+
+    // Handle FinalStep (only if we went through all the previous steps and the final step size is above eps)
+    if (i == MaxSteps && FinalStep > 0.01f)
+    {
+        CurPos -= LocalCamVec * (FinalStep);
+        float ShadowValue = 1 - LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
+        AccumulateLightEnergy(LightEnergy, float4(ShadowValue, ShadowValue, ShadowValue, ShadowValue));
+    }
+
+    return LightEnergy;
+}
 
 
+//int i = 0;
+//for (i = 0;i <
+//MaxSteps; i++)
+//{
+
+//    // Uniform density - like very thin fog
+//float CurSample = 1 - LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
+
+//float4 ColorSample = float4(CurSample, CurSample, CurSample, CurSample);
+//	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
+//    AddLightAndOpacity(lightenergy, opacity, ColorSample);
+
+//	if (opacity > 0.99) {
+//		opacity = 1;
+//		break;
+//	};
+//	CurPos -=
+//localcamvec;
+//}
+
+
+//// Handle FinalStep (only if we went through all the previous steps and there is a final step)
+//if (i == MaxSteps && FinalStep > 0) {
+//    // Go back to the previous location, so we can perform final step.
+//    CurPos += (1 - FinalStep) *
+//localcamvec;
+//    StepSize*=
+//FinalStep;
+//          // Uniform density - like very thin fog
+//float CurSample = 1 - LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
+
+
+//float4 ColorSample = float4(CurSample, CurSample, CurSample, CurSample);
+//	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
+
+//        AddLightAndOpacity(lightenergy, opacity, ColorSample);
+	
+//}
+//return float4(lightenergy, opacity);
