@@ -41,6 +41,8 @@ float4 GetColorFromLabelValueUI(uint LabelValue)
             return float4(0.0f, 1.0f, 0.0f, 0.30f);
         case 0: // Clear 
             return float4(0.0f, 0.0f, 0.0f, 0.0f);
+        case 255: // maybe?
+            return float4(0.0f, 0.0f, 1.0f, 1.0f);
         default: // Unknown - return full black so bugs are visible.
             return float4(0.0f, 0.0f, 0.0f, 1.0f);
     }

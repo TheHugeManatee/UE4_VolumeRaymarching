@@ -40,14 +40,17 @@ float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
     LocalCamPos = (LocalCamPos / (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax * 2)) + 0.5;
     float3 InverseRayDirVec = 1 / LocalCamVec;
 
-    // Get intersections
-    float3 FirstIntersections = (0 - LocalCamPos) * InverseRayDirVec;
-    float3 SecondIntersections = (1 - LocalCamPos) * InverseRayDirVec;
+    // Because now we're in texture space where our box is at [0, 1] in each axis, it's easy to get intersections.
+    // LowIntersections will have the distance of the ray in X,Y,Z before it hits the respective axis.
+    // HighIntersections will have the distance of the ray in X,Y,Z before it reaches 1 in the respective axis.
+    float3 LowIntersections = (0 - LocalCamPos) * InverseRayDirVec;
+    float3 HighIntersections = (1 - LocalCamPos) * InverseRayDirVec;
 
-    // Find closest and furthest intersections
-    float3 ClosestIntersections = min(FirstIntersections, SecondIntersections);
-    float3 FurthestIntersections = max(FirstIntersections, SecondIntersections);
+    // Get closest and furthest intersections
+    float3 ClosestIntersections = min(LowIntersections, HighIntersections);
+    float3 FurthestIntersections = max(LowIntersections, HighIntersections);
 
+    // The actual intersections of the box are the 2 values in the middle of the pack.
     // T0 (entry) = the farthest of the closest intersections
     float t0 = max(ClosestIntersections.x, max(ClosestIntersections.y, ClosestIntersections.z));
     // T1 (exit) = the closest of the furthest intersections
@@ -62,39 +65,11 @@ float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
     // Calculate box thickness at this pixel (in local space).
     float BoxThickness = max(0, t1 - t0);
 
-    // Get entry position in local space.
+    // Get entry position in UVW space.
     float3 EntryPos = LocalCamPos + (t0 * LocalCamVec);
     
     return float4(EntryPos, BoxThickness);
 }
-
-//float4 PerformOffRaymarchCubeSetup
-//{
-
-//float4x4 WorldToVolumeLocal = float4x4(
-//W2V_X0.x, W2V_X0.y, W2V_X0.z, 0,
-//W2V_X1.x, W2V_X1.y, W2V_X1.z, 0,
-//W2V_X2.x, W2V_X2.y, W2V_X2.z, 0,
-//W2V_X3.x, W2V_X3.y, W2V_X3.z, 1);
-
-//// Get cam pos and vector into local space too.
-//float3 localcampos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), WorldToVolumeLocal).xyz;
-//float3 localcamvec = -normalize(mul(float4(ResolvedView.WorldCameraOrigin + Parameters.CameraVector, 1.00000000), WorldToVolumeLocal).xyz - localcampos);
-
-
-//float2 intersect = LineBoxIntersect(localcampos, localcampos + localcamvec * 10000, -VolumeLocalBounds / 2, VolumeLocalBounds / 2);
-//float3 entryposOnCube = localcampos + intersect.x * localcamvec * 10000;
-
-//float3 entrypos = (entryposOnCube + VolumeLocalBounds / 2) / VolumeLocalBounds;
-
-//float boxthickness = max(0, intersect.y - intersect.x);
-
-//if(boxthickness == 0.0) return float4(0.0, 0.0, 0.0, 0.0);
-//return float4(entrypos, 1.0);//boxthickness);
-
-//}
-
-
 
 // Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
 // and thickness of the cube in alpha. All values returned are in UVW space.
