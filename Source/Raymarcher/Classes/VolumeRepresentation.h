@@ -1,4 +1,5 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// (c) 2019 Technical University of Munich
+// Jakob Weiss <jakob.weiss@tum.de>, Tomas Bartipan <tomas.bartipan@tum.de>
 
 #pragma once
 

@@ -1,4 +1,5 @@
-// Copyright 1998-2018 Epic Games, Inc. All Rights Reserved.
+// (C) Technical University of Munich - Computer Aided Medical Procedures
+// Developed by Tomas Bartipan (tomas.bartipan@tum.de)
 
 #pragma once
 
