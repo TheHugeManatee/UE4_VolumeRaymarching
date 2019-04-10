@@ -63,7 +63,7 @@ public:
 
   bool Serialize(FArchive& Ar) {
     bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-    Ar << MarkedVolume << CuboidCenter << CuboidSize << WrittenValue;
+    Ar << MarkedVolume << CuboidCenter << WrittenValue << CuboidSize;
     return bShaderHasOutdatedParameters;
   }
 
@@ -79,9 +79,15 @@ protected:
 
 void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                       FRHITexture3D* MarkedVolume, const float SphereRadiusWorld,
-                                      const FVector BrushWorldSize,
+                                      const FVector BrushWorldCenter,
                                       const FRaymarchWorldParameters WorldParameters,
                                       FSurgeryLabel WrittenValue);
+
+void WriteSphereToVolumeLocal_RenderThread(FRHICommandListImmediate& RHICmdList,
+                                           FRHITexture3D* MarkedVolume,
+                                           const FVector BrushLocalCenter,
+                                           const float SphereRadiusLocal,
+                                           FSurgeryLabel WrittenValue);
 
 // Actual blueprint library follows
 UCLASS()
@@ -102,5 +108,10 @@ public:
   static void LabelSphereInVolumeWorld(UVolumeTexture* MarkedVolume, FVector BrushWorldCenter,
                                        const float SphereRadiusWorld,
                                        const FRaymarchWorldParameters WorldParameters,
-                                       const FSurgeryLabel label);
+                                       const FSurgeryLabel Label);
+
+  /** Writes specified value into a volume at a sphere specified in local coordinates. */
+  UFUNCTION(BlueprintCallable, Category = "Label Volume")
+  static void LabelSphereInVolumeLocal(UVolumeTexture* MarkedVolume, FVector BrushLocalCenter,
+                                       const float SphereLocalRadius, const FSurgeryLabel Label);
 };

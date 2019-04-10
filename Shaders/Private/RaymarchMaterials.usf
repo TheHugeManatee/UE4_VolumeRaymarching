@@ -71,8 +71,75 @@ float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
     return float4(EntryPos, BoxThickness);
 }
 
+
 // Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
 // and thickness of the cube in alpha. All values returned are in UVW space.
+float4 PerformExperimentalRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters, out float4 EntryPos, out float3 ExitPos, in float Scaling)
+{
+    // Get scene depth at this pixel.
+    float LocalSceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(MaterialParameters)));
+
+    // Get camera forward vector in world space.
+    float3 CameraFWDVecWorld = mul(float3(0.00000000, 0.00000000, 1.00000000), ResolvedView.ViewToTranslatedWorld);
+
+    // Get world space vector going from camera center to current scene depth.
+    float3 WorldDepthVec = normalize(MaterialParameters.CameraVector) * LocalSceneDepth;
+
+    // Transform this vector into the box's local space
+    WorldDepthVec = mul(WorldDepthVec, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal);
+
+    // Get actual depth in local space, account for mesh bounds (by default, we use a centered 1x1x1 cube mesh, so this is unnecessary)
+    LocalSceneDepth = length(WorldDepthVec);
+    LocalSceneDepth /= (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax.x * 2);
+
+    // Account for difference between camera center vector and camera-to-pixel depth
+    LocalSceneDepth /= abs(dot(CameraFWDVecWorld, MaterialParameters.CameraVector));
+
+    // Get cam pos and vector into local space too.
+    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), (GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal) * Scaling).xyz;
+    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
+
+    // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
+    LocalCamPos = ((LocalCamPos / (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax * 2))) + 0.5;
+    float3 InverseRayDirVec = 1 / LocalCamVec;
+
+    // Because now we're in texture space where our box is at [0, 1] in each axis, it's easy to get intersections.
+    // LowIntersections will have the distance of the ray in X,Y,Z before it hits the respective axis.
+    // HighIntersections will have the distance of the ray in X,Y,Z before it reaches 1 in the respective axis.
+    float3 LowIntersections = (0 - LocalCamPos) * InverseRayDirVec;
+    float3 HighIntersections = (1 - LocalCamPos) * InverseRayDirVec;
+
+    // Get closest and furthest intersections
+    float3 ClosestIntersections = min(LowIntersections, HighIntersections);
+    float3 FurthestIntersections = max(LowIntersections, HighIntersections);
+
+    // The actual intersections of the box are the 2 values in the middle of the pack.
+    // T0 (entry) = the farthest of the closest intersections
+    float t0 = max(ClosestIntersections.x, max(ClosestIntersections.y, ClosestIntersections.z));
+    // T1 (exit) = the closest of the furthest intersections
+    float t1 = min(FurthestIntersections.x, min(FurthestIntersections.y, FurthestIntersections.z));
+
+    // Make sure the entry point is not behind the camera
+    t0 = max(0, t0);
+
+    // Make sure the exit point is not behind other scene geometry.
+    t1 = min(t1, LocalSceneDepth * Scaling);
+
+    // Calculate box thickness at this pixel (in local space).
+    float BoxThickness = max(0, t1 - t0);
+
+    // Get entry position in UVW space.
+    EntryPos.xyz = LocalCamPos + (t0 * LocalCamVec);
+    EntryPos.a = BoxThickness;
+    ExitPos = LocalCamPos + (t1 * LocalCamVec);
+
+    return EntryPos;
+}
+
+// Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
+// and thickness of the cube in alpha. All values returned are in UVW space. 
+// This setup is for performing the setup from a shader that's NOT run on the cube itself, it takes the
+// cube's transform as a parameter.
 float4 PerformOffsetRaymarchCubeSetup(float4x4 CubeTransformW2L, FMaterialPixelParameters MaterialParameters)
 {
     // Get scene depth at this pixel.
@@ -98,7 +165,6 @@ float4 PerformOffsetRaymarchCubeSetup(float4x4 CubeTransformW2L, FMaterialPixelP
 //    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, CubeTransformW2L));
 
     float3 LocalCamVec = -normalize(mul(float4(ResolvedView.WorldCameraOrigin + MaterialParameters.CameraVector, 1.00000000), CubeTransformW2L).xyz - LocalCamPos);
-
 
     // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
     LocalCamPos = (LocalCamPos) + 0.5;
@@ -129,15 +195,7 @@ float4 PerformOffsetRaymarchCubeSetup(float4x4 CubeTransformW2L, FMaterialPixelP
     // Get entry position in local space.
     float3 EntryPos = LocalCamPos + (t0 * LocalCamVec);
     
-    if (BoxThickness == 0.0f)
-    {
-        return float4(0.0, 0.0, 0.0, 0.0);
-    }
-    else
-    {
-        return float4(EntryPos, 1.0); //boxthickness);}
-
-    }
+    return float4(EntryPos, BoxThickness);
 }
 
 // Performs lit raymarch for the current pixel. The lighting information is taken from a precomputed light volume.
@@ -394,6 +452,13 @@ float4 PerformShadowRaymarch(Texture3D LightVolume, SamplerState LightVolumeSamp
     return LightEnergy;
 }
 
+float4x4 MatrixFromRowVectors(float4 X0, float4 X1, float4 X2, float4 X3)
+{
+    return float4x4(X0.x, X0.y, X0.z, X0.a,
+                    X1.x, X1.y, X1.z, X1.a,
+                    X2.x, X2.y, X2.z, X2.a,
+                    X3.x, X3.y, X3.z, X3.a);
+}
 
 //int i = 0;
 //for (i = 0;i <

@@ -331,8 +331,8 @@ void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(
 
   //  assert(i == sampleCount);
 
-  for (unsigned i = 1; i < TextureHeight; i++) {
-    FMemory::Memcpy(samples + (i * sampleCount * 4), samples, sampleCount * 4 * 2);
+  for (unsigned j = 1; j < TextureHeight; j++) {
+    FMemory::Memcpy(samples + (j * sampleCount * 4), samples, sampleCount * 4 * 2);
   }
 
   Update2DTextureAsset(Texture, PF_FloatRGBA, FIntPoint(sampleCount, TextureHeight),

@@ -851,7 +851,7 @@ void ClearVolumeTexture_RenderThread(FRHICommandListImmediate& RHICmdList,
   // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
   // no race conditions But we definitely need to transition the resource to Compute-shader
   // accessible, otherwise the renderer might touch our textures while we're writing them.
-  RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+  RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier,
                                 EResourceTransitionPipeline::EGfxToCompute, VolumeUAVRef);
 
   ComputeShader->SetParameters(RHICmdList, VolumeUAVRef, ClearValues,

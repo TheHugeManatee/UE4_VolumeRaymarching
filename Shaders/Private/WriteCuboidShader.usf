@@ -19,6 +19,7 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
     float3 myPosLocal = myPosRelative / (float3) CuboidSize;
     if (length(myPosLocal) <= 0.5)
     {
+
         MarkedVolume[myPos] = CharToFloat(WrittenValue);
     }
 }
