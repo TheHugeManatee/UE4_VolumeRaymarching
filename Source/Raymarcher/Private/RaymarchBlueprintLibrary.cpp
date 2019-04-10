@@ -396,6 +396,15 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
   CreateBufferTextures(YBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[1]);
   CreateBufferTextures(ZBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[2]);
 
+  if (!OutParameters.ALightVolumeRef->Resource->TextureRHI) {
+    // Note: We assume that when the TextureRHI is null, the texture is still being set up on the
+    // render thread, so we flush it. No explicit checks are done whether this is successful, so if
+    // the TextureRHI is null for some other reason, this will still crash..
+    FlushRenderingCommands();
+  }
+
+  check(OutParameters.ALightVolumeRef->Resource->TextureRHI);
+
   OutParameters.ALightVolumeUAVRef =
       RHICreateUnorderedAccessView(OutParameters.ALightVolumeRef->Resource->TextureRHI);
 
@@ -583,20 +592,20 @@ void URaymarchBlueprintLibrary::GetRightFaceAlongNegX(FCubeFace CubeFace,
 }
 
 void URaymarchBlueprintLibrary::Initialize2DTextureForSliceWrite(UVolumeTexture* VolumeTexture,
-																 UTexture2D* WrittenSliceTexture) {
+                                                                 UTexture2D* WrittenSliceTexture) {
   if (!VolumeTexture || !WrittenSliceTexture) {
     MY_LOG("Failed initializing texture for slice write. Volume or Slice texture not provided!");
-    return;  
+    return;
   }
 
   FIntPoint Texture2DSize = FIntPoint(VolumeTexture->GetSizeY(), VolumeTexture->GetSizeZ());
-  Update2DTextureAsset(WrittenSliceTexture, VolumeTexture->GetPixelFormat(), Texture2DSize, nullptr, true, true);
+  Update2DTextureAsset(WrittenSliceTexture, VolumeTexture->GetPixelFormat(), Texture2DSize, nullptr,
+                       true, true);
 }
 
 void URaymarchBlueprintLibrary::WriteVolumeTextureSlice(UVolumeTexture* VolumeTexture,
                                                         UTexture2D* WrittenSliceTexture,
                                                         int Layer) {
-
   if (!VolumeTexture || !VolumeTexture->Resource || !WrittenSliceTexture) {
     MY_LOG("Failed writing volume texture slice. Volume or Slice texture not provided!");
     return;
@@ -608,7 +617,8 @@ void URaymarchBlueprintLibrary::WriteVolumeTextureSlice(UVolumeTexture* VolumeTe
   }
 
   EPixelFormat PixelFormat = VolumeTexture->GetPixelFormat();
-  // We are slicing along X, so make sure the other 2 dimensions match (slice X = volume Y, slice Y = volume Z)
+  // We are slicing along X, so make sure the other 2 dimensions match (slice X = volume Y, slice Y
+  // = volume Z)
   check(WrittenSliceTexture->GetSizeX() == VolumeTexture->GetSizeY() &&
         WrittenSliceTexture->GetSizeY() == VolumeTexture->GetSizeZ())
 
@@ -618,14 +628,12 @@ void URaymarchBlueprintLibrary::WriteVolumeTextureSlice(UVolumeTexture* VolumeTe
       });
 }
 
-void URaymarchBlueprintLibrary::LocalToTextureCoords(FVector LocalCoords, FVector& TextureCoords)
-{
-	TextureCoords = (LocalCoords / 2.0f) + 0.5f;
+void URaymarchBlueprintLibrary::LocalToTextureCoords(FVector LocalCoords, FVector& TextureCoords) {
+  TextureCoords = (LocalCoords / 2.0f) + 0.5f;
 }
 
-void URaymarchBlueprintLibrary::TextureToLocalCoords(FVector TextureCoors, FVector& LocalCoords)
-{
-	LocalCoords = (TextureCoors - 0.5f) * 2.0f;
+void URaymarchBlueprintLibrary::TextureToLocalCoords(FVector TextureCoors, FVector& LocalCoords) {
+  LocalCoords = (TextureCoors - 0.5f) * 2.0f;
 }
 
 #undef LOCTEXT_NAMESPACE
