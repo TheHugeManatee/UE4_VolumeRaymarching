@@ -101,7 +101,7 @@ void PerformOffsetRaymarchCubeSetupExtended(FMaterialPixelParameters MaterialPar
     float3 LocalCamVec = -normalize(mul(float4(ResolvedView.WorldCameraOrigin + MaterialParameters.CameraVector, 1.00000000), CubeTransformW2L).xyz - LocalCamPos);
 
     // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
-    LocalCamPos = (LocalCamPos / (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax * 2)) + 0.5;
+    LocalCamPos = LocalCamPos  + 0.5;
     float3 InverseRayDirVec = 1 / LocalCamVec;
        
     // Get intersections
@@ -244,8 +244,8 @@ float4 PerformActualCombinedRaymarch(float3 EntryPos1, float3 LocalCamVec1,
     // Initialize accumulated light energy.
     float4 LightEnergy = 0;
     // Jitter Entry position to avoid artifacts.
-    //JitterEntryPos(EntryPos1, LocalCamVec1, MaterialParameters);
-    //JitterEntryPos(EntryPos2, LocalCamVec2, MaterialParameters);
+    JitterEntryPos(EntryPos1, LocalCamVec1, MaterialParameters);
+    JitterEntryPos(EntryPos2, LocalCamVec2, MaterialParameters);
 
     float3 CurPos1 = EntryPos1;
     float3 CurPos2 = EntryPos2;
@@ -270,48 +270,6 @@ float4 PerformActualCombinedRaymarch(float3 EntryPos1, float3 LocalCamVec1,
     }
     return LightEnergy;
 }
-
-
-
-float4 PerformActualCombinedRaymarchWorld(float3 EntryPos, float3 WorldStep,
-                                     float4x4 VolumeW2L, float StepSizeWorld, float Steps, // Entry&Exit in UVW space
-                                     Texture3D DataVolume, SamplerState DataVolumeSampler, // Data Volume and Sampler
-                                     Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain, // Transfer func, sampler and intensity domain modifier
-                                     Texture3D LightVolume, SamplerState LightVolumeSampler, // Light Volume  
-                                     Texture3D LabelVolume,
-                                     float4x4 VolumeTransformL2W,
-                                     FMaterialPixelParameters MaterialParameters)
-{
-    // Initialize accumulated light energy.
-    float4 LightEnergy = 0;
-    // Jitter Entry position to avoid artifacts.
-    //JitterEntryPos(EntryPos1, LocalCamVec1, MaterialParameters);
-    //JitterEntryPos(EntryPos2, LocalCamVec2, MaterialParameters);
-
-    float3 CurPos1 = EntryPos;
-    float3 CurPos2 = EntryPos;
-
-    int i = 0;
-    for (i = 0; i < Steps; i++)
-    {
-        if (all(saturate(CurPos1) == CurPos1))
-            AccumulateOneRaymarchLabelStep(LightEnergy, CurPos1, LabelVolume, StepSizeWorld);
-        
-        if (all(saturate(CurPos2) == CurPos2))
-            AccumulateOneRaymarchStep(LightEnergy, CurPos2, DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain, LightVolume, LightVolumeSampler, StepSizeWorld);
-
-	    // Exit early if light energy (opacity) is already very high (so future steps would have almost no impact on color).
-        if (LightEnergy.a > 0.99f)
-        {
-            LightEnergy.a = 1.0f;
-            break;
-        };
-        CurPos1 += EntryPos;
-        CurPos2 += EntryPos;
-    }
-    return LightEnergy;
-}
-
 
 
 // Original!
@@ -339,11 +297,6 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, SamplerState DataVolumeSamp
 
     if (BoxThickness2 == 0)
     {
-        EntryPos1.xyz = UVWToLocal(EntryPos1.xyz);
-        EntryPos1 = mul(EntryPos1, LabelVolumeTransformL2W);
-        EntryPos1.xyz /= 40;
-        EntryPos1.x /= 2;
-        return EntryPos1;
         // Hit only the label volume -> perform only label volume raymarch
         return PerformLabelOnlyRaymarchFixedSteps(LabelVolume, LabelVolumeTransformL2W,
                                                   EntryPos1.xyz, ExitPos1.xyz, Steps, Parameters);
@@ -351,12 +304,6 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, SamplerState DataVolumeSamp
 
     if (BoxThickness1 == 0)
     {
-        EntryPos2.xyz = UVWToLocal(EntryPos2.xyz);
-        EntryPos2 = mul(EntryPos2, DataVolumeTransformL2W);
-        EntryPos2.xyz /= 40;
-        EntryPos2.x /= 2;
-        return EntryPos2;
-
         // Only the offset box has non-zero thickness -> perform regular raymarch on it.
         return PerformLitRaymarchFixedStep(DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain,
                                         LightVolume, LightVolumeSampler,
@@ -373,29 +320,29 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, SamplerState DataVolumeSamp
     // 5) Profit!
 
     // Get all Entry/Exit points in world space
-    
+
+
     // First volume - get entry, exit in local (from UVW)
-    EntryPos1.xyz = UVWToLocal(EntryPos1.xyz);
-    ExitPos1.xyz = UVWToLocal(ExitPos1.xyz);
+    EntryPos1.xyz = UVWToUnitLocal(EntryPos1.xyz);
+    ExitPos1.xyz = UVWToUnitLocal(ExitPos1.xyz);
     // And into world space.
     EntryPos1 = mul(EntryPos1, LabelVolumeTransformL2W);
     ExitPos1 = mul(ExitPos1, LabelVolumeTransformL2W);
     // Second volume - get entry, exit in local (from UVW)
-    EntryPos2.xyz = UVWToLocal(EntryPos2.xyz);
-    ExitPos2.xyz = UVWToLocal(ExitPos2.xyz);
+    EntryPos2.xyz = UVWToUnitLocal(EntryPos2.xyz);
+    ExitPos2.xyz = UVWToUnitLocal(ExitPos2.xyz);
     // And into world space.
     EntryPos2 = mul(EntryPos2, DataVolumeTransformL2W);
     ExitPos2 = mul(ExitPos2, DataVolumeTransformL2W);
-
-    float4 CloserEntryWorld, FurtherExitWorld;
-
-    // Get world to view ?
-    float3 EntryPos1View = mul(EntryPos1 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
-    float3 EntryPos2View = mul(EntryPos2 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
-    float3 ExitPos1View = mul(ExitPos1 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
-    float3 ExitPos2View = mul(ExitPos2 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
-
-    //if (distance(EntryPos1.xyz, CameraWorld) < distance(EntryPos2.xyz, CameraWorld))
+    
+    // A different way of ordering the entry + exit pts, also works
+    
+    // // Get world to view
+    //float3 EntryPos1View = mul(EntryPos1 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
+    //float3 EntryPos2View = mul(EntryPos2 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
+    //float3 ExitPos1View = mul(ExitPos1 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
+    //float3 ExitPos2View = mul(ExitPos2 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
+    //if (EntryPos1View.z < EntryPos2View.z)
     //{
     //    CloserEntryWorld = EntryPos1;
     //}
@@ -404,7 +351,7 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, SamplerState DataVolumeSamp
     //    CloserEntryWorld = EntryPos2;
     //}
 
-    //if (distance(ExitPos1.xyz, CameraWorld) > distance(ExitPos2.xyz, CameraWorld))
+    //if (ExitPos1View.z > ExitPos2View.z)
     //{
     //    FurtherExitWorld = ExitPos1;
     //}
@@ -412,18 +359,20 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, SamplerState DataVolumeSamp
     //{
     //    FurtherExitWorld = ExitPos2;
     //}
-
     
-    if (EntryPos1View.z < EntryPos2View.z)
+    float4 CloserEntryWorld, FurtherExitWorld;
+
+    if (distance(EntryPos1.xyz, CameraWorld) < distance(EntryPos2.xyz, CameraWorld))
     {
         CloserEntryWorld = EntryPos1;
+
     }
     else
     {
         CloserEntryWorld = EntryPos2;
     }
 
-    if (ExitPos1View.z > ExitPos2View.z)
+    if (distance(ExitPos1.xyz, CameraWorld) > distance(ExitPos2.xyz, CameraWorld))
     {
         FurtherExitWorld = ExitPos1;
     }
@@ -432,23 +381,19 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, SamplerState DataVolumeSamp
         FurtherExitWorld = ExitPos2;
     }
 
+   
 
-    CloserEntryWorld.xyz /= 40;
-    CloserEntryWorld.x /= 2;
-    return CloserEntryWorld;
+    
 
     // We got Entry&Exit in world space, transform back into local for both volumes.
-    EntryPos1.xyz = LocalToUVW(mul(CloserEntryWorld, LabelVolumeTransformW2L).xyz);
+    EntryPos1.xyz = UnitLocaltoUVW(mul(CloserEntryWorld, LabelVolumeTransformW2L).xyz);
     //ExitPos1.xyz = LocalToUVW(mul(FurtherExitWorld, GetPrimitiveData(Parameters.PrimitiveId).WorldToLocal).xyz * ScaleDownFactor);
 
-    EntryPos2.xyz = LocalToUVW(mul(CloserEntryWorld, DataVolumeTransformW2L).xyz);
+    EntryPos2.xyz = UnitLocaltoUVW(mul(CloserEntryWorld, DataVolumeTransformW2L).xyz);
     //ExitPos2.xyz = LocalToUVW(mul(FurtherExitWorld, DataVolumeTransformW2L).xyz);
 
     float4 TotalMarchingVectorWorld = FurtherExitWorld - CloserEntryWorld;
-    
-    float lengthW = length(TotalMarchingVectorWorld) / 250;
-     return float4(lengthW, lengthW, lengthW, 1.0);
-    
+       
     float3 LocalCamVec1 = mul(TotalMarchingVectorWorld, LabelVolumeTransformW2L).xyz / Steps;
     float3 LocalCamVec2 = mul(TotalMarchingVectorWorld, DataVolumeTransformW2L).xyz / Steps;
     float StepSizeWorld = length(TotalMarchingVectorWorld) / Steps;
@@ -458,164 +403,3 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, SamplerState DataVolumeSamp
                                             LightVolume, LightVolumeSampler, LabelVolume,
                                             DataVolumeTransformL2W, Parameters);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Original!
-float4 PerformCombinedRaymarchOriginal(Texture3D DataVolume, SamplerState DataVolumeSampler, // Data Volume and Sampler
-                               Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain, // Transfer func, sampler and intensity domain modifier
-                               Texture3D LightVolume, SamplerState LightVolumeSampler, // Light Volume  
-                               Texture3D LabelVolume, SamplerState LabelVolumeSampler, // Label Volume  
-                               float4x4 DataVolumeTransformW2L, float4x4 DataVolumeTransformL2W, // Offset volume transforms
-                               float ScaleDownFactor, float Steps,
-                               FMaterialPixelParameters Parameters, float3 CameraWorld)
-{
-    float BoxThickness1, BoxThickness2;
-    float4 EntryPos1, ExitPos1, EntryPos2, ExitPos2;
-    
-    // Get Local Entry and Exit points and also the box thickness in local space.
-    PerformRaymarchCubeSetupScaledDown(Parameters, ScaleDownFactor, EntryPos1, ExitPos1, BoxThickness1);
-    PerformOffsetRaymarchCubeSetupExtended(Parameters, DataVolumeTransformW2L, EntryPos2, ExitPos2, BoxThickness2);
-    
-    if (BoxThickness1 == 0 && BoxThickness2 == 0)
-    {
-        // Box thicnkess is 0 for both -> no intersection
-        return float4(0, 0, 0, 0);
-    }
-
-    if (BoxThickness2 == 0)
-    {
-        //EntryPos1.xyz = UVWToLocal(EntryPos1.xyz) / ScaleDownFactor;
-        //EntryPos1 = mul(EntryPos1, GetPrimitiveData(Parameters.PrimitiveId).LocalToWorld);
-        //EntryPos1.xyz = LocalToUVW(mul(EntryPos1, GetPrimitiveData(Parameters.PrimitiveId).WorldToLocal).xyz * ScaleDownFactor);
-        //return EntryPos1;
-        
-        // Hit only the label volume -> perform only label volume raymarch
-        return PerformLabelOnlyRaymarchFixedSteps(EntryPos1.xyz, ExitPos1.xyz, Steps, LabelVolume, Parameters, ScaleDownFactor);
-    }
-
-    if (BoxThickness1 == 0)
-    {
-        //EntryPos2.xyz = UVWToLocal(EntryPos2.xyz);
-        //EntryPos2 = mul(EntryPos2, DataVolumeTransformL2W);
-        //EntryPos2.xyz = LocalToUVW(mul(EntryPos2, DataVolumeTransformW2L).xyz);
-        //return EntryPos2;
-
-        // Only the offset box has non-zero thickness -> perform regular raymarch on it.
-        return PerformLitRaymarchFixedStep(DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain,
-                                        LightVolume, LightVolumeSampler,
-                                        DataVolumeTransformL2W, EntryPos2.xyz, ExitPos2.xyz, Steps, Parameters);
-    }
-
-    // The hard case - both volumes have non-zero thicknesses
-    // Gotta 
-    // 1) get the entry and exit points in world space and get their distance to camera
-    // 2) Sort them, so that we use the closer entry and further exit.
-    // 3) Transform both world coords into 4 local ones (Entry, Exit point in both local spaces)
-    // 4) Raymarch both in lockstep.
-    // ???
-    // 5) Profit!
-
-    // Get all Entry/Exit points in world space
-    
-    // First volume - get entry,exit to actual local coords (from scaled UVW).
-    EntryPos1.xyz = UVWToLocal(EntryPos1.xyz) / ScaleDownFactor;
-    ExitPos1.xyz = UVWToLocal(ExitPos1.xyz) / ScaleDownFactor;
-    // And into world space.
-    EntryPos1 = mul(EntryPos1, GetPrimitiveData(Parameters.PrimitiveId).LocalToWorld);
-    ExitPos1 = mul(ExitPos1, GetPrimitiveData(Parameters.PrimitiveId).LocalToWorld);
-
-    // Second volume - get entry, exit in local (from UVW)
-    EntryPos2.xyz = UVWToLocal(EntryPos2.xyz);
-    ExitPos2.xyz = UVWToLocal(ExitPos2.xyz);
-    // And into world space.
-    EntryPos2 = mul(EntryPos2, DataVolumeTransformL2W);
-    ExitPos2 = mul(ExitPos2, DataVolumeTransformL2W);
-
-    float4 CloserEntryWorld, FurtherExitWorld;
-
-    float3 EntryPos1View = mul(EntryPos1, View.TranslatedWorldToView).xyz;
-    float3 EntryPos2View = mul(EntryPos2, View.TranslatedWorldToView).xyz;
-    float3 ExitPos1View = mul(ExitPos1, View.TranslatedWorldToView).xyz;
-    float3 ExitPos2View = mul(ExitPos2, View.TranslatedWorldToView).xyz;
-
-    if (EntryPos1View.z < EntryPos2View.z)
-    {
-        CloserEntryWorld = EntryPos1;
-    }
-    else
-    {
-        CloserEntryWorld = EntryPos2;
-    }
-
-    if (ExitPos1View.z > ExitPos2View.z)
-    {
-        FurtherExitWorld = ExitPos1;
-    }
-    else
-    {
-        FurtherExitWorld = ExitPos2;
-    }
-
-
-    // We got Entry&Exit in world space, transform back into local for both volumes.
-    EntryPos1.xyz = LocalToUVW(mul(CloserEntryWorld, GetPrimitiveData(Parameters.PrimitiveId).WorldToLocal).xyz * ScaleDownFactor);
-    //ExitPos1.xyz = LocalToUVW(mul(FurtherExitWorld, GetPrimitiveData(Parameters.PrimitiveId).WorldToLocal).xyz * ScaleDownFactor);
-
-    EntryPos2.xyz = LocalToUVW(mul(CloserEntryWorld, DataVolumeTransformW2L).xyz);
-    //ExitPos2.xyz = LocalToUVW(mul(FurtherExitWorld, DataVolumeTransformW2L).xyz);
-
-    float4 TotalMarchingVectorWorld = FurtherExitWorld - CloserEntryWorld;
-    
-    float lengthW = length(TotalMarchingVectorWorld) / 250;
-    // return float4(lengthW, lengthW, lengthW, 1.0);
-    
-    float3 LocalCamVec1 = (mul(TotalMarchingVectorWorld, GetPrimitiveData(Parameters.PrimitiveId).WorldToLocal).xyz / Steps) * ScaleDownFactor;
-    float3 LocalCamVec2 = mul(TotalMarchingVectorWorld, DataVolumeTransformW2L).xyz / Steps;
-    float StepSizeWorld = length(TotalMarchingVectorWorld) / Steps;
-
-    return PerformActualCombinedRaymarch(EntryPos1.xyz, LocalCamVec1, EntryPos2.xyz, LocalCamVec2, StepSizeWorld, Steps,
-                                            DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain,
-                                            LightVolume, LightVolumeSampler, LabelVolume,
-                                            DataVolumeTransformL2W, Parameters);
-
-    //if (EntryPos2.a != 0)
-    //{
-    //    return EntryPos2;
-    //}
-
-    //if (EntryPos1.a == 0.0 && EntryPos2.a == 0.0)
-    //{
-    //    // Box thicnkess is 0 for both
-    //    return float4(0, 0, 0, 0);
-    //}
-
-    //if (EntryPos1.a == 0.0)
-    //{
-    //    // Only the offset box has non-zero thickness -> perform regular raymarch on it.
-    //    return PerformLabelOnlyRaymarchFixedSteps(EntryPos1.xyz, Steps, LabelVolume, Parameters, ScaleDownFactor);
-    //}
-
-    //if (EntryPos2.a == 0.0)
-    //{
-    //    // Only label volume has non-zero thickness -> Raymarch only labels
-    //    return PerformLitRaymarchFixedSteps(EntryPos2.xyz, Steps, LabelVolume, Parameters, ScaleDownFactor);
-    //}
-
-
-    
-}
-

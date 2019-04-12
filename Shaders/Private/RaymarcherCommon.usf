@@ -90,6 +90,20 @@ float3 LocalToUVW(float3 Local)
 {
     return (Local / 2) + 0.5;
 }
+
+// Go from UVW coords to local coords of a unit cube (from [0 -> 1] to [-0.5 -> 1])
+float3 UVWToUnitLocal(float3 UVW)
+{
+    return (UVW - 0.5);
+}
+
+
+// Go from Local coords of a unit cube to UVW (from [-0.5 -> 1] to [0 -> 1])
+float3 UnitLocaltoUVW(float3 Local)
+{
+    return (Local + 0.5);
+}
+
 ///
 /// Obsolete functions for multicolored lights. Eventually we might reipmlement them.
 ///
