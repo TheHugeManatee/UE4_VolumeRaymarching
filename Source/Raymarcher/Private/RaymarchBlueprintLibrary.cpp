@@ -31,7 +31,7 @@ void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
   }
 
   // FMemory::Memset(InitMemory, 1, TotalSize);
-  UpdateVolumeTextureAsset(LightVolume, PF_G8, Dimensions, nullptr, true, false, true);
+  UpdateVolumeTextureAsset(LightVolume, PF_G8, Dimensions, nullptr, false, false, true);
 }
 
 void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
@@ -240,7 +240,7 @@ void URaymarchBlueprintLibrary::ColorCurveToTexture(UCurveLinearColor* Curve, UT
   }
 
   Update2DTextureAsset(Texture, PF_FloatRGBA, FIntPoint(sampleCount, TextureHeight),
-                       (uint8*)samples, true);
+                       (uint8*)samples);
 
   delete[] samples;  // Don't forget to free the memory here
   return;
