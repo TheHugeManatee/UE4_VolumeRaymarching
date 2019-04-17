@@ -27,7 +27,7 @@ float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
 
     // Get actual depth in local space, account for mesh bounds (by default, we use a centered 1x1x1 cube mesh, so this is unnecessary)
     LocalSceneDepth = length(WorldDepthVec);
-    LocalSceneDepth /= (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax.x * 2);
+    // LocalSceneDepth /= (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax.x * 2);
 
     // Account for difference between camera center vector and camera-to-pixel depth
     LocalSceneDepth /= abs(dot(CameraFWDVecWorld, MaterialParameters.CameraVector));
@@ -37,7 +37,7 @@ float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
     float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
 
     // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
-    LocalCamPos = (LocalCamPos / (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax * 2)) + 0.5;
+    LocalCamPos += 0.5;
     float3 InverseRayDirVec = 1 / LocalCamVec;
 
     // Because now we're in texture space where our box is at [0, 1] in each axis, it's easy to get intersections.
@@ -90,7 +90,7 @@ float4 PerformExperimentalRaymarchCubeSetup(FMaterialPixelParameters MaterialPar
 
     // Get actual depth in local space, account for mesh bounds (by default, we use a centered 1x1x1 cube mesh, so this is unnecessary)
     LocalSceneDepth = length(WorldDepthVec);
-    LocalSceneDepth /= (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax.x * 2);
+    // LocalSceneDepth /= (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax.x * 2);
 
     // Account for difference between camera center vector and camera-to-pixel depth
     LocalSceneDepth /= abs(dot(CameraFWDVecWorld, MaterialParameters.CameraVector));
@@ -100,7 +100,7 @@ float4 PerformExperimentalRaymarchCubeSetup(FMaterialPixelParameters MaterialPar
     float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
 
     // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
-    LocalCamPos = ((LocalCamPos / (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax * 2))) + 0.5;
+    LocalCamPos += 0.5; //  ((LocalCamPos / (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax * 2))) + 0.5;
     float3 InverseRayDirVec = 1 / LocalCamVec;
 
     // Because now we're in texture space where our box is at [0, 1] in each axis, it's easy to get intersections.
@@ -162,12 +162,10 @@ float4 PerformOffsetRaymarchCubeSetup(float4x4 CubeTransformW2L, FMaterialPixelP
 
     // Get cam pos and vector into local space too.
     float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), CubeTransformW2L).xyz;
-//    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, CubeTransformW2L));
-
     float3 LocalCamVec = -normalize(mul(float4(ResolvedView.WorldCameraOrigin + MaterialParameters.CameraVector, 1.00000000), CubeTransformW2L).xyz - LocalCamPos);
 
     // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
-    LocalCamPos = (LocalCamPos) + 0.5;
+    LocalCamPos += 0.5;
     float3 InverseRayDirVec = 1 / LocalCamVec;
        
     // Get intersections

@@ -28,7 +28,6 @@ void PerformRaymarchCubeSetupScaledDown(FMaterialPixelParameters MaterialParamet
 
     // Get actual depth in local space, account for mesh bounds (by default, we use a centered 1x1x1 cube mesh, so this is unnecessary)
     LocalSceneDepth = length(WorldDepthVec);
-    LocalSceneDepth /= (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax.x * 2);
 
     // Account for difference between camera center vector and camera-to-pixel depth
     LocalSceneDepth /= abs(dot(CameraFWDVecWorld, MaterialParameters.CameraVector));
@@ -38,8 +37,7 @@ void PerformRaymarchCubeSetupScaledDown(FMaterialPixelParameters MaterialParamet
     float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
 
     // Transform camera pos from local to UVW coords (from +-1 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
-    //LocalCamPos = LocalToUVW(LocalCamPos);
-    LocalCamPos = (LocalCamPos / (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax * 2)) + 0.5;
+    LocalCamPos += 0.5;
     float3 InverseRayDirVec = 1 / LocalCamVec;
 
     // Because now we're in texture space where our box is at [0, 1] in each axis, it's easy to get intersections.
@@ -90,7 +88,7 @@ void PerformOffsetRaymarchCubeSetupExtended(FMaterialPixelParameters MaterialPar
     // Transform this vector into the box's local space
     WorldDepthVec = mul(WorldDepthVec, CubeTransformW2L);
 
-    // Get actual depth in local space (account for mesh bounds?)
+    // Get actual depth in local space.
     LocalSceneDepth = length(WorldDepthVec);
 
     // Account for difference between camera center vector and camera-to-pixel depth
@@ -101,7 +99,7 @@ void PerformOffsetRaymarchCubeSetupExtended(FMaterialPixelParameters MaterialPar
     float3 LocalCamVec = -normalize(mul(float4(ResolvedView.WorldCameraOrigin + MaterialParameters.CameraVector, 1.00000000), CubeTransformW2L).xyz - LocalCamPos);
 
     // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
-    LocalCamPos = LocalCamPos  + 0.5;
+    LocalCamPos += 0.5;
     float3 InverseRayDirVec = 1 / LocalCamVec;
        
     // Get intersections

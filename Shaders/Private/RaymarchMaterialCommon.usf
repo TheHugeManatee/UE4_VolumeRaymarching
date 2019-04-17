@@ -126,7 +126,7 @@ void AccumulateOneRaymarchLabelStep(inout float4 AccumulatedLightEnergy, float3 
 // by the magical shader compiler environment. Lurk through the generated HLSL file to see other nice structs that can be stolen like this.
 float GetDFShadow(float3 CurPos, int DFSteps, float LightTangent, float3 LightVectorWS, FMaterialPixelParameters MaterialParameters)
 {
-    float3 DFPos = 2 * (CurPos - 0.5) * Primitive.LocalObjectBoundsMax.x;
+    float3 DFPos = (CurPos - 0.5);
     DFPos = TransformLocalPositionToWorld(MaterialParameters, DFPos).xyz;
 
     float dftracedist = 1;

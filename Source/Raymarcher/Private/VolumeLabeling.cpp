@@ -19,17 +19,11 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                       const FRaymarchWorldParameters WorldParameters,
                                       FSurgeryLabel WrittenValue) {
   // Get local center.
-  FVector localCenter =
-      ((WorldParameters.VolumeTransform.InverseTransformPosition(BrushWorldCenter) /
-        (WorldParameters.MeshMaxBounds)) /
-       2.0) +
-      0.5;
+  FVector localCenter = WorldParameters.VolumeTransform.InverseTransformPosition(BrushWorldCenter) + 0.5;
+  // Get local center to UVW coords
 
-  float localSphereDiameter =
-      ((WorldParameters.VolumeTransform.InverseTransformVector(FVector(SphereRadiusWorld, 0, 0)) /
-        (WorldParameters.MeshMaxBounds * 2)))
-          .Size() *
-      2;
+  float localSphereDiameter = WorldParameters.VolumeTransform.InverseTransformVector(FVector(SphereRadiusWorld, 0, 0)).Size() * 2;
+
   /**
   This would be for making the sphere actually round in world space. Currently, let's prefer the sphere being round in the 
   square window for displaying the labeled data.

@@ -321,8 +321,7 @@ void GetStepSizeAndUVWOffset(FCubeFace Axis, FVector LightPosition, FIntVector T
   }
 
   // Transform local vector to world space.
-  FVector WorldVec = WorldParameters.VolumeTransform.TransformVector(
-      OutUVWOffset * WorldParameters.MeshMaxBounds * 2);
+  FVector WorldVec = WorldParameters.VolumeTransform.TransformVector(OutUVWOffset);
   OutStepSize = WorldVec.Size();
 }
 
@@ -364,18 +363,14 @@ void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
 FClippingPlaneParameters GetLocalClippingParameters(
     const FRaymarchWorldParameters WorldParameters) {
   FClippingPlaneParameters RetVal;
-  // Get clipping center to (0-1) texture local space. (Invert transform, divide by mesh size,
-  // divide by 2 and add 0.5 to get to (0-1) space.
-  RetVal.Center = ((WorldParameters.VolumeTransform.InverseTransformPosition(
-                        WorldParameters.ClippingPlaneParameters.Center) /
-                    (WorldParameters.MeshMaxBounds)) /
-                   2.0) +
-                   0.5;
+  // Get clipping center to (0-1) texture local space. (Invert transform, add 0.5 to get to (0-1) space of a unit cube centered on 0,0,0)
+  RetVal.Center = WorldParameters.VolumeTransform.InverseTransformPosition(
+                        WorldParameters.ClippingPlaneParameters.Center) + 0.5;
   // Get clipping direction in local space - here we don't care about the mesh size (as long as
   // it's a cube, which it really bloody better be).
 
-  // TODO Why the fuck does light direction need NoScale and no multiplication by scale and clipping
-  // plane needs to be multiplied?
+  // TODO Why the fuck does light direction work with regular InverseTransformVector
+  // but clipping direction only works with NoScale and multiplying by scale afterwards?
   RetVal.Direction = WorldParameters.VolumeTransform.InverseTransformVectorNoScale(
       WorldParameters.ClippingPlaneParameters.Direction);
   RetVal.Direction *= WorldParameters.VolumeTransform.GetScale3D();

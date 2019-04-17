@@ -134,8 +134,6 @@ USTRUCT(BlueprintType) struct FRaymarchWorldParameters {
   FTransform VolumeTransform;
   UPROPERTY(BlueprintReadWrite, Category = "Raymarch Rendering World Parameters")
   FClippingPlaneParameters ClippingPlaneParameters;
-  UPROPERTY(BlueprintReadWrite, Category = "Raymarch Rendering World Parameters")
-  FVector MeshMaxBounds;
 };
 
 // Enum for indexes for cube faces - used to discern axes for light propagation shader.
