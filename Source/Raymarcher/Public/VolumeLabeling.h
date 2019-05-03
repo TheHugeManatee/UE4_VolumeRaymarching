@@ -16,9 +16,7 @@ enum class FSurgeryLabel : uint8 {
   SL_Clear = 0,   // Clear, will be fully transparent
   SL_Risk = 1,    // Risk area, red with alpha ~0.5
   SL_Target = 2,  // Target area - green with alpha ~0.5
-  SL_PotentialRisk = 3,
-  SL_PotentialTarget = 4,
-  SL_NotPainting = 5
+  SL_NotPainting = 3
 };
 
 // Parent shader for any shader that works on Light Volumes. Provides a way to bind and unbind the 4

@@ -152,8 +152,8 @@ float SurgeryLabelToFloat(const FSurgeryLabel label) {
     case FSurgeryLabel::SL_Clear: return 0.0;
     case FSurgeryLabel::SL_Risk: return (1.0 / 255.0);
     case FSurgeryLabel::SL_Target: return (2.0 / 255.0);
-    case FSurgeryLabel::SL_PotentialRisk: return (3.0 / 255.0);
-    case FSurgeryLabel::SL_PotentialTarget: return (4.0 / 255.0);
+//    case FSurgeryLabel::SL_PotentialRisk: return (3.0 / 255.0);
+//    case FSurgeryLabel::SL_PotentialTarget: return (4.0 / 255.0);
     // This shouldn't happen -> assert
     default: check(0); return 0.0;
   }
