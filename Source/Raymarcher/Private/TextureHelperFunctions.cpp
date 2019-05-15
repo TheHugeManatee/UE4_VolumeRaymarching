@@ -106,12 +106,15 @@ bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntV
   // ActualMips++;
   //}
 }
-
 bool UpdateVolumeTextureAsset(UVolumeTexture* VolumeTexture, EPixelFormat PixelFormat,
                               FIntVector Dimensions, uint8* BulkData, bool Persistent /*= false*/,
                               bool SaveNow /*= false*/, bool UAVCompatible /*= false*/) {
-  if (!VolumeTexture || !VolumeTexture->PlatformData) {
+  if (!VolumeTexture) {
     return false;
+  }
+
+  if (!VolumeTexture->PlatformData) {
+    VolumeTexture->PlatformData = new FTexturePlatformData();
   }
 
   int PixelByteSize = GPixelFormats[PixelFormat].BlockBytes;
@@ -168,6 +171,7 @@ bool UpdateVolumeTextureAsset(UVolumeTexture* VolumeTexture, EPixelFormat PixelF
   VolumeTexture->UpdateResource();
   return RetVal;
 }
+
 
 bool HandleTextureEditorData(UTexture* Texture, const EPixelFormat PixelFormat,
                              const bool Persistent, const FIntVector Dimensions,

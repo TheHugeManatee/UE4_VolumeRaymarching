@@ -10,8 +10,8 @@ int Layer;
 void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
 {
     int3 LoadingPos;
-    LoadingPos.x = Layer;
-    LoadingPos.y = ThreadId.x;
-    LoadingPos.z = ThreadId.y;
+    LoadingPos.x = ThreadId.x;
+    LoadingPos.y = ThreadId.y;
+    LoadingPos.z = Layer;
     TextureUAV[ThreadId.xy] = Volume.Load(int4(LoadingPos, 0)).r;
 }

@@ -45,7 +45,7 @@ SamplerState ReadBufferSampler;
 float StepSize;
 float3 UVWOffset;
 
-[numthreads(32, 32, 1)]
+[numthreads(16, 16, 1)]
 void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
 {
     int3 pos = mul(int3(PixelLoc.x, PixelLoc.y, Loop), PermutationMatrix);

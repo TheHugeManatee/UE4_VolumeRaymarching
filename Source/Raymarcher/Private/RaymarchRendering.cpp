@@ -41,7 +41,7 @@ IMPLEMENT_SHADER_TYPE(, FWriteSliceToTextureShader,
                       TEXT("MainComputeShader"), SF_Compute)
 
 #define NUM_THREADS_PER_GROUP_DIMENSION \
-  32  // This has to be the same as in the compute shader's spec [X, X, 1]
+  16  // This has to be the same as in the compute shader's spec [X, X, 1]
 
 // Writes to 3D texture slice(s).
 void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Size,

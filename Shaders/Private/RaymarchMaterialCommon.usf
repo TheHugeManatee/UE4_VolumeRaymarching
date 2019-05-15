@@ -59,7 +59,6 @@ float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume)
     // We don't want to interpolate here, use load instead of sample.
     float LabelValue = Volume.Load(int4(round(Dimensions * saturate(CurPos)), 0)).r;
     float4 Color = GetColorFromLabelValue(FloatToChar(LabelValue));
-    // GetColorFromLabelValue(RetVal);
     Color.a = 1.0 - pow(1.0 - Color.a, StepSize);
     return Color;
 }

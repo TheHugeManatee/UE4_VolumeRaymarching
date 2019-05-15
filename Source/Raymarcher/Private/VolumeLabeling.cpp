@@ -63,7 +63,7 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
   FString kkt = "Written texture size = " + MarkedVolume->GetSizeXYZ().ToString() + "\nLocalCenter =" + localCenter.ToString() + ", in ints = " + localCenterIntCoords.ToString() +
                 "\nLocal Sphere diameter = " + FString::SanitizeFloat(localSphereDiameter) + ", brush size in ints = " + brush.ToString();
 
-  GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
+//  GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
 
   FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
   ComputeShader->SetMarkedVolumeUAV(RHICmdList, cs, MarkedVolumeUAV);
@@ -112,7 +112,7 @@ void WriteSphereToVolumeLocal_RenderThread(FRHICommandListImmediate& RHICmdList,
                 "\nLocal Sphere diameter = " + FString::SanitizeFloat(SphereRadiusLocal * 2) +
                 ", brush size in ints = " + brush.ToString();
 
-  GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
+//  GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
 
   FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
   ComputeShader->SetMarkedVolumeUAV(RHICmdList, cs, MarkedVolumeUAV);

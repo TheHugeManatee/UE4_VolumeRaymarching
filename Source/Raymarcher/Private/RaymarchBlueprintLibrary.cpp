@@ -636,4 +636,100 @@ void URaymarchBlueprintLibrary::TextureToLocalCoords(FVector TextureCoors, FVect
   LocalCoords = (TextureCoors - 0.5f) * 2.0f;
 }
 
+
+
+void URaymarchBlueprintLibrary::UpdateVolumeTextureSource(UVolumeTexture* Texture) {
+  if (!ensure(Texture != nullptr)) {
+//    UE_LOG(OpenCV, Error, TEXT("The given texture is empty!"));
+	return;
+  }
+
+  if (!ensure(Texture->PlatformData != nullptr && Texture->PlatformData->Mips.Num() > 0)) {
+//    UE_LOG(OpenCV, Error,
+ //          TEXT("Given texture does not have platform data or does not have mipmaps!"));
+    return;
+  }
+
+  // auto &mip = texture->PlatformData->Mips[0];
+  // void *memoryBuffer = mip.BulkData.Lock(EBulkDataLockFlags::LOCK_READ_WRITE);
+
+  struct FCopyBufferData {
+    UVolumeTexture* Texture;
+	uint8* Payload;
+    TPromise<void> Promise;
+  };
+  using FCommandDataPtr = TSharedPtr<FCopyBufferData, ESPMode::ThreadSafe>;
+  FCommandDataPtr CommandData = MakeShared<FCopyBufferData, ESPMode::ThreadSafe>();
+  CommandData->Texture = Texture;
+  FIntVector Dimensions;
+  GetVolumeTextureDimensions(Texture, Dimensions);
+
+  uint32 TotalSize = Texture->GetSizeX() * Texture->GetSizeY() * Texture->GetSizeY();
+  CommandData->Payload = new uint8[TotalSize];
+
+  auto Future = CommandData->Promise.GetFuture();
+
+    // Call the actual rendering code on RenderThread.
+  ENQUEUE_RENDER_COMMAND(CaptureCommand)
+  ([=](FRHICommandListImmediate& RHICmdList) {
+
+
+    TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
+    TShaderMapRef<FWriteSliceToTextureShader> ComputeShader(GlobalShaderMap);
+
+    RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
+    // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
+    // LightVolumeResource);
+
+
+	
+  FRHIResourceCreateInfo CreateInfo(FClearValueBinding::Transparent);
+
+    FTexture2DRHIRef SumTexture = RHICreateTexture2D(
+         Dimensions.X, Dimensions.Y, PF_G8, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
+    FUnorderedAccessViewRHIRef TextureUAV;
+
+    TextureUAV = RHICreateUnorderedAccessView(SumTexture, 0);
+    RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier, SumTexture);
+	
+    
+	for (int i = 0; i < Dimensions.Z; i++) {
+	
+		RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
+                                  EResourceTransitionPipeline::EComputeToCompute, TextureUAV);
+
+	ComputeShader->SetParameters(RHICmdList, Texture->Resource->TextureRHI->GetTexture3D(),
+                                 TextureUAV, i);
+
+    uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)SumTexture->GetSizeX(),
+                                                32);
+    uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)SumTexture->GetSizeY(),
+                                                32);
+
+    DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
+    ComputeShader->UnbindUAV(RHICmdList);
+    // Transition resources back to the renderer.
+
+	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, TextureUAV);
+    uint32 DestPitch{0};
+
+    uint32* rawData =
+        (uint32*)RHILockTexture2D(SumTexture, 0, EResourceLockMode::RLM_ReadOnly, DestPitch, false);
+
+	FMemory::Memcpy(CommandData->Payload + (Dimensions.X * Dimensions.Y * i), rawData, Dimensions.X * Dimensions.Y);
+
+	RHIUnlockTexture2D(SumTexture, 0, false);
+
+	}
+    
+		CommandData->Promise.SetValue();
+  });
+
+  // wait until render thread operation completes
+  Future.Get();
+
+  UpdateVolumeTextureAsset(Texture, PF_G8, Dimensions, CommandData->Payload, true, true, true);
+}
+
+
 #undef LOCTEXT_NAMESPACE

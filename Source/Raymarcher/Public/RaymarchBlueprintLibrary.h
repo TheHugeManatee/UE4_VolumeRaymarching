@@ -246,6 +246,8 @@ public:
   */
   static void TextureToLocalCoords(FVector TextureCoors, FVector& LocalCoords);
 
+  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+  static void UpdateVolumeTextureSource(UVolumeTexture* Texture);
 
   /**
    Given a volume texture, this will copy the current texture content into the texture source.

@@ -73,3 +73,138 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
     OutputSurface[ThreadId.xy] = outputColor;
 
 }
+
+
+
+
+// Adds current sampled color and opacity to the accumulated LightEnergy
+void AccumulateLightEnergy(inout float4 LightEnergy, in float4 CurrentSample)
+{
+    // Affect the color depending on how much opaque the current sample is and 
+    // how strong the existing accumulated Light Energy is.
+    LightEnergy.rgb = LightEnergy.rgb + (CurrentSample.rgb * CurrentSample.a *
+                      (1.0 - LightEnergy.a));
+    // Affect the accumulated light energy strength.
+    LightEnergy.a = LightEnergy.a + (CurrentSample.a * (1.0 - LightEnergy.a));
+}
+
+// Samples a Data volume, transforms it to fit the TF Intensity domain and then 
+// transforms it by the TF. Corrects the opacity to account for StepSize (in 
+// World units).
+float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, 
+                        SamplerState VolumeSampler, Texture2D TF, 
+                        SamplerState TFSampler, float2 TFIntensityDomain)
+{
+    float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, 0).r;
+    RemapIntensity(VolumeSample, TFIntensityDomain);
+
+    float4 ColorSample = TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
+    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize);
+    return ColorSample;
+}
+
+// Samples a Label volume, gets the corresponding color and corrects the opacity
+// to account for StepSize.
+float4 SampleLabelVolume(float3 CurPos, float StepSize, Texture3D Volume)
+{
+    int x, y, z;
+    Volume.GetDimensions(x, y, z);
+    int3 Dimensions = int3(x - 1, y - 1, z - 1);
+    // We don't want to interpolate here, use load instead of sample.
+    float LabelValue = Volume.Load(int4(round(Dimensions * saturate(CurPos)), 0)).r;
+    float4 Color = GetColorFromLabelValue(FloatToChar(LabelValue));
+    Color.a = 1.0 - pow(1.0 - Color.a, StepSize);
+    return Color;
+}
+
+// Performs one raymarch step and accumulates the result to the existing 
+// Accumulated Light Energy.
+void AccumulateOneRaymarchStep(inout float4 AccumulatedLightEnergy, float3 CurPos,
+                               Texture3D DataVolume, SamplerState DataVolumeSampler,
+                               Texture2D TF, SamplerState TFSampler, 
+                               float2 TFIntensityDomain, Texture3D LightVolume, 
+                               SamplerState LightVolumeSampler, float StepSize)
+{
+    // Sample intensity from the volume and get corresponding color-opacity from 
+    // transfer function.
+    float4 ColorSample = SampleDataVolume(CurPos, StepSize, DataVolume, 
+                                          DataVolumeSampler, TF, TFSampler, 
+                                          TFIntensityDomain);
+    
+    // Get lighting information from illumination volume for current position and
+    // Multiply sampled color with light color to adjust intensity according to light 
+    // strength.
+    ColorSample.rgb = 
+        ColorSample.rgb * LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
+        // Accumulate current colored sample to the final values.
+    AccumulateLightEnergy(AccumulatedLightEnergy, ColorSample);
+}
+
+// Performs one raymarch step in a label volume and accumulates the result to the
+// existing Accumulated Light Energy.
+void AccumulateOneRaymarchLabelStep(inout float4 AccumulatedLightEnergy,
+                    float3 CurPos, Texture3D LabelVolume, float StepSize)
+{
+    // Sample intensity from the volume and get corresponding color-opacity
+    // from transfer function.
+    float4 ColorSample = SampleLabelVolume(CurPos, StepSize, LabelVolume);
+    // Accumulate colored label sample to the final values.
+    AccumulateLightEnergy(AccumulatedLightEnergy, ColorSample);
+}
+
+
+// Performs lit raymarch for the current pixel. Also takes into account a provided labeling volume. 
+// Labeling volume ignores the clipping plane, so labels are always visible.
+// The lighting information is taken from a precomputed light volume.
+float4 PerformLitRaymarchLabeled(Texture3D DataVolume, SamplerState DataVolumeSampler, // Data Volume and Sampler
+                                 Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain, // Transfer func, sampler and intensity domain modifier
+                                 Texture3D LightVolume, SamplerState LightVolumeSampler, // Light Volume
+                                 Texture3D LabelVolume, // Label Volume
+                                 float3 CurPos, float MaxSteps, float StepSize, float FinalStep, // Position of ray entry to cube, number of steps, size of a step and a 0-1 value of how big the final step is compared to regular steps 
+                                 float3 ClippingCenter, float3 ClippingDirection, // Clipping plane position and direction of clipped away region
+                                 FMaterialPixelParameters MaterialParameters)                    // Material Parameters
+{
+    // Get camera vector in local space and multiply it by step size.
+    float3 LocalCamVec = normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
+    // Get step size in world units to be consistent with compute shaders' opacity calculations.
+    float StepSizeWorld = length(mul(LocalCamVec, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
+    // Initialize accumulated light energy.
+    float4 LightEnergy = 0;
+    // Jitter Entry position to avoid artifacts.
+    JitterEntryPos(CurPos, LocalCamVec, MaterialParameters);
+
+    int i = 0;
+    for (i = 0; i < MaxSteps; i++)
+    {
+        // Label volume ignores clipping.
+        AccumulateOneRaymarchLabelStep(LightEnergy, CurPos, LabelVolume, StepSizeWorld);
+	    // Any position that is clipped by the clipping plane shall be ignored.
+        if (!IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection))
+        {
+            AccumulateOneRaymarchStep(LightEnergy, CurPos, DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain, LightVolume, LightVolumeSampler, StepSizeWorld);
+        }
+
+        // Exit early if light energy (opacity) is already very high (so future steps would have almost no impact on color).
+        if (LightEnergy.a > 0.99f)
+        {
+            LightEnergy.a = 1.0f;
+            break;
+        };
+        CurPos -= LocalCamVec;
+    }
+
+    // Handle FinalStep (only if we went through all the previous steps and the final step size is above eps)
+    if (i == MaxSteps && FinalStep > 0.01f)
+    {
+        CurPos -= LocalCamVec * (FinalStep);
+        // Accumulate label.
+        AccumulateOneRaymarchLabelStep(LightEnergy, CurPos, LabelVolume, StepSizeWorld * FinalStep);
+        // If the final step is clipped, don't do anything.
+        if (!IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection))
+        {
+            AccumulateOneRaymarchStep(LightEnergy, CurPos, DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain, LightVolume, LightVolumeSampler, StepSizeWorld * FinalStep);
+        }
+    }
+
+    return LightEnergy;
+}
