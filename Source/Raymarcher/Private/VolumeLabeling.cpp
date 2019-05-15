@@ -85,7 +85,7 @@ void WriteSphereToVolumeLocal_RenderThread(FRHICommandListImmediate& RHICmdList,
                                            FSurgeryLabel WrittenValue) {
   // Get local center in integer space
   FIntVector localCenterIntCoords = FIntVector(BrushLocalCenter * FVector(MarkedVolume->GetSizeXYZ()));
-
+  
   // Get shader ref from GlobalShaderMap
   TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
   TShaderMapRef<FWriteSphereToVolumeShader> ComputeShader(GlobalShaderMap);
