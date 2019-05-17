@@ -453,7 +453,7 @@ float4 PerformShadowRaymarch(Texture3D LightVolume, SamplerState LightVolumeSamp
 
     return LightEnergy;
 }
-
+// Recomposes a matrix from 4 row vectors.
 float4x4 MatrixFromRowVectors(float4 X0, float4 X1, float4 X2, float4 X3)
 {
     return float4x4(X0.x, X0.y, X0.z, X0.a,
@@ -461,43 +461,3 @@ float4x4 MatrixFromRowVectors(float4 X0, float4 X1, float4 X2, float4 X3)
                     X2.x, X2.y, X2.z, X2.a,
                     X3.x, X3.y, X3.z, X3.a);
 }
-
-//int i = 0;
-//for (i = 0;i <
-//MaxSteps; i++)
-//{
-
-//    // Uniform density - like very thin fog
-//float CurSample = 1 - LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
-
-//float4 ColorSample = float4(CurSample, CurSample, CurSample, CurSample);
-//	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
-//    AddLightAndOpacity(lightenergy, opacity, ColorSample);
-
-//	if (opacity > 0.99) {
-//		opacity = 1;
-//		break;
-//	};
-//	CurPos -=
-//localcamvec;
-//}
-
-
-//// Handle FinalStep (only if we went through all the previous steps and there is a final step)
-//if (i == MaxSteps && FinalStep > 0) {
-//    // Go back to the previous location, so we can perform final step.
-//    CurPos += (1 - FinalStep) *
-//localcamvec;
-//    StepSize*=
-//FinalStep;
-//          // Uniform density - like very thin fog
-//float CurSample = 1 - LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
-
-
-//float4 ColorSample = float4(CurSample, CurSample, CurSample, CurSample);
-//	// Sample intensity from the volume and get corresponding color-opacity from transfer function.
-
-//        AddLightAndOpacity(lightenergy, opacity, ColorSample);
-	
-//}
-//return float4(lightenergy, opacity);

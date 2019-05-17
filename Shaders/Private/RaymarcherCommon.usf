@@ -52,7 +52,7 @@ float3 GetUVW(uint3 pos, float3 dimensions)
 // Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize (in World units).
 float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
 {
-    float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, 0).r;
+    float VolumeSample = Volume.SampleLevel(VolumeSampler, saturate(CurPos), 0).r;
     RemapIntensity(VolumeSample, TFIntensityDomain);
 
     float4 ColorSample = TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
