@@ -83,7 +83,7 @@ void JitterEntryPos(inout float3 EntryPos, float3 LocalCamVec, FMaterialPixelPar
 {
     int3 RandomPos = int3(MaterialParameters.SvPosition.xy, View.StateFrameIndexMod8);
     float rand = float(Rand3DPCG16(RandomPos).x) / 0xffff;
-    EntryPos += LocalCamVec * rand.x;
+    EntryPos -= LocalCamVec * rand.x;
 }
 
 // Adds current sampled color and opacity to the accumulated LightEnergy
@@ -96,16 +96,16 @@ void AccumulateLightEnergy(inout float4 LightEnergy, in float4 CurrentSample)
 }
 
 // Performs one raymarch step and accumulates the result to the existing Accumulated Light Energy.
-void AccumulateOneRaymarchStep(inout float4 AccumulatedLightEnergy, float3 CurPos, Texture3D DataVolume, SamplerState DataVolumeSampler,
-                               Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain,
-                               Texture3D LightVolume, SamplerState LightVolumeSampler, float StepSize)
+// Notice "Material.Clamp_WorldGroupSettings" used as a sampler. These are UE shared samplers.
+void AccumulateOneRaymarchStep(inout float4 AccumulatedLightEnergy, float3 CurPos, Texture3D DataVolume,
+                               Texture2D TF, float2 TFIntensityDomain, Texture3D LightVolume, float StepSize)
 {
     // Sample intensity from the volume and get corresponding color-opacity from transfer function.
-    float4 ColorSample = SampleDataVolume(CurPos, StepSize, DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain);
+    float4 ColorSample = SampleDataVolume(CurPos, StepSize, DataVolume, Material.Clamp_WorldGroupSettings, TF, Material.Clamp_WorldGroupSettings, TFIntensityDomain);
     
     // Get lighting information from illumination volume for current position and
     // Multiply sampled color with light color to adjust intensity according to light strength.
-    ColorSample.rgb = ColorSample.rgb * LightVolume.SampleLevel(LightVolumeSampler, saturate(CurPos), 0).r;
+    ColorSample.rgb = ColorSample.rgb * LightVolume.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
         // Accumulate current colored sample to the final values.
     AccumulateLightEnergy(AccumulatedLightEnergy, ColorSample);
 }
