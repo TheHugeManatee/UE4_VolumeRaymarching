@@ -31,7 +31,7 @@ void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
   }
 
   // FMemory::Memset(InitMemory, 1, TotalSize);
-  UpdateVolumeTextureAsset(LightVolume, PF_G8, Dimensions, nullptr, false, false, true);
+  UpdateVolumeTextureAsset(LightVolume, PF_R32_FLOAT, Dimensions, nullptr, false, false, true);
 }
 
 void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(

@@ -363,9 +363,11 @@ void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
 FClippingPlaneParameters GetLocalClippingParameters(
     const FRaymarchWorldParameters WorldParameters) {
   FClippingPlaneParameters RetVal;
-  // Get clipping center to (0-1) texture local space. (Invert transform, add 0.5 to get to (0-1) space of a unit cube centered on 0,0,0)
+  // Get clipping center to (0-1) texture local space. (Invert transform, add 0.5 to get to (0-1)
+  // space of a unit cube centered on 0,0,0)
   RetVal.Center = WorldParameters.VolumeTransform.InverseTransformPosition(
-                        WorldParameters.ClippingPlaneParameters.Center) + 0.5;
+                      WorldParameters.ClippingPlaneParameters.Center) +
+                  0.5;
   // Get clipping direction in local space - here we don't care about the mesh size (as long as
   // it's a cube, which it really bloody better be).
 
@@ -393,7 +395,8 @@ void WriteVolumeTextureSlice_RenderThread(FRHICommandListImmediate& RHICmdList,
   RHICmdList.SetComputeShader(ComputeShader->GetComputeShader());
   // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
   // LightVolumeResource);
-  FUnorderedAccessViewRHIRef TextureUAV = RHICreateUnorderedAccessView(WrittenSliceTexture->Resource->TextureRHI);
+  FUnorderedAccessViewRHIRef TextureUAV =
+      RHICreateUnorderedAccessView(WrittenSliceTexture->Resource->TextureRHI);
 
   // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
   // no race conditions But we definitely need to transition the resource to Compute-shader
@@ -401,7 +404,8 @@ void WriteVolumeTextureSlice_RenderThread(FRHICommandListImmediate& RHICmdList,
   RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
                                 EResourceTransitionPipeline::EGfxToCompute, TextureUAV);
 
-  ComputeShader->SetParameters(RHICmdList, VolumeTexture->Resource->TextureRHI->GetTexture3D(), TextureUAV, Layer);
+  ComputeShader->SetParameters(RHICmdList, VolumeTexture->Resource->TextureRHI->GetTexture3D(),
+                               TextureUAV, Layer);
 
   uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)WrittenSliceTexture->GetSizeX(),
                                               NUM_THREADS_PER_GROUP_DIMENSION);
@@ -565,10 +569,6 @@ void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICm
         LocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
     OneAxisReadWriteBufferResources& Buffers = GetBuffers(LocalMajorAxes, i, Resources);
 
-    // for (int i = 0; i < 2; i++) {
-    //	if (!Buffers.UAVs[i]) Buffers.UAVs[i] = RHICreateUnorderedAccessView(Buffers.Buffers[i]);
-    //}
-
     float LightAlpha = GetLightAlpha(LocalLightParams, LocalMajorAxes, i);
 
     ClearFloatTextureRW(RHICmdList, Buffers.UAVs[0],
@@ -588,7 +588,7 @@ void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICm
 
   // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
   // no race conditions But we definitely need to transition the resource to Compute-shader
-  // accessible, otherwise the renderer might touch our textures while we're writing them.
+  // accessible, otherwise the renderer might touch our textures while we're writing there.
   RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
                                 EResourceTransitionPipeline::EGfxToCompute, AVolumeUAV);
 
@@ -669,6 +669,7 @@ void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICm
   RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
                                 EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
 }
+#pragma optimize("", off)
 
 void ChangeDirLightInSingleLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, FBasicRaymarchRenderingResources Resources,
@@ -676,14 +677,14 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
     const FDirLightParameters AddedLightParameters,
     const FRaymarchWorldParameters WorldParameters) {
   // Can't have directional light without direction...
-  if (AddedLightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
+  if (AddedLightParameters.LightDirection == FVector(0.0, 0.0, 0.0) ||
+      RemovedLightParameters.LightDirection == FVector(0.0, 0.0, 0.0)) {
     GEngine->AddOnScreenDebugMessage(
         -1, 100.0f, FColor::Yellow,
         TEXT("Returning because the directional light doesn't have a direction."));
     return;
   }
 
-  FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
   // Create local copies of Light Params, so that if we have to fall back to 2x
   // AddOrRemoveLight, we can just pass the original parameters.
   FDirLightParameters RemovedLocalLightParams, AddedLocalLightParams;
@@ -694,7 +695,7 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
   GetLocalLightParamsAndAxes(AddedLightParameters, WorldParameters.VolumeTransform,
                              AddedLocalLightParams, AddedLocalMajorAxes);
 
-  // If lights have different major axes, do a proper removal and addition.
+  // If lights have different major axes, do a separate removal and addition.
   if (RemovedLocalMajorAxes.FaceWeight[0].first != AddedLocalMajorAxes.FaceWeight[0].first ||
       RemovedLocalMajorAxes.FaceWeight[1].first != AddedLocalMajorAxes.FaceWeight[1].first) {
     AddDirLightToSingleLightVolume_RenderThread(RHICmdList, Resources, RemovedLightParameters,
@@ -704,20 +705,14 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
     return;
   }
 
+  FClippingPlaneParameters LocalClippingParameters = GetLocalClippingParameters(WorldParameters);
+
   // Clear buffers for the two axes we will be using.
   for (unsigned i = 0; i < 2; i++) {
-    // Break if the main axis weight == 1
-    if (RemovedLocalMajorAxes.FaceWeight[i].second == 0) {
-      break;
-    }
     // Get the X, Y and Z transposed into the current axis orientation.
     FIntVector TransposedDimensions = GetTransposedDimensions(
         RemovedLocalMajorAxes, Resources.ALightVolumeRef->Resource->TextureRHI->GetTexture3D(), i);
     OneAxisReadWriteBufferResources& Buffers = GetBuffers(RemovedLocalMajorAxes, i, Resources);
-
-    // for (int i = 0; i < 4; i++) {
-    //	if (!Buffers.UAVs[i]) Buffers.UAVs[i] = RHICreateUnorderedAccessView(Buffers.Buffers[i]);
-    //}
 
     float RemovedLightAlpha = GetLightAlpha(RemovedLocalLightParams, RemovedLocalMajorAxes, i);
     float AddedLightAlpha = GetLightAlpha(AddedLocalLightParams, AddedLocalMajorAxes, i);
@@ -737,7 +732,7 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
   }
 
   // For GPU profiling.
-  SCOPED_DRAW_EVENTF(RHICmdList, ChangeDirLightInLightVolume_RenderThread, TEXT("Changing Lights"));
+  SCOPED_DRAW_EVENTF(RHICmdList, ChangeDirLightInSingleLightVolume_RenderThread, TEXT("Changing Lights"));
   SCOPED_GPU_STAT(RHICmdList, GPUChangingLights);
 
   TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
@@ -784,10 +779,39 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
         GetUVOffset(RemovedLocalMajorAxes.FaceWeight[i].first,
                     -RemovedLocalLightParams.LightDirection, TransposedDimensions);
 
+    FVector2D AddedUVOffset =
+        GetUVOffset(AddedLocalMajorAxes.FaceWeight[i].first, -AddedLocalLightParams.LightDirection,
+                    TransposedDimensions);
+    FVector2D RemovedUVOffset =
+        GetUVOffset(RemovedLocalMajorAxes.FaceWeight[i].first,
+                    -RemovedLocalLightParams.LightDirection, TransposedDimensions);
+
+    FVector AddedUVWOffset, RemovedUVWOffset;
+    float AddedStepSize, RemovedStepSize;
+
+    GetStepSizeAndUVWOffset(AddedLocalMajorAxes.FaceWeight[i].first,
+                            -AddedLocalLightParams.LightDirection, TransposedDimensions,
+                            WorldParameters, AddedStepSize, AddedUVWOffset);
+    GetStepSizeAndUVWOffset(RemovedLocalMajorAxes.FaceWeight[i].first,
+                            -RemovedLocalLightParams.LightDirection, TransposedDimensions,
+                            WorldParameters, RemovedStepSize, RemovedUVWOffset);
+
+    // Normalize UVW offset to length of largest voxel size to get rid of artifacts. (Not correct,
+    // but consistent!)
+    int LowestVoxelCount =
+        FMath::Min3(TransposedDimensions.X, TransposedDimensions.Y, TransposedDimensions.Z);
+    float LongestVoxelSide = 1.0f / LowestVoxelCount;
+
+    AddedUVWOffset.Normalize();
+    AddedUVWOffset *= LongestVoxelSide;
+    RemovedUVWOffset.Normalize();
+    RemovedUVWOffset *= LongestVoxelSide;
+
     ComputeShader->SetStepSizes(RHICmdList, ShaderRHI,
-                                GetStepSize(RemovedPixOffset, TransposedDimensions),
-                                GetStepSize(AddedPixOffset, TransposedDimensions));
+                                AddedStepSize, RemovedStepSize);
+
     ComputeShader->SetPixelOffsets(RHICmdList, ShaderRHI, AddedPixOffset, RemovedPixOffset);
+	ComputeShader->SetUVWOffsets(RHICmdList, ShaderRHI, AddedUVWOffset, RemovedUVWOffset);
 
     FMatrix perm = GetPermutationMatrix(RemovedLocalMajorAxes, i);
     ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, perm);
@@ -828,6 +852,8 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
   RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
                                 EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
 }
+#pragma optimize("", on)
+
 
 void ClearVolumeTexture_RenderThread(FRHICommandListImmediate& RHICmdList,
                                      FRHITexture3D* VolumeResourceRef, float ClearValues) {

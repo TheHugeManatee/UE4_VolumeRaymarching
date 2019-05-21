@@ -12,6 +12,7 @@ RWTexture3D<float> ALightVolume;
 RWTexture2D<float> WriteBuffer;
 Texture2D ReadBuffer;
 
+
 int Loop;
 
 Texture3D Volume;
@@ -62,7 +63,6 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
 
     float2 PreviousUV = ((PixelLoc + float2(0.5, 0.5)) / float2(texSizeX, texSizeY)) + PrevPixelOffset;
     float PreviousLightAlpha = ReadBuffer.SampleLevel(ReadBufferSampler, PreviousUV, 0);
-    float CurrentLightAlpha;
 
     float DistanceToCuttingPlane = dot(SampleUVW - LocalClippingCenter, LocalClippingDirection);
 
@@ -74,34 +74,34 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     // Distance from cutting plane to voxel center in voxel space.
     float VoxelDistance = length(VoxelCuttingPlaneOffset);
 
-    // Case when the voxel is very close to the cutting plane -> weight the alpha in the voxel by an
+    // Weight the alpha in the voxel by an
     // aproximation of the part of the cube that's not cut away - this prevents noticeable clipping plane artifacts
-    // (even though it's not even close to being mathematically correct).
-    if (VoxelDistance < SQRT_3_HALF)
+    // (even though it's not even close to being mathematically correct and the artifacts are still slightly visible).
+
+    // Use signum of the DistanceToCuttingPlane, because the weight of a voxel, that's barely
+    // NOT cut away should icnrease with the distance to the cutting plane, but the weight
+    // of a pixel cut away will decrease with the distance to the cutting plane.
+    // If the distance of the center of the voxel to the cutting plane is  0, then exactly half is cut away.
+    float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
+    
+    float CurrentSample = 0.0;
+
+    if (AlphaWeight > 0.0)
     {
-        // Use signum of the DistanceToCuttingPlane, because the weight of a voxel, that's barely
-        // NOT cut away should icnrease with the distance to the cutting plane, but the weight
-        // of a pixel cut away will decrease with the distance to the cutting plane.
-        // If the distance of the center of the voxel to the cutting plane is  0, then exactly half is cut away.
-        float AlphaWeight = clamp(0.5 + (ONE_OVER_SQRT_3 * VoxelDistance * sign(DistanceToCuttingPlane)), 0, 1);
-        float CurrentSample = SampleDataVolume(SampleUVW, StepSize, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
+        CurrentSample = SampleDataVolume(SampleUVW, StepSize, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
         CurrentSample *= AlphaWeight;
-        CurrentLightAlpha = PreviousLightAlpha * (1 - (CurrentSample));
     }
-    else if (DistanceToCuttingPlane < 0.0) // Case of being normally cut away.
-    {
-        // Avoid reads that would be unnecessary. Just propagate previous light unchanged and add it to volume.
-        CurrentLightAlpha = PreviousLightAlpha;
-    }
-    else // Case of being not cut away at all.
-    {
-        float CurrentSample = SampleDataVolume(SampleUVW, StepSize, Volume, VolumeSampler, TransferFunc, TransferFuncSampler, TFIntensityDomain).a;
-        CurrentLightAlpha = PreviousLightAlpha * (1 - (CurrentSample));
-    }
+    
+    float CurrentLightAlpha = PreviousLightAlpha * (1 - CurrentSample);
 
 	// The read/write buffers have always positive values (the alpha of current light being propagated)
     WriteBuffer[PixelLoc] = CurrentLightAlpha; 
     // Adding Color to the volume depends on if we're adding or removing.
     // if we're removing a light, multiply alpha by -1.
-    ALightVolume[pos] = ALightVolume[pos] + (CurrentLightAlpha * bAdded);
+    
+    // Ignore changes smaller than 0.001 to avoid writes with almost no effect.
+    if (abs(CurrentLightAlpha) > 1e-4)
+    {
+        ALightVolume[pos] = ALightVolume[pos] + (CurrentLightAlpha * bAdded);
+    }
 }

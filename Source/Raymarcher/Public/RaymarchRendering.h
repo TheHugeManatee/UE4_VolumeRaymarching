@@ -598,22 +598,30 @@ public:
     : FLightPropagationShader(Initializer) {
     // Volume texture + Transfer function uniforms
     PrevPixelOffset.Bind(Initializer.ParameterMap, TEXT("PrevPixelOffset"), SPF_Mandatory);
+    UVWOffset.Bind(Initializer.ParameterMap, TEXT("UVWOffset"), SPF_Mandatory);
   }
 
   void SetUVOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
                    FVector2D PixelOffset) {
     SetShaderValue(RHICmdList, ShaderRHI, PrevPixelOffset, PixelOffset);
   }
+  
+  void SetUVWOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                    FVector pUVWOffset) {
+    SetShaderValue(RHICmdList, ShaderRHI, UVWOffset, pUVWOffset);
+  }
 
   virtual bool Serialize(FArchive& Ar) override {
     bool bShaderHasOutdatedParameters = FLightPropagationShader::Serialize(Ar);
-    Ar << PrevPixelOffset;
+    Ar << PrevPixelOffset << UVWOffset;
     return bShaderHasOutdatedParameters;
   }
 
 protected:
   // Tells the shader the pixel offset for reading from the previous loop's buffer
   FShaderParameter PrevPixelOffset;
+  // And the offset in the volume from the previous volume sample.
+  FShaderParameter UVWOffset;
 };
 
 class FAddDirLightShader : public FDirLightPropagationShader {
@@ -656,6 +664,8 @@ public:
     RemovedReadBufferSampler.Bind(Initializer.ParameterMap, TEXT("RemovedReadBufferSampler"),
                                   SPF_Mandatory);
     RemovedWriteBuffer.Bind(Initializer.ParameterMap, TEXT("RemovedWriteBuffer"), SPF_Mandatory);
+    RemovedUVWOffset.Bind(Initializer.ParameterMap, TEXT("RemovedUVWOffset"), SPF_Mandatory);
+    RemovedStepSize.Bind(Initializer.ParameterMap, TEXT("RemovedStepSize"), SPF_Mandatory);
   }
 
   // Sets loop-dependent uniforms in the pipeline.
@@ -675,22 +685,22 @@ public:
                         pRemovedReadBuffSampler, pRemovedReadBuffer);
   }
 
-  void SetRemovedPixelOffset(FRHICommandListImmediate& RHICmdList,
-                             FComputeShaderRHIParamRef ShaderRHI, FVector2D PixelOffset) {
-    // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
-    SetShaderValue(RHICmdList, ShaderRHI, RemovedPrevPixelOffset, PixelOffset);
-  }
-
   void SetPixelOffsets(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
-                       FVector2D RemovedPixelOffset, FVector2D AddedPixelOffset) {
-    SetShaderValue(RHICmdList, ShaderRHI, RemovedPrevPixelOffset, RemovedPixelOffset);
+                       FVector2D AddedPixelOffset, FVector2D RemovedPixelOffset) {
     SetShaderValue(RHICmdList, ShaderRHI, PrevPixelOffset, AddedPixelOffset);
+    SetShaderValue(RHICmdList, ShaderRHI, RemovedPrevPixelOffset, RemovedPixelOffset);
+ }
+
+  void SetUVWOffsets(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
+                       FVector pAddedUVWOffset, FVector pRemovedUVWOffset) {
+    SetShaderValue(RHICmdList, ShaderRHI, UVWOffset, pAddedUVWOffset);
+    SetShaderValue(RHICmdList, ShaderRHI, RemovedUVWOffset, pRemovedUVWOffset);
   }
 
   void SetStepSizes(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
-                    float pRemovedStepSize, float pAddedStepSize) {
-    SetShaderValue(RHICmdList, ShaderRHI, RemovedStepSize, pRemovedStepSize);
+                    float pAddedStepSize, float pRemovedStepSize) {
     SetShaderValue(RHICmdList, ShaderRHI, StepSize, pAddedStepSize);
+    SetShaderValue(RHICmdList, ShaderRHI, RemovedStepSize, pRemovedStepSize);
   }
 
   virtual void UnbindResources(FRHICommandListImmediate& RHICmdList,
@@ -704,13 +714,13 @@ public:
   virtual bool Serialize(FArchive& Ar) override {
     bool bShaderHasOutdatedParameters = FDirLightPropagationShader::Serialize(Ar);
     Ar << RemovedPrevPixelOffset << RemovedReadBuffer << RemovedReadBufferSampler
-       << RemovedWriteBuffer << RemovedStepSize;
+       << RemovedWriteBuffer << RemovedStepSize << RemovedUVWOffset;
     return bShaderHasOutdatedParameters;
   }
 
 protected:
-  // Same collection of parameters as for a dir light shader, but these ones are the ones of the
-  // removed light.
+  // Same collection of parameters as for a "add dir light" shader, but these ones are the ones of
+  // the removed light.
 
   // Tells the shader the pixel offset for reading from the previous loop's buffer
   FShaderParameter RemovedPrevPixelOffset;
@@ -721,6 +731,8 @@ protected:
   FShaderResourceParameter RemovedWriteBuffer;
   // Removed light step size (is different than added one's)
   FShaderParameter RemovedStepSize;
+  // Removed light UVW offset
+  FShaderParameter RemovedUVWOffset;
 };
 
 class FAddDirLightShaderSingle : public FAddDirLightShader {
@@ -736,18 +748,12 @@ public:
     : FAddDirLightShader(Initializer) {
     // Volume texture + Transfer function uniforms
     ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"), SPF_Mandatory);
-    UVWOffset.Bind(Initializer.ParameterMap, TEXT("UVWOffset"), SPF_Mandatory);
   }
 
   void SetALightVolume(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
                        FUnorderedAccessViewRHIRef pALightVolume) {
     // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
     SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pALightVolume);
-  }
-
-  void SetUVWOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
-                    FVector pUVWOffset) {
-    SetShaderValue(RHICmdList, ShaderRHI, UVWOffset, pUVWOffset);
   }
 
   virtual void UnbindResources(FRHICommandListImmediate& RHICmdList,
@@ -759,14 +765,13 @@ public:
 
   virtual bool Serialize(FArchive& Ar) override {
     bool bShaderHasOutdatedParameters = FAddDirLightShader::Serialize(Ar);
-    Ar << ALightVolume << UVWOffset;
+    Ar << ALightVolume;
     return bShaderHasOutdatedParameters;
   }
 
 protected:
   // Tells the shader the pixel offset for reading from the previous loop's buffer
   FShaderResourceParameter ALightVolume;
-  FShaderParameter UVWOffset;
 };
 
 class FChangeDirLightShaderSingle : public FChangeDirLightShader {
@@ -786,7 +791,6 @@ public:
 
   void SetALightVolume(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
                        FUnorderedAccessViewRHIRef pALightVolume) {
-    // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
     SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pALightVolume);
   }
 
