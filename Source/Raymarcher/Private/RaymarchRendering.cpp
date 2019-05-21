@@ -28,172 +28,9 @@ IMPLEMENT_SHADER_TYPE(, FClearFloatRWTextureCS,
                       TEXT("/Plugin/VolumeRaymarching/Private/ClearTextureShader.usf"),
                       TEXT("MainComputeShader"), SF_Compute)
 
-IMPLEMENT_SHADER_TYPE(, FMakeMaxMipsShader,
-                      TEXT("/Plugin/VolumeRaymarching/Private/CreateMaxMipsShader.usf"),
-                      TEXT("MainComputeShader"), SF_Compute)
-
-IMPLEMENT_SHADER_TYPE(, FMakeDistanceFieldShader,
-                      TEXT("/Plugin/VolumeRaymarching/Private/CreateDistanceFieldShader.usf"),
-                      TEXT("MainComputeShader"), SF_Compute)
-
-IMPLEMENT_SHADER_TYPE(, FWriteSliceToTextureShader,
-                      TEXT("/Plugin/VolumeRaymarching/Private/WriteSliceToTextureShader.usf"),
-                      TEXT("MainComputeShader"), SF_Compute)
-
 #define NUM_THREADS_PER_GROUP_DIMENSION \
   16  // This has to be the same as in the compute shader's spec [X, X, 1]
 
-// Writes to 3D texture slice(s).
-void WriteTo3DTexture_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Size,
-                                   UVolumeTexture* inTexture) {
-  // Set render target to our volume texture.
-  SetRenderTarget(RHICmdList, inTexture->Resource->TextureRHI, FTextureRHIRef());
-
-  // Initialize Pipeline
-  FGraphicsPipelineStateInitializer GraphicsPSOInit;
-  RHICmdList.ApplyCachedRenderTargets(GraphicsPSOInit);
-
-  // No blend, no depth checking.
-  GraphicsPSOInit.BlendState = TStaticBlendState<>::GetRHI();
-  GraphicsPSOInit.RasterizerState = TStaticRasterizerState<>::GetRHI();
-  GraphicsPSOInit.DepthStencilState = TStaticDepthStencilState<false, CF_Always>::GetRHI();
-
-  // Get shaders from GlobalShaderMap
-  TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
-  // Get Geometry and Vertex shaders for Volume texture writes (provided by EPIC).
-  TShaderMapRef<FWriteToSliceVS> VertexShader(GlobalShaderMap);
-  TOptionalShaderMapRef<FWriteToSliceGS> GeometryShader(GlobalShaderMap);
-  // Get a primitive shader that just writes a constant value everywhere (provided by me).
-  TShaderMapRef<FVolumePS> PixelShader(GlobalShaderMap);
-
-  // Set the bounds of where to write (you can write to multiple slices in any orientation - along
-  // X/Y/Z)
-  FVolumeBounds VolumeBounds(Size.X);
-  // This will write to 5 slices along X-axis.
-  VolumeBounds.MinX = Size.X - 10;
-  VolumeBounds.MaxX = Size.X - 5;
-
-  // Set the shaders into the pipeline.
-  GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI =
-      GScreenVertexDeclaration.VertexDeclarationRHI;
-  GraphicsPSOInit.BoundShaderState.VertexShaderRHI = GETSAFERHISHADER_VERTEX(*VertexShader);
-  GraphicsPSOInit.BoundShaderState.GeometryShaderRHI = GETSAFERHISHADER_GEOMETRY(*GeometryShader);
-  GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*PixelShader);
-  GraphicsPSOInit.PrimitiveType = PT_TriangleStrip;
-  SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit);
-
-  // Set shader parameters - must set the volume bounds to vertex shader.
-  VertexShader->SetParameters(RHICmdList, VolumeBounds, Size);
-  if (GeometryShader.IsValid()) {
-    GeometryShader->SetParameters(RHICmdList, VolumeBounds.MinZ);
-  }
-  // Pixel shader doesn't have parameters now, it was just for testing.
-
-  // Do the rendering.
-  RasterizeToVolumeTexture(RHICmdList, VolumeBounds);
-
-  // Ummmmmmm.......
-  // This is probably unnecessary or actually a bad idea...
-  FResolveParams ResolveParams;
-  RHICmdList.CopyToResolveTarget(inTexture->Resource->TextureRHI, inTexture->Resource->TextureRHI,
-                                 ResolveParams);
-}
-
-// For making statistics about GPU use.
-DECLARE_FLOAT_COUNTER_STAT(TEXT("GeneratingMIPs"), STAT_GPU_GeneratingMIPs, STATGROUP_GPU);
-DECLARE_GPU_STAT_NAMED(GPUGeneratingMIPs, TEXT("Generating Volume MIPs"));
-
-void GenerateVolumeTextureMipLevels_RenderThread(FRHICommandListImmediate& RHICmdList,
-                                                 FIntVector Dimensions,
-                                                 FRHITexture3D* VolumeResource,
-                                                 FRHITexture2D* TransferFunc) {
-  check(IsInRenderingThread());
-
-  // For GPU profiling.
-  SCOPED_DRAW_EVENTF(RHICmdList, GenerateVolumeTextureMipLevels_RenderThread,
-                     TEXT("Generating MIPs"));
-  SCOPED_GPU_STAT(RHICmdList, GPUGeneratingMIPs);
-  // Get shader ref from GlobalShaderMap
-
-  // Find and set compute shader
-  TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
-  TShaderMapRef<FMakeMaxMipsShader> ComputeShader(GlobalShaderMap);
-  FComputeShaderRHIParamRef ShaderRHI = ComputeShader->GetComputeShader();
-  RHICmdList.SetComputeShader(ShaderRHI);
-
-  RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier, VolumeResource);
-
-  FUnorderedAccessViewRHIRef VolumeUAVs[8];
-
-  for (uint8 i = 0; i < 8; i++) {
-    VolumeUAVs[i] = RHICreateUnorderedAccessView(VolumeResource, i);
-  }
-
-  for (uint8 i = 0; i < 7; i++) {
-    ComputeShader->SetResources(RHICmdList, ShaderRHI, VolumeUAVs[i], VolumeUAVs[i + 1]);
-    Dimensions /= 2;
-    if (Dimensions.X == 0 || Dimensions.Y == 0 || Dimensions.Z == 0) {
-      GEngine->AddOnScreenDebugMessage(0, 10, FColor::Red,
-                                       "Zero dimension mip detected! Aborting...");
-      break;
-    }
-    DispatchComputeShader(RHICmdList, *ComputeShader, Dimensions.X, Dimensions.Y, Dimensions.Z);
-  }
-
-  // Unbind UAVs.
-  ComputeShader->UnbindResources(RHICmdList, ShaderRHI);
-
-  // Transition resources back to the renderer.
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, VolumeResource);
-}
-
-void GenerateDistanceField_RenderThread(FRHICommandListImmediate& RHICmdList, FIntVector Dimensions,
-                                        FRHITexture3D* VolumeResource, FRHITexture2D* TransferFunc,
-                                        FRHITexture3D* DistanceFieldResource,
-                                        float localSphereDiameter, float threshold) {
-  check(IsInRenderingThread());
-
-  // For GPU profiling.
-  SCOPED_DRAW_EVENTF(RHICmdList, GenerateDistanceField_RenderThread, TEXT("Generating MIPs"));
-  SCOPED_GPU_STAT(RHICmdList, GPUGeneratingMIPs);
-  // Get shader ref from GlobalShaderMap
-
-  // Find and set compute shader
-  TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
-  TShaderMapRef<FMakeDistanceFieldShader> ComputeShader(GlobalShaderMap);
-  FComputeShaderRHIParamRef ShaderRHI = ComputeShader->GetComputeShader();
-  RHICmdList.SetComputeShader(ShaderRHI);
-
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, VolumeResource);
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, TransferFunc);
-  RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier, DistanceFieldResource);
-
-  FIntVector brush = FIntVector(localSphereDiameter * VolumeResource->GetSizeX(),
-                                localSphereDiameter * VolumeResource->GetSizeY(),
-                                localSphereDiameter * VolumeResource->GetSizeZ());
-
-  // brush = FIntVector(9,9, 21);
-
-  FUnorderedAccessViewRHIRef DistanceFieldUAV = RHICreateUnorderedAccessView(DistanceFieldResource);
-
-  ComputeShader->SetResources(RHICmdList, ShaderRHI, DistanceFieldUAV, VolumeResource, TransferFunc,
-                              brush, threshold, localSphereDiameter / 2);
-
-  uint32 GroupSizeX = FMath::DivideAndRoundUp(Dimensions.X, NUM_THREADS_PER_GROUP_DIMENSION);
-  uint32 GroupSizeY = FMath::DivideAndRoundUp(Dimensions.Y, NUM_THREADS_PER_GROUP_DIMENSION);
-
-  // Separate into parts so that the GPU doesn't hang.
-  for (int i = 0; i < 10; i++) {
-    ComputeShader->SetZOffset(RHICmdList, ShaderRHI, i * (Dimensions.Z / 10));
-    DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, Dimensions.Z / 10);
-  }
-
-  // Unbind UAVs.
-  ComputeShader->UnbindResources(RHICmdList, ShaderRHI);
-
-  // Transition resources back to the renderer.
-  RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, DistanceFieldResource);
-}
 
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat) {
   // THIS IS UNTESTED FOR FORMATS OTHER THAN G8 AND R16G16B16A16_SNORM!
@@ -338,8 +175,7 @@ void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
   // Normalize Light Direction to get unit length.
   OutLocalLightParameters.LightDirection.Normalize();
 
-  // Color and Intensity are the same in local space -> copy.
-  OutLocalLightParameters.LightColor = LightParameters.LightColor;
+  // Intensity is the same in local space -> copy.
   OutLocalLightParameters.LightIntensity = LightParameters.LightIntensity;
 
   // Get Major Axes (notice inverting of light Direction - for a directional light, the position of
@@ -353,10 +189,6 @@ void GetLocalLightParamsAndAxes(const FDirLightParameters& LightParameters,
   // Set second axis weight to (1 - (first axis weight))
   OutLocalMajorAxes.FaceWeight[1].second = 1 - OutLocalMajorAxes.FaceWeight[0].second;
 
-  // FString debug = "Global light dir : " + LightParameters.LightDirection.ToString() +
-  //                ", Local light dir : " + OutLocalLightParameters.LightDirection.ToString();
-  // GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow, debug);
-
   // RetVal.Direction *= VolumeTransform.GetScale3D();
 }
 
@@ -366,21 +198,14 @@ FClippingPlaneParameters GetLocalClippingParameters(
   // Get clipping center to (0-1) texture local space. (Invert transform, add 0.5 to get to (0-1)
   // space of a unit cube centered on 0,0,0)
   RetVal.Center = WorldParameters.VolumeTransform.InverseTransformPosition(
-                      WorldParameters.ClippingPlaneParameters.Center) +
-                  0.5;
-  // Get clipping direction in local space - here we don't care about the mesh size (as long as
-  // it's a cube, which it really bloody better be).
-
-  // TODO Why the fuck does light direction work with regular InverseTransformVector
+                      WorldParameters.ClippingPlaneParameters.Center) + 0.5;
+  // Get clipping direction in local space
+  // TODO Why the hell does light direction work with regular InverseTransformVector
   // but clipping direction only works with NoScale and multiplying by scale afterwards?
   RetVal.Direction = WorldParameters.VolumeTransform.InverseTransformVectorNoScale(
       WorldParameters.ClippingPlaneParameters.Direction);
   RetVal.Direction *= WorldParameters.VolumeTransform.GetScale3D();
   RetVal.Direction.Normalize();
-
-  //  FString debug = "Global clip dir : " + WorldParameters.ClippingPlaneParameters.ToString() + ",
-  //  Local clip dir : " +  RetVal.Direction.ToString(); GEngine->AddOnScreenDebugMessage(-1, 0,
-  //  FColor::Yellow, debug);
 
   return RetVal;
 }
@@ -442,6 +267,7 @@ float GetLightAlpha(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsig
   return LightParams.LightIntensity * MajorAxes.FaceWeight[index].second;
 }
 
+// Returns a 3x3 permutation matrix depending on the current propagation axis
 FMatrix GetPermutationMatrix(FMajorAxes MajorAxes, unsigned index) {
   uint8 Axis = (uint8)MajorAxes.FaceWeight[index].first / 2;
   FMatrix retVal;
@@ -463,26 +289,7 @@ FMatrix GetPermutationMatrix(FMajorAxes MajorAxes, unsigned index) {
   return retVal;
 }
 
-float GetStepSize(FVector2D PixelOffset, FIntVector TransposedDimensions) {
-  // Pixel offset is increased by 0.5 to point to the center of pixels from int coords -> decrease
-  // it by that so that the calculations are correct
-  PixelOffset = PixelOffset - 0.5;
-  // Get step to previous voxel in the volume (distance between two propagation layers).
-  float LayerThickness = 1.0f / (float)TransposedDimensions.Z;
-  // Get diagonal length if the step to previous pixel was one
-  float PixelOffsetSize = sqrt(1 + PixelOffset.Size() * PixelOffset.Size());
-  // Return the product.
-  FString debugMsg =
-      "Layer thickness = " + FString::SanitizeFloat(LayerThickness) +
-      ", Pix offset = " + PixelOffset.ToString() +
-      ", diagonal = " + FString::SanitizeFloat(PixelOffsetSize) +
-      ", final StepSize = " + FString::SanitizeFloat(PixelOffsetSize * LayerThickness);
-
-  //	GEngine->AddOnScreenDebugMessage(-1, 0, FColor::Yellow,debugMsg);
-
-  return PixelOffsetSize * LayerThickness;
-}
-
+// Returns the Loop Start index, end index and the way the loop is going along the axis.
 void GetLoopStartStopIndexes(int& OutStart, int& OutStop, int& OutAxisDirection,
                              const FMajorAxes& MajorAxes, const unsigned& index,
                              const int zDimension) {
@@ -496,14 +303,7 @@ void GetLoopStartStopIndexes(int& OutStart, int& OutStop, int& OutAxisDirection,
   }
 }
 
-// Returns the color int required for the given light color and major axis.
-uint32 GetBorderColorInt(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsigned index) {
-  FVector LC = LightParams.LightColor;
-  FLinearColor LightColor = FLinearColor(
-      LC.X, LC.Y, LC.Z, LightParams.LightIntensity * MajorAxes.FaceWeight[index].second);
-  return LightColor.ToFColor(true).ToPackedARGB();
-}
-
+// Used for swapping read/write buffers - transitions one to Readable and other to Writable.
 void TransitionBufferResources(FRHICommandListImmediate& RHICmdList,
                                FTextureRHIParamRef NewlyReadableTexture,
                                FUnorderedAccessViewRHIParamRef NewlyWriteableUAV) {
@@ -512,15 +312,15 @@ void TransitionBufferResources(FRHICommandListImmediate& RHICmdList,
                                 EResourceTransitionPipeline::EComputeToCompute, NewlyWriteableUAV);
 }
 
-// For making statistics about GPU use.
+// For making statistics about GPU use - Adding Lights.
 DECLARE_FLOAT_COUNTER_STAT(TEXT("AddingLights"), STAT_GPU_AddingLights, STATGROUP_GPU);
 DECLARE_GPU_STAT_NAMED(GPUAddingLights, TEXT("AddingLightsToVolume"));
 
-// For making statistics about GPU use.
+// For making statistics about GPU use - Changing Lights.
 DECLARE_FLOAT_COUNTER_STAT(TEXT("ChangingLights"), STAT_GPU_ChangingLights, STATGROUP_GPU);
 DECLARE_GPU_STAT_NAMED(GPUChangingLights, TEXT("ChangingLightsInVolume"));
 
-// For making statistics about GPU use.
+// For making statistics about GPU use - Clearing Lights.
 DECLARE_FLOAT_COUNTER_STAT(TEXT("ClearingLights"), STAT_GPU_ClearingLights, STATGROUP_GPU);
 DECLARE_GPU_STAT_NAMED(GPUClearingLights, TEXT("ClearingLightsInVolume"));
 
@@ -872,7 +672,7 @@ void ClearVolumeTexture_RenderThread(FRHICommandListImmediate& RHICmdList,
   // Don't need barriers on these - we only ever read/write to the same pixel from one thread ->
   // no race conditions But we definitely need to transition the resource to Compute-shader
   // accessible, otherwise the renderer might touch our textures while we're writing them.
-  RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier,
+  RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
                                 EResourceTransitionPipeline::EGfxToCompute, VolumeUAVRef);
 
   ComputeShader->SetParameters(RHICmdList, VolumeUAVRef, ClearValues,

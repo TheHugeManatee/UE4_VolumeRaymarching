@@ -10,6 +10,16 @@
 //                      TEXT("/Plugin/VolumeRaymarching/Private/ClearVolumesShader.usf"),
 //                      TEXT("MainComputeShader"), SF_Compute)
 //
+//
+
+//// Returns the color int required for the given light color and major axis.
+//uint32 GetBorderColorInt(FDirLightParameters LightParams, FMajorAxes MajorAxes, unsigned index) {
+//	FVector LC = LightParams.LightColor;
+//	FLinearColor LightColor = FLinearColor(
+//		LC.X, LC.Y, LC.Z, LightParams.LightIntensity * MajorAxes.FaceWeight[index].second);
+//	return LightColor.ToFColor(true).ToPackedARGB();
+//}
+
 //void AddDirLightToLightVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
 //	FBasicRaymarchRenderingResources Resources,
 //	const FColorVolumesResources ColorResources,

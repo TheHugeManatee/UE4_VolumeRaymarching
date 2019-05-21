@@ -125,7 +125,7 @@ public:
   static void CreateBasicRaymarchingResources(UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
                                               UTexture2D* TransferFunction,
                                               FTransferFunctionRangeParameters TFRangeParams,
-                                              bool HalfResolution, const bool ColoredLightSupport,
+                                              bool HalfResolution,
                                               FBasicRaymarchRenderingResources& OutParameters);  //
 
   //

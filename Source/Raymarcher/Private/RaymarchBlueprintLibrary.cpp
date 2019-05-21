@@ -4,6 +4,7 @@
 #include "RaymarchBlueprintLibrary.h"
 #include "MhdInfo.h"
 #include "RaymarchRendering.h"
+#include "Experimental.h"
 
 #include <cstdio>
 #include "Classes/Engine/World.h"
@@ -359,7 +360,7 @@ void CreateBufferTextures(FIntPoint Size, EPixelFormat PixelFormat,
 void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
     UVolumeTexture* Volume, UVolumeTexture* ALightVolume, UTexture2D* TransferFunction,
     FTransferFunctionRangeParameters TFRangeParams, bool HalfResolution,
-    const bool ColoredLightSupport, FBasicRaymarchRenderingResources& OutParameters) {
+    FBasicRaymarchRenderingResources& OutParameters) {
   if (!Volume || !ALightVolume || !TransferFunction) {
     UE_LOG(LogTemp, Error, TEXT("Invalid input parameters!"));
     return;
@@ -390,7 +391,7 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
   FIntPoint ZBufferSize = FIntPoint(X, Y);
 
   // Make buffers fully colored if we need to support colored lights.
-  EPixelFormat PixelFormat = (ColoredLightSupport ? PF_A32B32G32R32F : PF_G8);
+  EPixelFormat PixelFormat = PF_R32_FLOAT;
 
   CreateBufferTextures(XBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[0]);
   CreateBufferTextures(YBufferSize, PixelFormat, OutParameters.XYZReadWriteBuffers[1]);
@@ -409,7 +410,6 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
       RHICreateUnorderedAccessView(OutParameters.ALightVolumeRef->Resource->TextureRHI);
 
   OutParameters.isInitialized = true;
-  OutParameters.supportsColor = ColoredLightSupport;
 }
 
 void URaymarchBlueprintLibrary::CheckBasicRaymarchingResources(

@@ -10,7 +10,7 @@
 #define LOCTEXT_NAMESPACE "RaymarchPlugin"
 
 IMPLEMENT_SHADER_TYPE(, FWriteSphereToVolumeShader,
-                      TEXT("/Plugin/VolumeRaymarching/Private/WriteCuboidShader.usf"),
+                      TEXT("/Plugin/VolumeRaymarching/Private/WriteEllipsoidShader.usf"),
                       TEXT("MainComputeShader"), SF_Compute)
 
 void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,

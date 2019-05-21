@@ -43,7 +43,7 @@ public:
   void SetMarkedVolumeUAV(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
                           const FUnorderedAccessViewRHIParamRef pMarkedVolume) {
     // Set the UAV parameter for the light volume
-    SetUAVParameter(RHICmdList, ShaderRHI, MarkedVolume, pMarkedVolume);
+    RHICmdList.SetUAVParameter(ShaderRHI, MarkedVolume.GetUAVIndex(),pMarkedVolume);
   }
 
   void SetParameters(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
@@ -56,7 +56,7 @@ public:
   void UnbindMarkedVolumeUAV(FRHICommandListImmediate& RHICmdList,
                              FComputeShaderRHIParamRef ShaderRHI) {
     // Unbind the UAVs.
-    SetUAVParameter(RHICmdList, ShaderRHI, MarkedVolume, FUnorderedAccessViewRHIParamRef());
+    RHICmdList.SetUAVParameter(ShaderRHI, MarkedVolume.GetUAVIndex(), FUnorderedAccessViewRHIParamRef());
   }
 
   bool Serialize(FArchive& Ar) {
@@ -67,7 +67,7 @@ public:
 
 protected:
   // The modified volume.
-  FShaderResourceParameter MarkedVolume;
+  FRWShaderParameter MarkedVolume;
   // Written cuboid center and size.
   FShaderParameter CuboidCenter;
   FShaderParameter CuboidSize;

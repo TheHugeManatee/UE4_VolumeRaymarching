@@ -3,7 +3,7 @@
 
 // Thx Temaran for original HLSL & usage example
 
-RWTexture3D<float> MarkedVolume;
+RWTexture3D<float> RWMarkedVolume;
 
 int3 CuboidCenter;
 
@@ -20,6 +20,6 @@ void MainComputeShader(uint3 ThreadId : SV_DispatchThreadID)
     if (length(myPosLocal) <= 0.5)
     {
 
-        MarkedVolume[myPos] = CharToFloat(WrittenValue);
+        RWMarkedVolume[myPos] = CharToFloat(WrittenValue);
     }
 }

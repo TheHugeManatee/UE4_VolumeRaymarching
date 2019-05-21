@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "1.0",
 	"FriendlyName": "Raymarcher",
-	"Description": "A slightly less filthy, hacky and shady support for true 3DTexture raymarching",
+	"Description": "A plugin allowing 3DTexture raymarching and labeling",
 	"Category": "Other",
 	"CreatedBy": "Tomas Bartipan",
 	"CreatedByURL": "http://campar.in.tum.de",
