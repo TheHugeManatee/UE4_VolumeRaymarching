@@ -49,7 +49,7 @@ public:
 
   /** Clears a light volume. */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
-  static void ClearSingleLightVolume(UVolumeTexture* ALightVolume, float ClearValue);
+  static void ClearVolumeTexture(UVolumeTexture* VolumeTexture, float ClearValue);
 
   /** Clears a light volume in provided raymarch resources. */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
@@ -128,16 +128,9 @@ public:
                                               bool HalfResolution,
                                               FBasicRaymarchRenderingResources& OutParameters);  //
 
-  //
 
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
   static void CheckBasicRaymarchingResources(FBasicRaymarchRenderingResources OutParameters);  //
-
-  /** Loads a RAW 3D texture into this classes FRHITexture3D member. Will output error log messages
-   * and return if unsuccessful */
-  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
-  static void ReadTransferFunctionFromFile(FString TextFileName,
-                                           UCurveLinearColor*& OutColorCurve);  //
 
   //
   //

@@ -12,11 +12,11 @@
 IMPLEMENT_SHADER_TYPE(, FVolumePS, TEXT("/Plugin/VolumeRaymarching/Private/RaymarchShader.usf"),
                       TEXT("PassthroughPS"), SF_Pixel)
 
-IMPLEMENT_SHADER_TYPE(, FAddDirLightShaderSingle,
+IMPLEMENT_SHADER_TYPE(, FAddDirLightShader,
                       TEXT("/Plugin/VolumeRaymarching/Private/AddDirLightShader.usf"),
                       TEXT("MainComputeShader"), SF_Compute)
 
-IMPLEMENT_SHADER_TYPE(, FChangeDirLightShaderSingle,
+IMPLEMENT_SHADER_TYPE(, FChangeDirLightShader,
                       TEXT("/Plugin/VolumeRaymarching/Private/ChangeDirLightShader.usf"),
                       TEXT("MainComputeShader"), SF_Compute)
 
@@ -103,27 +103,27 @@ FVector2D GetUVOffset(FCubeFace Axis, FVector LightPosition, FIntVector Transpos
   // an offset to apply to current pos to read from our read buffer texture.
   FVector2D RetVal;
   switch (Axis) {
-    case FCubeFace::Right:  // +X
+    case FCubeFace::XPositive:  // +X
       normLightPosition /= normLightPosition.X;
       RetVal = FVector2D(normLightPosition.Y, normLightPosition.Z);
       break;
-    case FCubeFace::Left:  // -X
+    case FCubeFace::XNegative:  // -X
       normLightPosition /= -normLightPosition.X;
       RetVal = FVector2D(normLightPosition.Y, normLightPosition.Z);
       break;
-    case FCubeFace::Back:  // +Y
+    case FCubeFace::YPositive:  // +Y
       normLightPosition /= normLightPosition.Y;
       RetVal = FVector2D(normLightPosition.X, normLightPosition.Z);
       break;
-    case FCubeFace::Front:  // -Y
+    case FCubeFace::YNegative:  // -Y
       normLightPosition /= -normLightPosition.Y;
       RetVal = FVector2D(normLightPosition.X, normLightPosition.Z);
       break;
-    case FCubeFace::Top:  // +Z
+    case FCubeFace::ZPositive:  // +Z
       normLightPosition /= normLightPosition.Z;
       RetVal = FVector2D(normLightPosition.X, normLightPosition.Y);
       break;
-    case FCubeFace::Bottom:  // -Z
+    case FCubeFace::ZNegative:  // -Z
       normLightPosition /= -normLightPosition.Z;
       RetVal = FVector2D(normLightPosition.X, normLightPosition.Y);
       break;
@@ -148,12 +148,12 @@ void GetStepSizeAndUVWOffset(FCubeFace Axis, FVector LightPosition, FIntVector T
   OutUVWOffset = LightPosition;
   // Since we don't care about the direction, just the size, ignore signs.
   switch (Axis) {
-    case FCubeFace::Right:  // +-X
-    case FCubeFace::Left: OutUVWOffset /= abs(LightPosition.X) * TransposedDimensions.Z; break;
-    case FCubeFace::Back:  // +-Y
-    case FCubeFace::Front: OutUVWOffset /= abs(LightPosition.Y) * TransposedDimensions.Z; break;
-    case FCubeFace::Top:  // +-Z
-    case FCubeFace::Bottom: OutUVWOffset /= abs(LightPosition.Z) * TransposedDimensions.Z; break;
+    case FCubeFace::XPositive:  // +-X
+    case FCubeFace::XNegative: OutUVWOffset /= abs(LightPosition.X) * TransposedDimensions.Z; break;
+    case FCubeFace::YPositive:  // +-Y
+    case FCubeFace::YNegative: OutUVWOffset /= abs(LightPosition.Y) * TransposedDimensions.Z; break;
+    case FCubeFace::ZPositive:  // +-Z
+    case FCubeFace::ZNegative: OutUVWOffset /= abs(LightPosition.Z) * TransposedDimensions.Z; break;
     default: check(false); ;
   }
 
@@ -379,7 +379,7 @@ void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICm
 
   // Find and set compute shader
   TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
-  TShaderMapRef<FAddDirLightShaderSingle> ComputeShader(GlobalShaderMap);
+  TShaderMapRef<FAddDirLightShader> ComputeShader(GlobalShaderMap);
   FComputeShaderRHIParamRef ShaderRHI = ComputeShader->GetComputeShader();
   RHICmdList.SetComputeShader(ShaderRHI);
 
@@ -536,7 +536,7 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
   SCOPED_GPU_STAT(RHICmdList, GPUChangingLights);
 
   TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
-  TShaderMapRef<FChangeDirLightShaderSingle> ComputeShader(GlobalShaderMap);
+  TShaderMapRef<FChangeDirLightShader> ComputeShader(GlobalShaderMap);
 
   FComputeShaderRHIParamRef ShaderRHI = ComputeShader->GetComputeShader();
   RHICmdList.SetComputeShader(ShaderRHI);

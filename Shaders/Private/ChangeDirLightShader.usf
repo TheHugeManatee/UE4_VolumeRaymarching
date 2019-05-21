@@ -140,8 +140,8 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
     RemovedWriteBuffer[PixelLoc] = RemovedCurrentLightAlpha;
     WriteBuffer[PixelLoc] = CurrentLightAlpha;
 
-    // Ignore changes smaller than 0.001 to avoid writes with almost no effect. (Also, these shaders usually work with 
-    // G8 format, so changes smaller than 1/255 won't have an effect).
+
+    // Ignore changes smaller than 0.001 to avoid writes with almost no effect.
     if (abs(CurrentLightAlpha - RemovedCurrentLightAlpha) > 1e-3)
     {
         ALightVolume[pos] = ALightVolume[pos] + CurrentLightAlpha - RemovedCurrentLightAlpha;

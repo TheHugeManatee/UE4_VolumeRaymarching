@@ -18,6 +18,7 @@ RWTexture2D<float> WriteBuffer;
 Texture2D ReadBuffer;
 SamplerState ReadBufferSampler;
 
+
 // Offset from current pixel position into the read buffer - depending on where the light is
 // in relation to the propagation axis. (e.g. will be (0,0) if the light is propagating exactly along the axis)
 float2 PrevPixelOffset;
@@ -114,8 +115,7 @@ void MainComputeShader(uint2 PixelLoc : SV_DispatchThreadID)
 	// The read/write buffers have always positive values (the alpha of current light being propagated)
     WriteBuffer[PixelLoc] = CurrentLightAlpha; 
     
-    // Ignore changes smaller than 0.001 to avoid writes with almost no effect. (Also, these shaders usually work with 
-    // G8 format, so changes smaller than 1/255 won't have an effect).
+    // Ignore changes smaller than 0.001 to avoid writes with almost no effect.
     if (abs(CurrentLightAlpha) > 1e-3)
     {
         // If we're removing a light, multiply alpha by -1. (but read/write buffers stay positive)

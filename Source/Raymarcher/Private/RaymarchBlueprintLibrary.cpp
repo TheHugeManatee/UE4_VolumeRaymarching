@@ -107,14 +107,14 @@ void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
   });
 }
 
-void URaymarchBlueprintLibrary::ClearSingleLightVolume(UVolumeTexture* ALightVolume,
+void URaymarchBlueprintLibrary::ClearVolumeTexture(UVolumeTexture* VolumeTexture,
                                                        float ClearValue) {
-  FRHITexture3D* ALightVolumeResource = ALightVolume->Resource->TextureRHI->GetTexture3D();
+  FRHITexture3D* VolumeTextureResource = VolumeTexture->Resource->TextureRHI->GetTexture3D();
 
   // Call the actual rendering code on RenderThread.
   ENQUEUE_RENDER_COMMAND(CaptureCommand)
-  ([ALightVolumeResource, ClearValue](FRHICommandListImmediate& RHICmdList) {
-    ClearVolumeTexture_RenderThread(RHICmdList, ALightVolumeResource, ClearValue);
+  ([VolumeTextureResource, ClearValue](FRHICommandListImmediate& RHICmdList) {
+    ClearVolumeTexture_RenderThread(RHICmdList, VolumeTextureResource, ClearValue);
   });
 }
 
@@ -425,21 +425,6 @@ void URaymarchBlueprintLibrary::CreateLightVolumeAsset(FString TextureName, FInt
                            true);
 }
 
-void URaymarchBlueprintLibrary::ReadTransferFunctionFromFile(FString TextFileName,
-                                                             UCurveLinearColor*& OutColorCurve) {
-  FString RelativePath = FPaths::ProjectContentDir();
-  FString FullPath =
-      IFileManager::Get().ConvertToAbsolutePathForExternalAppForRead(*RelativePath) + TextFileName;
-
-  FString FileContent;
-  if (!FFileHelper::LoadFileToString(/*out*/ FileContent, *FullPath)) {
-    MY_LOG("Reading TF text file failed!");
-    return;
-  }
-
-  OutColorCurve = NewObject<UCurveLinearColor>();
-}
-
 void URaymarchBlueprintLibrary::GenerateVolumeTextureMipLevels(FIntVector Dimensions,
                                                                UVolumeTexture* inTexture,
                                                                UTexture2D* TransferFunction,
@@ -525,35 +510,35 @@ void URaymarchBlueprintLibrary::GetCutplaneMaterialParams(FCubeFace DominantFace
   switch (DominantFace) {
       // Bottom = going from the bottom -> dominant face is at -Z, so slices are going along Z, U
       // coordinate increases Y)
-    case FCubeFace::Bottom:
+    case FCubeFace::ZNegative:
       Origin = FVector(0, 0, 0);
       UMultiplier = FVector(0, 1, 0);
       SliceMultiplier = FVector(0, 0, 1);
       break;
       // Top = going from the top -> dominant face is at +Z, so slices going along going along -Z,
       // U coordinate decreases Y))
-    case FCubeFace::Top:
+    case FCubeFace::ZPositive:
       Origin = FVector(0, 1, 1);
       UMultiplier = FVector(0, -1, 0);
       SliceMultiplier = FVector(0, 0, -1);
       break;
       // Back = going from back -> dominant face is at -Y,  so slices going along +Y, U coordinate
       // decreases Z)
-    case FCubeFace::Front:
+    case FCubeFace::YNegative:
       Origin = FVector(0, 0, 1);
       UMultiplier = FVector(0, 0, -1);
       SliceMultiplier = FVector(0, 1, 0);
       break;
       // Front = going from Front -> dominant face is at +Y, so slices going along -Y, U coordinate
       // increases Z))
-    case FCubeFace::Back:
+    case FCubeFace::YPositive:
       Origin = FVector(0, 1, 0);
       UMultiplier = FVector(0, 0, 1);
       SliceMultiplier = FVector(0, -1, 0);
       break;
       // Should never go from +-X, so assert here.
-    case FCubeFace::Left:
-    case FCubeFace::Right: check(0);
+    case FCubeFace::XNegative:
+    case FCubeFace::XPositive: check(0);
   }
 }
 
@@ -566,7 +551,7 @@ void URaymarchBlueprintLibrary::GetDominantFace(FVector LocalDirectionVector,
 void URaymarchBlueprintLibrary::GetDominantFaceNotX(FVector LocalDirectionVector,
                                                     FCubeFace& DominantFace) {
   FMajorAxes axes = GetMajorAxes(LocalDirectionVector);
-  if (axes.FaceWeight[0].first != FCubeFace::Left && axes.FaceWeight[0].first != FCubeFace::Right) {
+  if (axes.FaceWeight[0].first != FCubeFace::XNegative && axes.FaceWeight[0].first != FCubeFace::XPositive) {
     DominantFace = axes.FaceWeight[0].first;
   } else {
     DominantFace = axes.FaceWeight[1].first;
@@ -580,13 +565,13 @@ void URaymarchBlueprintLibrary::GetFaceNormal(FCubeFace CubeFace, FVector& FaceN
 void URaymarchBlueprintLibrary::GetRightFaceAlongNegX(FCubeFace CubeFace,
                                                       FCubeFace& RightCubeFace) {
   switch (CubeFace) {
-    case FCubeFace::Right:
-    case FCubeFace::Left:  // Fail! There's no "right" along X for these faces
+    case FCubeFace::XPositive:
+    case FCubeFace::XNegative:  // Fail! There's no "right" along X for these faces
       break;
-    case FCubeFace::Back: RightCubeFace = FCubeFace::Bottom; break;
-    case FCubeFace::Front: RightCubeFace = FCubeFace::Top; break;
-    case FCubeFace::Top: RightCubeFace = FCubeFace::Back; break;
-    case FCubeFace::Bottom: RightCubeFace = FCubeFace::Front; break;
+    case FCubeFace::YPositive: RightCubeFace = FCubeFace::ZNegative; break;
+    case FCubeFace::YNegative: RightCubeFace = FCubeFace::ZPositive; break;
+    case FCubeFace::ZPositive: RightCubeFace = FCubeFace::YPositive; break;
+    case FCubeFace::ZNegative: RightCubeFace = FCubeFace::YNegative; break;
     default: break;
   }
 }
