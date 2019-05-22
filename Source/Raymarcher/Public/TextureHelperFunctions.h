@@ -50,12 +50,15 @@ bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoi
                           bool UAVCompatible = false, TextureAddress TilingX = TA_Clamp,
                           TextureAddress TilingY = TA_Clamp);
 
+/** Handles the saving of source data to persistent textures. Only works in-editor, as packaged
+ builds no longer have source data for textures.*/
 bool HandleTextureEditorData(UTexture* Texture, const EPixelFormat PixelFormat,
                              const bool Persistent, const FIntVector Dimensions,
                              const uint8* BulkData);
 
-void UpdateVolumeTextureSource_Impl(UVolumeTexture* Texture);
-
-    uint8* LoadRawFileIntoArray(const FString FileName, const int64 BytesToLoad);
+/**
+  
+*/
+uint8* LoadRawFileIntoArray(const FString FileName, const int64 BytesToLoad);
 
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat);

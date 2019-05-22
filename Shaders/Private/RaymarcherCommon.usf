@@ -91,80 +91,15 @@ float3 LocalToUVW(float3 Local)
     return (Local / 2) + 0.5;
 }
 
-// Go from UVW coords to local coords of a unit cube (from [0 -> 1] to [-0.5 -> 1])
+// Go from UVW coords to local coords of a unit cube (from [0, 1] to [-0.5, 0.5])
 float3 UVWToUnitLocal(float3 UVW)
 {
     return (UVW - 0.5);
 }
 
 
-// Go from Local coords of a unit cube to UVW (from [-0.5 -> 1] to [0 -> 1])
+// Go from Local coords of a unit cube to UVW (from [-0.5, 0.5] to [0, 1])
 float3 UnitLocaltoUVW(float3 Local)
 {
     return (Local + 0.5);
 }
-
-///
-/// Obsolete functions for multicolored lights. Eventually we might reipmlement them.
-///
-
-//void RemoveAndAddColor(int3 pos, float4 removedColor, float4 addedColor, float4 oldColor,
-//RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<float> BLightVolume, RWTexture3D<float> ALightVolume)
-//{
-//	// Substract "removed" alpha from original alpha
-//    float currentAlpha = oldColor.a - removedColor.a;
-//	// Get current weight of color components relative to old alpha.
-//    float currentRed = oldColor.r * oldColor.a;
-//    float currentGreen = oldColor.g * oldColor.a;
-//    float currentBlue = oldColor.b * oldColor.a;
-
-//	// Get the weights of colors after removing the removed color (these are already relative to the currentAlpha)
-//    // As in - if they are now (0.1, 0.1, 0.1, 0.1), it is actually full white at 0.1 intensity
-//    float afterRemoveRed = currentRed - (removedColor.r * removedColor.a);
-//    float afterRemoveGreen = currentGreen - (removedColor.g * removedColor.a);
-//    float afterRemoveBlue = currentBlue - (removedColor.b * removedColor.a);
-
-//	// Now we have subtracted the color. Start adding the added one.
-//    currentAlpha = currentAlpha + addedColor.a;
-
-//	// We can assume currentAlpha will be nonzero now, as otherwise we'd be adding a 0 intensity light
-//	// (Actually, TODO add a check to C code to return on lights with 0 intensity)...
-//    ALightVolume[pos] = currentAlpha;
-//    RLightVolume[pos] = (afterRemoveRed + (addedColor.r * addedColor.a)) / currentAlpha;
-//    GLightVolume[pos] = (afterRemoveGreen + (addedColor.g * addedColor.a)) / currentAlpha;
-//    BLightVolume[pos] = (afterRemoveBlue + (addedColor.b * addedColor.a)) / currentAlpha;
-
-//	// TODO
-//	//
-//	// Optimize this!
-//}
-
-//void AddColor(int3 pos, float4 addedColor, float4 oldColor,
-//RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<float> BLightVolume, RWTexture3D<float> ALightVolume)
-//{
-//    float totalAlpha = oldColor.a + addedColor.a;
-
-//    float currentRed = oldColor.r * oldColor.a;
-//    float currentGreen = oldColor.g * oldColor.a;
-//    float currentBlue = oldColor.b * oldColor.a;
-
-//    ALightVolume[pos] = totalAlpha;
-
-//    if (totalAlpha == 0)
-//    {
-//		// Division by zero is baaaad, mmkey?
-//		// Don't need to set the other colors - since alpha is zero, currentXXX will always equal zero on next add anyways.
-//        return;
-//    }
-
-//    RLightVolume[pos] = (currentRed + (addedColor.r * addedColor.a)) / totalAlpha;
-//    GLightVolume[pos] = (currentGreen + (addedColor.g * addedColor.a)) / totalAlpha;
-//    BLightVolume[pos] = (currentBlue + (addedColor.b * addedColor.a)) / totalAlpha;
-//    // Todo? LERP instead of explicit?
-//}
-
-
-//float4 GetColor(int3 pos, RWTexture3D<float> RLightVolume, RWTexture3D<float> GLightVolume, RWTexture3D<float> BLightVolume, RWTexture3D<float> ALightVolume)
-//{
-//    return float4(RLightVolume[pos], GLightVolume[pos], BLightVolume[pos], ALightVolume[pos]);
-//}

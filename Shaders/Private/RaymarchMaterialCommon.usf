@@ -6,27 +6,27 @@
 
 // Gets color from a uint label value.
 // Switches on G8 will be faster than reading a full color volume. Also we need to export the labels eventually and color might not be the best way to do that.
+// So labels are kept as G8 format.
+
 float4 GetColorFromLabelValue(uint LabelValue)
 {
     switch (LabelValue)
     {
-        case 1: // Risk
-            return float4(1.0f, 0.0f, 0.0f, 0.3f);
-        case 2: // Target
-            return float4(0.0f, 1.0f, 0.0f, 0.15f);
-        case 3: // Potential Risk
-            return float4(1.0f, 0.0f, 0.0f, 0.3f);
-        case 4: // Potential Target
-            return float4(0.0f, 1.0f, 0.0f, 0.15f);
         case 0: // Clear 
             return float4(0.0f, 0.0f, 0.0f, 0.0f);
-        default: // Unknown - return full black so bugs are visible.
+        case 1: // Risk
+            return float4(1.0f, 0.0f, 0.0f, 0.5f);
+        case 2: // Target
+            return float4(0.0f, 1.0f, 0.0f, 0.5f);
+        default: // Unknown - return full black so bugs are obvious.
             return float4(0.0f, 0.0f, 0.0f, 1.0f);
     }
 }
 
 // Gets color from a uint label value. Used in UI functions.
 // Switches on G8 will be faster than reading a full color volume. Also we need to export the labels eventually and color might not be the best way to do that.
+// So labels are kept as G8 format.
+
 float4 GetColorFromLabelValueUI(uint LabelValue)
 {
     switch (LabelValue)
@@ -35,10 +35,6 @@ float4 GetColorFromLabelValueUI(uint LabelValue)
             return float4(1.0f, 0.0f, 0.0f, 0.5f);
         case 2: // Target
             return float4(0.0f, 1.0f, 0.0f, 0.5f);
-        case 3: // Potential Risk
-            return float4(1.0f, 0.0f, 0.0f, 0.25f);
-        case 4: // Potential Target
-            return float4(0.0f, 1.0f, 0.0f, 0.30f);
         case 0: // Clear 
             return float4(0.0f, 0.0f, 0.0f, 0.0f);
         case 255: // maybe?

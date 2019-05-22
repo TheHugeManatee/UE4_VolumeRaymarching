@@ -18,29 +18,20 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                       const float SphereRadiusWorld,
                                       const FRaymarchWorldParameters WorldParameters,
                                       FSurgeryLabel WrittenValue) {
-  // Get local center.
-  FVector localCenter = WorldParameters.VolumeTransform.InverseTransformPosition(BrushWorldCenter) + 0.5;
   // Get local center to UVW coords
-
-  float localSphereDiameter = WorldParameters.VolumeTransform.InverseTransformVector(FVector(SphereRadiusWorld, 0, 0)).Size() * 2;
-
-  /**
-  This would be for making the sphere actually round in world space. Currently, let's prefer the sphere being round in the 
-  square window for displaying the labeled data.
+  FVector LocalCenterUVW =
+      WorldParameters.VolumeTransform.InverseTransformPosition(BrushWorldCenter) + 0.5;
 
   FVector VolumeDimensions(MarkedVolume->GetSizeXYZ());
   FVector VoxelSize = WorldParameters.VolumeTransform.GetScale3D() / FVector(VolumeDimensions);
+  // Multiply radius by 2 and add one to make the sizes odd.
   FVector BrushSize = ((FVector(SphereRadiusWorld) / VoxelSize) * 2) + 1;
 
   FIntVector BrushSizeInt(FMath::RoundToInt(BrushSize.X), FMath::RoundToInt(BrushSize.Y),
                           FMath::RoundToInt(BrushSize.Z));
 
-  FIntVector LocalCenterIntCoords = FIntVector(LocalCenterUVW * VolumeDimensions);
-
-  */
-
   // Get local center in integer space
-  FIntVector localCenterIntCoords = FIntVector(localCenter * FVector(MarkedVolume->GetSizeXYZ()));
+  FIntVector LocalCenterIntCoords = FIntVector(LocalCenterUVW * VolumeDimensions);
 
   // Get shader ref from GlobalShaderMap
   TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
@@ -55,22 +46,17 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
   RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
                                 EResourceTransitionPipeline::EGfxToCompute, MarkedVolumeUAV);
 
-  // Get brush size in texture space.
-  FIntVector brush = FIntVector(localSphereDiameter * MarkedVolume->GetSizeX() + 1,
-                                localSphereDiameter * MarkedVolume->GetSizeY() + 1,
-                                localSphereDiameter * MarkedVolume->GetSizeZ() + 1);
+  //FString debug = "Written texture size = " + MarkedVolume->GetSizeXYZ().ToString() + "\nLocalCenter =" + LocalCenterUVW.ToString() + ", in ints = " + LocalCenterIntCoords.ToString() +
+  //              ", brush size in ints = " + BrushSizeInt.ToString();
 
-  FString kkt = "Written texture size = " + MarkedVolume->GetSizeXYZ().ToString() + "\nLocalCenter =" + localCenter.ToString() + ", in ints = " + localCenterIntCoords.ToString() +
-                "\nLocal Sphere diameter = " + FString::SanitizeFloat(localSphereDiameter) + ", brush size in ints = " + brush.ToString();
-
-//  GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
 
   FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
   ComputeShader->SetMarkedVolumeUAV(RHICmdList, cs, MarkedVolumeUAV);
   // As the label enum class is based on uint8 anyways, the cast is probably redundant.
-  ComputeShader->SetParameters(RHICmdList, cs, localCenterIntCoords, brush, (uint8)WrittenValue);
+  ComputeShader->SetParameters(RHICmdList, cs, LocalCenterIntCoords, BrushSizeInt,
+                               (uint8)WrittenValue);
 
-  DispatchComputeShader(RHICmdList, *ComputeShader, brush.X, brush.Y, brush.Z);
+  DispatchComputeShader(RHICmdList, *ComputeShader, BrushSizeInt.X, BrushSizeInt.Y, BrushSizeInt.Z);
 
   ComputeShader->UnbindMarkedVolumeUAV(RHICmdList, cs);
 
@@ -99,19 +85,16 @@ void WriteSphereToVolumeLocal_RenderThread(FRHICommandListImmediate& RHICmdList,
   RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
                                 EResourceTransitionPipeline::EGfxToCompute, MarkedVolumeUAV);
     
-  check((uint8)WrittenValue < 6);
-
   // Get brush size in texture space.
   FIntVector brush = FIntVector(SphereRadiusLocal * 2 * MarkedVolume->GetSizeX() + 1,
                                 SphereRadiusLocal * 2 * MarkedVolume->GetSizeY() + 1,
                                 SphereRadiusLocal * 2 * MarkedVolume->GetSizeZ() + 1);
 
-  FString kkt = "Written texture size = " + MarkedVolume->GetSizeXYZ().ToString() +
+ /* FString debug = "Written texture size = " + MarkedVolume->GetSizeXYZ().ToString() +
                 "\nLocalCenter =" + BrushLocalCenter.ToString() +
                 ", in ints = " + localCenterIntCoords.ToString() +
                 "\nLocal Sphere diameter = " + FString::SanitizeFloat(SphereRadiusLocal * 2) +
-                ", brush size in ints = " + brush.ToString();
-
+                ", brush size in ints = " + brush.ToString();*/
 //  GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
 
   FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
@@ -146,14 +129,13 @@ void ULabelVolumeLibrary::InitLabelingVolume(UVolumeTexture* LabelVolumeAsset,
   FlushRenderingCommands();
 }
 
+// Converts a surgery label to a float value that will be saved in the compute shader.
 float SurgeryLabelToFloat(const FSurgeryLabel label) {
   switch (label) {
     case FSurgeryLabel::SL_NotPainting:
     case FSurgeryLabel::SL_Clear: return 0.0;
     case FSurgeryLabel::SL_Risk: return (1.0 / 255.0);
     case FSurgeryLabel::SL_Target: return (2.0 / 255.0);
-//    case FSurgeryLabel::SL_PotentialRisk: return (3.0 / 255.0);
-//    case FSurgeryLabel::SL_PotentialTarget: return (4.0 / 255.0);
     // This shouldn't happen -> assert
     default: check(0); return 0.0;
   }

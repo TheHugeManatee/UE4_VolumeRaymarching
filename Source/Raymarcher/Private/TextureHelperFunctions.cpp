@@ -205,27 +205,6 @@ bool HandleTextureEditorData(UTexture* Texture, const EPixelFormat PixelFormat,
   return true;
 }
 
-void UpdateVolumeTextureSource_Impl(UVolumeTexture* Texture) {
-#if WITH_EDITORONLY_DATA
-  // If asset is to be persistent, handle creating the Source structure for it.
-  // If using a format that's not supported as Source format, fail.
-  ETextureSourceFormat TextureSourceFormat = PixelFormatToSourceFormat(Texture->GetPixelFormat());
-  if (TextureSourceFormat == TSF_Invalid) {
-    GEngine->AddOnScreenDebugMessage(
-        0, 10, FColor::Red, "Trying to create persistent asset with unsupported pixel format!");
-    return;
-  }
-
-  FTexture2DMipMap& Mip = Texture->PlatformData->Mips[0];  // A reference
-  uint8* Data = (uint8*)Mip.BulkData.Lock(LOCK_READ_WRITE);
-
-  // Otherwise initialize the source struct with our size and bulk data.
-  Texture->Source.Init(Texture->GetSizeX(), Texture->GetSizeY(), Texture->GetSizeZ(), 1,
-                       TextureSourceFormat, Data);
-  Mip.BulkData.Unlock();
-#endif  // WITH_EDITORONLY_DATA
-}
-
 uint8* LoadRawFileIntoArray(const FString FileName, const int64 BytesToLoad) {
   IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
   // Try opening as absolute path.

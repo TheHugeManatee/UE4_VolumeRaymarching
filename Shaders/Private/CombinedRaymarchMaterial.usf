@@ -1,80 +1,23 @@
+// Material functions needed to perform a combined raymarcher. This allows two raymarched volumes to be 
+// overlaid with correct depth-ordering. Supports arbitrary transforms of both volumes.
+
 // This file contains functions used in Custom nodes in our raymarching materials.
 // Because editing in custom node is horrible, it's nicer to just include and use a single 
 // function from this file.
 
 // Beware, modifications to this file will not be detected by the material shaders and they will not
-// be recompiled. Shaders using this file have to be recompiled manually! (unless I find a way
+// be recompiled. Shaders using this file have to be recompiled manually! (unless we find a way
 // to tell the shadercompiler to always recompile the raymarch shaders on startup)
 
 #pragma once
 #include "RaymarchMaterials.usf"
 
-// Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
-// and thickness of the cube in alpha. All values returned are in UVW space.
-void PerformRaymarchCubeSetupScaledDown(FMaterialPixelParameters MaterialParameters, in float Scaling, 
-                                          out float4 EntryPos, out float4 ExitPos, out float BoxThickness)
-{
-    // Get scene depth at this pixel.
-    float LocalSceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(MaterialParameters)));
-
-    // Get camera forward vector in world space.
-    float3 CameraFWDVecWorld = mul(float3(0.00000000, 0.00000000, 1.00000000), ResolvedView.ViewToTranslatedWorld);
-
-    // Get world space vector going from camera center to current scene depth.
-    float3 WorldDepthVec = normalize(MaterialParameters.CameraVector) * LocalSceneDepth;
-
-    // Transform this vector into the box's local space
-    WorldDepthVec = mul(WorldDepthVec, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal);
-
-    // Get actual depth in local space, account for mesh bounds (by default, we use a centered 1x1x1 cube mesh, so this is unnecessary)
-    LocalSceneDepth = length(WorldDepthVec);
-
-    // Account for difference between camera center vector and camera-to-pixel depth
-    LocalSceneDepth /= abs(dot(CameraFWDVecWorld, MaterialParameters.CameraVector));
-
-    // Get cam pos and vector into local space too.
-    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), (GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal) * Scaling).xyz;
-    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
-
-    // Transform camera pos from local to UVW coords (from +-1 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
-    LocalCamPos += 0.5;
-    float3 InverseRayDirVec = 1 / LocalCamVec;
-
-    // Because now we're in texture space where our box is at [0, 1] in each axis, it's easy to get intersections.
-    // LowIntersections will have the distance of the ray in X,Y,Z before it hits the respective axis.
-    // HighIntersections will have the distance of the ray in X,Y,Z before it reaches 1 in the respective axis.
-    float3 LowIntersections = (0 - LocalCamPos) * InverseRayDirVec;
-    float3 HighIntersections = (1 - LocalCamPos) * InverseRayDirVec;
-
-    // Get closest and furthest intersections
-    float3 ClosestIntersections = min(LowIntersections, HighIntersections);
-    float3 FurthestIntersections = max(LowIntersections, HighIntersections);
-
-    // The actual intersections of the box are the 2 values in the middle of the pack.
-    // T0 (entry) = the farthest of the closest intersections
-    float t0 = max(ClosestIntersections.x, max(ClosestIntersections.y, ClosestIntersections.z));
-    // T1 (exit) = the closest of the furthest intersections
-    float t1 = min(FurthestIntersections.x, min(FurthestIntersections.y, FurthestIntersections.z));
-
-    // Make sure the entry point is not behind the camera
-    t0 = max(0, t0);
-
-    // Make sure the exit point is not behind other scene geometry.
-    t1 = min(t1, LocalSceneDepth * Scaling);
-
-    // Calculate box thickness at this pixel (in local space).
-    BoxThickness = max(0, t1 - t0);
-    // Get entry position in UVW space.
-    EntryPos = float4(LocalCamPos + (t0 * LocalCamVec), 1.0);
-    ExitPos = float4(LocalCamPos + (t1 * LocalCamVec), 1.0);
-}
-
-// Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
-// and thickness of the cube in alpha. All values returned are in UVW space. 
+// Performs raymarch cube setup for this pixel. Modifies the output parameters instead of returning values.
+// All values returned are in UVW space (texture space - normalized to 0-1). 
 // This setup is for performing the setup from a shader that's NOT run on the cube itself, it takes the
 // cube's transform as a parameter.
-void PerformOffsetRaymarchCubeSetupExtended(FMaterialPixelParameters MaterialParameters, float4x4 CubeTransformW2L,
-                                            out float4 EntryPos, out float4 ExitPos, out float BoxThickness)
+void PerformOffsetRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters, float4x4 CubeTransformW2L,
+                                    out float4 EntryPos, out float4 ExitPos, out float BoxThickness)
 {
     // Get scene depth at this pixel.
     float LocalSceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(MaterialParameters)));
@@ -128,42 +71,7 @@ void PerformOffsetRaymarchCubeSetupExtended(FMaterialPixelParameters MaterialPar
     ExitPos = float4(LocalCamPos + (t1 * LocalCamVec), 1.0);
 }
 
-
-// Performs Raymarch only of the label volume. 
-float4 PerformLabelOnlyRaymarchFixedSteps(float3 EntryPos, float3 ExitPos, float Steps, // Entry&Exit in UVW space
-                                Texture3D LabelVolume, // Label Volume
-                                FMaterialPixelParameters MaterialParameters, float Scaling)                    
-{
-
-    float3 LocalCamVecNorm = normalize(ExitPos - EntryPos);
-    float3 LocalCamVec = LocalCamVecNorm * length(ExitPos - EntryPos) / Steps;
-    // Get step size in world units to be consistent with compute shaders' opacity calculations.
-    // We're using the primitive's LocalToWorld, but our cube is further scaled down by a factor of Scaling -> divide distance.
-    float StepSizeWorld = length(mul(LocalCamVec, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld)) / Scaling;
-    // Initialize accumulated light energy.
-    float4 LightEnergy = 0;
-    // Jitter Entry position to avoid artifacts.
-    JitterEntryPos(EntryPos, LocalCamVec, MaterialParameters);
-
-    float3 CurPos = EntryPos;
-    int i = 0;
-    for (i = 0; i < Steps; i++)
-    {
-        // Label volume ignores clipping.
-        AccumulateOneRaymarchLabelStep(LightEnergy, CurPos, LabelVolume, StepSizeWorld);
-	    // Exit early if light energy (opacity) is already very high (so future steps would have almost no impact on color).
-        if (LightEnergy.a > 0.99f)
-        {
-            LightEnergy.a = 1.0f;
-            break;
-        };
-        CurPos += LocalCamVec;
-    }
-    return LightEnergy;
-}
-
-
-// Performs lit raymarch for the current pixel. The lighting information is taken from a precomputed light volume.
+// Performs label-only raymarch for the current pixel.
 float4 PerformLabelOnlyRaymarchFixedSteps(Texture3D LabelVolume, float4x4 VolumeTransformL2W,
                               float3 EntryPos, float3 ExitPos, float Steps, // Entry&Exit in UVW space
                               FMaterialPixelParameters MaterialParameters)                      // Material Parameters
@@ -230,6 +138,7 @@ float4 PerformLitRaymarchFixedStep(Texture3D DataVolume, // Data Volume
     return LightEnergy;
 }
 
+// Performs the combined raymarch, actually marching both volumes in lockstep.
 float4 PerformActualCombinedRaymarch(float3 EntryPos1, float3 LocalCamVec1,
                                      float3 EntryPos2, float3 LocalCamVec2, float StepSizeWorld, float Steps, // Entry&Exit in UVW space
                                      Texture3D DataVolume, // Data Volume 
@@ -270,7 +179,8 @@ float4 PerformActualCombinedRaymarch(float3 EntryPos1, float3 LocalCamVec1,
 }
 
 
-// Original!
+// Performs cube setup for both volumes, then depending on which were hit performs label-only, 
+// volume-only or combined raymarch.
 float4 PerformCombinedRaymarch(Texture3D DataVolume, // Data Volume
                                Texture2D TF, float2 TFIntensityDomain, // Transfer func and intensity domain modifier
                                Texture3D LightVolume, // Light Volume  
@@ -284,12 +194,12 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, // Data Volume
     float4 EntryPos1, ExitPos1, EntryPos2, ExitPos2;
     
     // Get Local Entry and Exit points and also the box thickness in local space.
-    PerformOffsetRaymarchCubeSetupExtended(Parameters, LabelVolumeTransformW2L, EntryPos1, ExitPos1, BoxThickness1);
-    PerformOffsetRaymarchCubeSetupExtended(Parameters, DataVolumeTransformW2L, EntryPos2, ExitPos2, BoxThickness2);
+    PerformOffsetRaymarchCubeSetup(Parameters, LabelVolumeTransformW2L, EntryPos1, ExitPos1, BoxThickness1);
+    PerformOffsetRaymarchCubeSetup(Parameters, DataVolumeTransformW2L, EntryPos2, ExitPos2, BoxThickness2);
     
     if (BoxThickness1 == 0 && BoxThickness2 == 0)
     {
-        // Box thicnkess is 0 for both -> no intersection
+        // Box thickness is 0 for both -> no intersection
         return float4(0, 0, 0, 0);
     }
 
@@ -318,7 +228,6 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, // Data Volume
 
     // Get all Entry/Exit points in world space
 
-
     // First volume - get entry, exit in local (from UVW)
     EntryPos1.xyz = UVWToUnitLocal(EntryPos1.xyz);
     ExitPos1.xyz = UVWToUnitLocal(ExitPos1.xyz);
@@ -332,13 +241,13 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, // Data Volume
     EntryPos2 = mul(EntryPos2, DataVolumeTransformL2W);
     ExitPos2 = mul(ExitPos2, DataVolumeTransformL2W);
     
-    // A different way of ordering the entry + exit pts, also works
-    
+    // A different way of ordering the entry + exit pts, also works but seems more complicated...
     // // Get world to view
     //float3 EntryPos1View = mul(EntryPos1 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
     //float3 EntryPos2View = mul(EntryPos2 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
     //float3 ExitPos1View = mul(ExitPos1 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
     //float3 ExitPos2View = mul(ExitPos2 + View.PreViewTranslation, View.TranslatedWorldToView).xyz;
+	// // Sort on Z coord.
     //if (EntryPos1View.z < EntryPos2View.z)
     //{
     //    CloserEntryWorld = EntryPos1;
@@ -347,7 +256,7 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, // Data Volume
     //{
     //    CloserEntryWorld = EntryPos2;
     //}
-
+	//
     //if (ExitPos1View.z > ExitPos2View.z)
     //{
     //    FurtherExitWorld = ExitPos1;
@@ -377,17 +286,10 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, // Data Volume
     {
         FurtherExitWorld = ExitPos2;
     }
-
-   
-
-    
-
+	
     // We got Entry&Exit in world space, transform back into local for both volumes.
     EntryPos1.xyz = UnitLocaltoUVW(mul(CloserEntryWorld, LabelVolumeTransformW2L).xyz);
-    //ExitPos1.xyz = LocalToUVW(mul(FurtherExitWorld, GetPrimitiveData(Parameters.PrimitiveId).WorldToLocal).xyz * ScaleDownFactor);
-
     EntryPos2.xyz = UnitLocaltoUVW(mul(CloserEntryWorld, DataVolumeTransformW2L).xyz);
-    //ExitPos2.xyz = LocalToUVW(mul(FurtherExitWorld, DataVolumeTransformW2L).xyz);
 
     float4 TotalMarchingVectorWorld = FurtherExitWorld - CloserEntryWorld;
        

@@ -8,9 +8,11 @@
 
 #include "VolumeLabeling.generated.h"
 
-// Enum class for the different possible labels
-
-// Enumeration for how to handle parts of Transfer Function which are cut off.
+// Enum class for the different possible labels.
+//
+// If you modify this, also modify the function SurgeryLabelToFloat in the .cpp file
+// and the GetColorFromLabelValue function in RaymarchMaterialCommon.usf
+// to have your changes consistent.
 UENUM(BlueprintType)
 enum class FSurgeryLabel : uint8 {
   SL_Clear = 0,   // Clear, will be fully transparent
@@ -19,8 +21,7 @@ enum class FSurgeryLabel : uint8 {
   SL_NotPainting = 3
 };
 
-// Parent shader for any shader that works on Light Volumes. Provides a way to bind and unbind the 4
-// light volumes.
+// Class declaring a shader used for writing spheroids into a volume.
 class FWriteSphereToVolumeShader : public FGlobalShader {
   DECLARE_SHADER_TYPE(FWriteSphereToVolumeShader, Global)
 
@@ -42,8 +43,8 @@ public:
 
   void SetMarkedVolumeUAV(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
                           const FUnorderedAccessViewRHIParamRef pMarkedVolume) {
-    // Set the UAV parameter for the light volume
-    RHICmdList.SetUAVParameter(ShaderRHI, MarkedVolume.GetUAVIndex(),pMarkedVolume);
+    // Set the UAV parameter for the labeling volume
+    RHICmdList.SetUAVParameter(ShaderRHI, MarkedVolume.GetUAVIndex(), pMarkedVolume);
   }
 
   void SetParameters(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
@@ -56,7 +57,8 @@ public:
   void UnbindMarkedVolumeUAV(FRHICommandListImmediate& RHICmdList,
                              FComputeShaderRHIParamRef ShaderRHI) {
     // Unbind the UAVs.
-    RHICmdList.SetUAVParameter(ShaderRHI, MarkedVolume.GetUAVIndex(), FUnorderedAccessViewRHIParamRef());
+    RHICmdList.SetUAVParameter(ShaderRHI, MarkedVolume.GetUAVIndex(),
+                               FUnorderedAccessViewRHIParamRef());
   }
 
   bool Serialize(FArchive& Ar) {
@@ -75,24 +77,33 @@ protected:
   FShaderParameter WrittenValue;
 };
 
+/**
+  Render-thread side of writing a sphere to a volume. Takes care of binding the resources 
+  to the compute shader and dispatching it.
+*/
 void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                       FRHITexture3D* MarkedVolume, const float SphereRadiusWorld,
                                       const FVector BrushWorldCenter,
                                       const FRaymarchWorldParameters WorldParameters,
                                       FSurgeryLabel WrittenValue);
 
+/**
+  Render-thread side of writing a sphere to a volume. Takes care of binding the resources 
+  to the compute shader and dispatching it.
+*/
 void WriteSphereToVolumeLocal_RenderThread(FRHICommandListImmediate& RHICmdList,
                                            FRHITexture3D* MarkedVolume,
                                            const FVector BrushLocalCenter,
                                            const float SphereRadiusLocal,
                                            FSurgeryLabel WrittenValue);
 
-// Actual blueprint library follows
+// Volume labeling blueprint library follows.
 UCLASS()
 class ULabelVolumeLibrary : public UBlueprintFunctionLibrary {
   GENERATED_BODY()
 public:
-  /** Creates labeling volume with the provided name and dimensions. */
+  /** Creates labeling volume with the provided name and dimensions. Returns the newly created
+   * texture. */
   UFUNCTION(BlueprintCallable, Category = "Label Volume")
   static void CreateNewLabelingVolumeAsset(FString AssetName, FIntVector Dimensions,
                                            UVolumeTexture*& OutTexture);
@@ -101,14 +112,22 @@ public:
   UFUNCTION(BlueprintCallable, Category = "Label Volume")
   static void InitLabelingVolume(UVolumeTexture* LabelVolumeAsset, FIntVector Dimensions);
 
-  /** Writes specified value into a volume at a sphere specified in world coordinates. */
+  /**
+    Writes the specified label into a volume at a sphere specified by world coordinates and size.
+    If using an anisotropic volume, the sphere written will be a sphere in world coordinates, not
+    in local.
+  */
   UFUNCTION(BlueprintCallable, Category = "Label Volume")
   static void LabelSphereInVolumeWorld(UVolumeTexture* MarkedVolume, FVector BrushWorldCenter,
                                        const float SphereRadiusWorld,
                                        const FRaymarchWorldParameters WorldParameters,
                                        const FSurgeryLabel Label);
 
-  /** Writes specified value into a volume at a sphere specified in local coordinates. */
+  /**
+    Writes the specified label into a volume at a sphere specified by local coordinates and size.
+    If using an anisotropic volume, the sphere written will be a sphere in local coordinates, not
+    in world.
+  */
   UFUNCTION(BlueprintCallable, Category = "Label Volume")
   static void LabelSphereInVolumeLocal(UVolumeTexture* MarkedVolume, FVector BrushLocalCenter,
                                        const float SphereLocalRadius, const FSurgeryLabel Label);
