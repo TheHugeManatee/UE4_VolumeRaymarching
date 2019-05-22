@@ -197,9 +197,9 @@ float4 PerformLabelOnlyRaymarchFixedSteps(Texture3D LabelVolume, float4x4 Volume
 
 
 // Performs lit raymarch for the current pixel. The lighting information is taken from a precomputed light volume.
-float4 PerformLitRaymarchFixedStep(Texture3D DataVolume, SamplerState DataVolumeSampler, // Data Volume and Sampler
-                              Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain, // Transfer func, sampler and intensity domain modifier
-                              Texture3D LightVolume, SamplerState LightVolumeSampler, // Light Volume  
+float4 PerformLitRaymarchFixedStep(Texture3D DataVolume, // Data Volume
+                              Texture2D TF, float2 TFIntensityDomain, // Transfer func and intensity domain modifier
+                              Texture3D LightVolume, // Light Volume  
                               float4x4 VolumeTransformL2W,
                               float3 EntryPos, float3 ExitPos, float Steps, // Entry&Exit in UVW space
                               FMaterialPixelParameters MaterialParameters)                      // Material Parameters
@@ -218,7 +218,7 @@ float4 PerformLitRaymarchFixedStep(Texture3D DataVolume, SamplerState DataVolume
     for (i = 0; i < Steps; i++)
     {
         // Label volume ignores clipping.
-        AccumulateOneRaymarchStep(LightEnergy, CurPos, DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain, LightVolume, LightVolumeSampler, StepSizeWorld);
+        AccumulateOneRaymarchStep(LightEnergy, CurPos, DataVolume, TF, TFIntensityDomain, LightVolume, StepSizeWorld);
 	    // Exit early if light energy (opacity) is already very high (so future steps would have almost no impact on color).
         if (LightEnergy.a > 0.99f)
         {
@@ -232,9 +232,9 @@ float4 PerformLitRaymarchFixedStep(Texture3D DataVolume, SamplerState DataVolume
 
 float4 PerformActualCombinedRaymarch(float3 EntryPos1, float3 LocalCamVec1,
                                      float3 EntryPos2, float3 LocalCamVec2, float StepSizeWorld, float Steps, // Entry&Exit in UVW space
-                                     Texture3D DataVolume, SamplerState DataVolumeSampler, // Data Volume and Sampler
-                                     Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain, // Transfer func, sampler and intensity domain modifier
-                                     Texture3D LightVolume, SamplerState LightVolumeSampler, // Light Volume  
+                                     Texture3D DataVolume, // Data Volume 
+                                     Texture2D TF, float2 TFIntensityDomain, // Transfer func and intensity domain modifier
+                                     Texture3D LightVolume, // Light Volume  
                                      Texture3D LabelVolume,
                                      float4x4 VolumeTransformL2W,
                                      FMaterialPixelParameters MaterialParameters)
@@ -255,7 +255,7 @@ float4 PerformActualCombinedRaymarch(float3 EntryPos1, float3 LocalCamVec1,
             AccumulateOneRaymarchLabelStep(LightEnergy, CurPos1, LabelVolume, StepSizeWorld);
         
         if (all(saturate(CurPos2) == CurPos2))
-            AccumulateOneRaymarchStep(LightEnergy, CurPos2, DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain, LightVolume, LightVolumeSampler, StepSizeWorld);
+            AccumulateOneRaymarchStep(LightEnergy, CurPos2, DataVolume, TF, TFIntensityDomain, LightVolume, StepSizeWorld);
 
 	    // Exit early if light energy (opacity) is already very high (so future steps would have almost no impact on color).
         if (LightEnergy.a > 0.99f)
@@ -271,10 +271,10 @@ float4 PerformActualCombinedRaymarch(float3 EntryPos1, float3 LocalCamVec1,
 
 
 // Original!
-float4 PerformCombinedRaymarch(Texture3D DataVolume, SamplerState DataVolumeSampler, // Data Volume and Sampler
-                               Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain, // Transfer func, sampler and intensity domain modifier
-                               Texture3D LightVolume, SamplerState LightVolumeSampler, // Light Volume  
-                               Texture3D LabelVolume, SamplerState LabelVolumeSampler, // Label Volume  
+float4 PerformCombinedRaymarch(Texture3D DataVolume, // Data Volume
+                               Texture2D TF, float2 TFIntensityDomain, // Transfer func and intensity domain modifier
+                               Texture3D LightVolume, // Light Volume  
+                               Texture3D LabelVolume, // Label Volume  
                                float4x4 DataVolumeTransformW2L, float4x4 DataVolumeTransformL2W, // Offset volume transforms
                                float4x4 LabelVolumeTransformW2L, float4x4 LabelVolumeTransformL2W, // Offset volume transforms
                                float ScaleDownFactor, float Steps,
@@ -303,8 +303,7 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, SamplerState DataVolumeSamp
     if (BoxThickness1 == 0)
     {
         // Only the offset box has non-zero thickness -> perform regular raymarch on it.
-        return PerformLitRaymarchFixedStep(DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain,
-                                        LightVolume, LightVolumeSampler,
+        return PerformLitRaymarchFixedStep(DataVolume, TF, TFIntensityDomain, LightVolume, 
                                         DataVolumeTransformL2W, EntryPos2.xyz, ExitPos2.xyz, Steps, Parameters);
     }
 
@@ -397,7 +396,7 @@ float4 PerformCombinedRaymarch(Texture3D DataVolume, SamplerState DataVolumeSamp
     float StepSizeWorld = length(TotalMarchingVectorWorld) / Steps;
 
     return PerformActualCombinedRaymarch(EntryPos1.xyz, LocalCamVec1, EntryPos2.xyz, LocalCamVec2, StepSizeWorld, Steps,
-                                            DataVolume, DataVolumeSampler, TF, TFSampler, TFIntensityDomain,
-                                            LightVolume, LightVolumeSampler, LabelVolume,
+                                            DataVolume, TF, TFIntensityDomain,
+                                            LightVolume, LabelVolume,
                                             DataVolumeTransformL2W, Parameters);
 }
