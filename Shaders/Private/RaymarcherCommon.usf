@@ -12,9 +12,11 @@
 // The multiplier to use with the SQRT_3_HALF to get values fitting to a range of 0-1.
 #define ONE_OVER_SQRT_3 0.57735026919f
 
-// A constant density setting determining how opaque a volume is. Higher means more opaque.
+// A constant density setting determining how opaque volumes are. Higher means more opaque.
 // Currently unused because using Unreal world units gives nice results for our purposes.
 // If you want denser volumes, multiply StepSize by this in SampleDataVolume / CorrectForStepSize.
+// We found that because we use Unreal units in our shaders, the results are nice as they are for
+// reasonably sized volumes.
 #define RAYMARCH_FIXED_DENSITY 20.0
 
 
