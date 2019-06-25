@@ -106,7 +106,8 @@ We implemented an AddDirLight shader and a ChangeDirLight shader.
 
 A (kind of a) sequence diagram here shows the interplay of blueprints, game thread, render thread and RHI thread.
 
-![](https://github.com/TheHugeManatee/UE4_VolumeRaymarching/Documents/sd.png)
+![
+](https://github.com/TheHugeManatee/UE4_VolumeRaymarching/Documents/sequence.png)
 
 # Platforms
 Currently only Windows is natively supported. We experimetnted with building on Linux and illumination compute shaders didn't work properly under OpenGL. They did, however work under the Vulkan backend, but significantly slower than under DX. 
