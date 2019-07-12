@@ -102,7 +102,7 @@ void AccumulateOneRaymarchStep(inout float4 AccumulatedLightEnergy, float3 CurPo
     // Get lighting information from illumination volume for current position and
     // Multiply sampled color with light color to adjust intensity according to light strength.
     ColorSample.rgb = ColorSample.rgb * LightVolume.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
-        // Accumulate current colored sample to the final values.
+    // Accumulate current colored sample to the final values.
     AccumulateLightEnergy(AccumulatedLightEnergy, ColorSample);
 }
 

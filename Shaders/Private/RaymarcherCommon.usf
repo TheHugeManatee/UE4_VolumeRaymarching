@@ -17,7 +17,7 @@
 // If you want denser volumes, multiply StepSize by this in SampleDataVolume / CorrectForStepSize.
 // We found that because we use Unreal units in our shaders, the results are nice as they are for
 // reasonably sized volumes.
-#define RAYMARCH_FIXED_DENSITY 20.0
+#define RAYMARCH_FIXED_DENSITY 200.0
 
 
 // Returns true if CurPos is clipped by the clipping plane defined by the center and direction.
@@ -51,6 +51,12 @@ float3 GetUVW(uint3 pos, float3 dimensions)
     return (pos + float3(0.5, 0.5, 0.5)) / dimensions;
 }
 
+// Returns Opacity corrected for stepsize.
+float CorrectForStepSize(float Opacity, float StepSize)
+{
+    return 1.0 - pow(1.0 - Opacity, StepSize*RAYMARCH_FIXED_DENSITY);
+}
+
 // Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize (in World units).
 float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
 {
@@ -58,7 +64,7 @@ float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, Sampler
     RemapIntensity(VolumeSample, TFIntensityDomain);
 
     float4 ColorSample = TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
-    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize);
+    ColorSample.a = CorrectForStepSize(ColorSample.a, StepSize);
     return ColorSample;
 }
 
@@ -75,12 +81,6 @@ float4 SampleDataVolumeUniformStep(float3 CurPos, Texture3D Volume, SamplerState
     float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, 0).r;
     RemapIntensity(VolumeSample, TFIntensityDomain);
     return TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
-}
-
-// Returns intensity corrected for stepsize.
-float CorrectForStepSize(float Intensity, float StepSize)
-{
-    return 1.0 - pow(1.0 - Intensity, StepSize);
 }
 
 float3 UVWToLocal(float3 UVW)
