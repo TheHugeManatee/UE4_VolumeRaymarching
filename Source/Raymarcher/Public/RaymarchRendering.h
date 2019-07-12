@@ -39,8 +39,7 @@ USTRUCT(BlueprintType) struct FDirLightParameters {
 
   FDirLightParameters(FVector LightDir, float LightInt)
     : LightDirection(LightDir), LightIntensity(LightInt){};
-  FDirLightParameters()
-    : LightDirection(FVector(0, 0, 0)), LightIntensity(0){};
+  FDirLightParameters() : LightDirection(FVector(0, 0, 0)), LightIntensity(0){};
 };
 
 // USTRUCT for Clipping plane parameters.
@@ -68,13 +67,14 @@ USTRUCT(BlueprintType) struct FTransferFunctionRangeParameters {
   GENERATED_BODY()
 
   // The range from which the TF will be sampled.
-  UPROPERTY(BlueprintReadWrite, Category = "TransferFunctionRange") FVector2D IntensityDomain;
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "TransferFunctionRange")
+  FVector2D IntensityDomain;
   // The range thet will be fully transparent - Relative to Intensity domain!
   // ( 0 to Cutoffs.X ) and ( Cutoffs.Y to 1) will be zero
-  UPROPERTY(BlueprintReadWrite, Category = "TransferFunctionRange") FVector2D Cutoffs;
-  UPROPERTY(BlueprintReadWrite, Category = "TransferFunctionRange")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "TransferFunctionRange") FVector2D Cutoffs;
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "TransferFunctionRange")
   FTransferFunctionCutoffMode LowCutMode;
-  UPROPERTY(BlueprintReadWrite, Category = "TransferFunctionRange")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "TransferFunctionRange")
   FTransferFunctionCutoffMode HighCutMode;
 
   FTransferFunctionRangeParameters(FVector2D IntensityDomain, FVector2D Cutoffs,
@@ -105,20 +105,20 @@ USTRUCT(BlueprintType) struct FBasicRaymarchRenderingResources {
   GENERATED_BODY()
 
   // Flag that these Rendering Resources have been initialized and can be used.
-  UPROPERTY(BlueprintReadOnly, Category = "Basic Raymarch Rendering Resources") 
+  UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Basic Raymarch Rendering Resources")
   bool isInitialized;
 
-  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Basic Raymarch Rendering Resources")
   UVolumeTexture* VolumeTextureRef;
-  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Basic Raymarch Rendering Resources")
   UTexture2D* TFTextureRef;
-  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Basic Raymarch Rendering Resources")
   UVolumeTexture* ALightVolumeRef;
-  UPROPERTY(BlueprintReadWrite, Category = "Basic Raymarch Rendering Resources")
+  UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Basic Raymarch Rendering Resources")
   FTransferFunctionRangeParameters TFRangeParameters;
-  UPROPERTY(BlueprintReadOnly, Category = "Basic Raymarch Rendering Resources")
+  UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Basic Raymarch Rendering Resources")
   bool LightVolumeHalfResolution;
-  
+
   // Following is not visible in BPs.
   // Unordered access view to the Light Volume.
   FUnorderedAccessViewRHIRef ALightVolumeUAVRef;
@@ -143,12 +143,12 @@ USTRUCT(BlueprintType) struct FRaymarchWorldParameters {
 // The axis convention is - you are looking at the cube along positive Y axis in UE.
 UENUM(BlueprintType)
 enum class FCubeFace : uint8 {
-  XPositive = 0,   // +X
-  XNegative = 1,   // -X
-  YPositive = 2,   // +Y
-  YNegative = 3,   // -Y
-  ZPositive = 4,   // +Z
-  ZNegative = 5    // -Z
+  XPositive = 0,  // +X
+  XNegative = 1,  // -X
+  YPositive = 2,  // +Y
+  YNegative = 3,  // -Y
+  ZPositive = 4,  // +Z
+  ZNegative = 5   // -Z
 };
 
 // Utility function to get sensible names from FCubeFace
@@ -200,7 +200,6 @@ static FMajorAxes GetMajorAxes(FVector LightPos) {
     // Dot^2 for non-negative faces will always sum up to 1.
     weight = (weight > 0 ? weight * weight : 0);
     RetVal.FaceWeight.push_back(std::make_pair(FCubeFace(i), weight));
-
   }
   // Sort so that the 3 major axes are the first.
   std::sort(RetVal.FaceWeight.begin(), RetVal.FaceWeight.end(), SortDescendingWeights);
@@ -257,103 +256,100 @@ void GenerateDistanceField_RenderThread(FRHICommandListImmediate& RHICmdList, FI
                                         FRHITexture3D* DistanceFieldResource,
                                         float localSphereDiameter, float threshold);
 
-
 // Compute Shader used for fast clearing of RW volume textures.
 class FClearVolumeTextureShader : public FGlobalShader {
-	DECLARE_SHADER_TYPE(FClearVolumeTextureShader, Global)
+  DECLARE_SHADER_TYPE(FClearVolumeTextureShader, Global)
 
 public:
-	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
-		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-	}
+  static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
+    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+  }
 
-	FClearVolumeTextureShader() {};
+  FClearVolumeTextureShader(){};
 
-	FClearVolumeTextureShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FGlobalShader(Initializer) {
-		Volume.Bind(Initializer.ParameterMap, TEXT("Volume"), SPF_Mandatory);
-		ClearValue.Bind(Initializer.ParameterMap, TEXT("ClearValue"), SPF_Mandatory);
-		ZSize.Bind(Initializer.ParameterMap, TEXT("ZSize"), SPF_Mandatory);
-	}
+  FClearVolumeTextureShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FGlobalShader(Initializer) {
+    Volume.Bind(Initializer.ParameterMap, TEXT("Volume"), SPF_Mandatory);
+    ClearValue.Bind(Initializer.ParameterMap, TEXT("ClearValue"), SPF_Mandatory);
+    ZSize.Bind(Initializer.ParameterMap, TEXT("ZSize"), SPF_Mandatory);
+  }
 
-	virtual void SetParameters(FRHICommandListImmediate& RHICmdList,
-		FUnorderedAccessViewRHIParamRef VolumeRef, float clearColor,
-		int ZSizeParam) {
-		FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
-		SetUAVParameter(RHICmdList, ShaderRHI, Volume, VolumeRef);
-		SetShaderValue(RHICmdList, ShaderRHI, ClearValue, clearColor);
-		SetShaderValue(RHICmdList, ShaderRHI, ZSize, ZSizeParam);
-	}
+  virtual void SetParameters(FRHICommandListImmediate& RHICmdList,
+                             FUnorderedAccessViewRHIParamRef VolumeRef, float clearColor,
+                             int ZSizeParam) {
+    FComputeShaderRHIParamRef ShaderRHI = GetComputeShader();
+    SetUAVParameter(RHICmdList, ShaderRHI, Volume, VolumeRef);
+    SetShaderValue(RHICmdList, ShaderRHI, ClearValue, clearColor);
+    SetShaderValue(RHICmdList, ShaderRHI, ZSize, ZSizeParam);
+  }
 
-	void UnbindUAV(FRHICommandList& RHICmdList) {
-		SetUAVParameter(RHICmdList, GetComputeShader(), Volume, FUnorderedAccessViewRHIParamRef());
-	}
+  void UnbindUAV(FRHICommandList& RHICmdList) {
+    SetUAVParameter(RHICmdList, GetComputeShader(), Volume, FUnorderedAccessViewRHIParamRef());
+  }
 
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << Volume << ClearValue << ZSize;
-		return bShaderHasOutdatedParameters;
-	}
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+    Ar << Volume << ClearValue << ZSize;
+    return bShaderHasOutdatedParameters;
+  }
 
 protected:
-	// Float values to be set to the alpha volume.
-	FShaderResourceParameter Volume;
-	FShaderParameter ClearValue;
-	FShaderParameter ZSize;
+  // Float values to be set to the alpha volume.
+  FShaderResourceParameter Volume;
+  FShaderParameter ClearValue;
+  FShaderParameter ZSize;
 };
-
 
 // Compute shader for clearing a single-channel 2D float RW texture
 class FClearFloatRWTextureCS : public FGlobalShader {
-	DECLARE_SHADER_TYPE(FClearFloatRWTextureCS, Global);
+  DECLARE_SHADER_TYPE(FClearFloatRWTextureCS, Global);
 
 public:
-	FClearFloatRWTextureCS() {}
-	FClearFloatRWTextureCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
-		: FGlobalShader(Initializer) {
-		ClearValue.Bind(Initializer.ParameterMap, TEXT("ClearValue"), SPF_Mandatory);
-		ClearTexture2DRW.Bind(Initializer.ParameterMap, TEXT("ClearTextureRW"), SPF_Mandatory);
-	}
+  FClearFloatRWTextureCS() {}
+  FClearFloatRWTextureCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+    : FGlobalShader(Initializer) {
+    ClearValue.Bind(Initializer.ParameterMap, TEXT("ClearValue"), SPF_Mandatory);
+    ClearTexture2DRW.Bind(Initializer.ParameterMap, TEXT("ClearTextureRW"), SPF_Mandatory);
+  }
 
-	// FShader interface.
-	virtual bool Serialize(FArchive& Ar) override {
-		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << ClearValue << ClearTexture2DRW;
-		return bShaderHasOutdatedParameters;
-	}
+  // FShader interface.
+  virtual bool Serialize(FArchive& Ar) override {
+    bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+    Ar << ClearValue << ClearTexture2DRW;
+    return bShaderHasOutdatedParameters;
+  }
 
-	void SetParameters(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIParamRef TextureRW,
-		float Value) {
-		SetUAVParameter(RHICmdList, GetComputeShader(), ClearTexture2DRW, TextureRW);
-		SetShaderValue(RHICmdList, GetComputeShader(), ClearValue, Value);
-	}
+  void SetParameters(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIParamRef TextureRW,
+                     float Value) {
+    SetUAVParameter(RHICmdList, GetComputeShader(), ClearTexture2DRW, TextureRW);
+    SetShaderValue(RHICmdList, GetComputeShader(), ClearValue, Value);
+  }
 
-	void UnbindUAV(FRHICommandList& RHICmdList) {
-		SetUAVParameter(RHICmdList, GetComputeShader(), ClearTexture2DRW,
-			FUnorderedAccessViewRHIParamRef());
-	}
+  void UnbindUAV(FRHICommandList& RHICmdList) {
+    SetUAVParameter(RHICmdList, GetComputeShader(), ClearTexture2DRW,
+                    FUnorderedAccessViewRHIParamRef());
+  }
 
-	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
-		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-	}
+  static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
+    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+  }
 
-	const FShaderParameter& GetClearColorParameter() { return ClearValue; }
+  const FShaderParameter& GetClearColorParameter() { return ClearValue; }
 
-	const FShaderResourceParameter& GetClearTextureRWParameter() { return ClearTexture2DRW; }
+  const FShaderResourceParameter& GetClearTextureRWParameter() { return ClearTexture2DRW; }
 
 protected:
-	FShaderResourceParameter ClearTexture2DRW;
-	FShaderParameter ClearValue;
+  FShaderResourceParameter ClearTexture2DRW;
+  FShaderParameter ClearValue;
 };
-
 
 //
 // Shaders for illumination propagation follow.
 //
 
 // Parent shader to any shader working with a raymarched volume.
-// Contains Volume, Transfer Function, TF intensity domain, Clipping Parameters and StepSize. 
-// StepSize is needed so that we know how far through the volume we went in each step 
+// Contains Volume, Transfer Function, TF intensity domain, Clipping Parameters and StepSize.
+// StepSize is needed so that we know how far through the volume we went in each step
 // so we can properly calculate the opacity.
 class FRaymarchVolumeShader : public FGlobalShader {
 public:
@@ -450,14 +446,13 @@ public:
     Loop.Bind(Initializer.ParameterMap, TEXT("Loop"), SPF_Mandatory);
     PermutationMatrix.Bind(Initializer.ParameterMap, TEXT("PermutationMatrix"), SPF_Mandatory);
 
-	// Read buffer and sampler.
+    // Read buffer and sampler.
     ReadBuffer.Bind(Initializer.ParameterMap, TEXT("ReadBuffer"), SPF_Mandatory);
     ReadBufferSampler.Bind(Initializer.ParameterMap, TEXT("ReadBufferSampler"), SPF_Mandatory);
-	// Write buffer.
-	WriteBuffer.Bind(Initializer.ParameterMap, TEXT("WriteBuffer"), SPF_Mandatory);
-	// Actual light volume
-	ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"), SPF_Mandatory);
-
+    // Write buffer.
+    WriteBuffer.Bind(Initializer.ParameterMap, TEXT("WriteBuffer"), SPF_Mandatory);
+    // Actual light volume
+    ALightVolume.Bind(Initializer.ParameterMap, TEXT("ALightVolume"), SPF_Mandatory);
   }
 
   // Sets loop-dependent uniforms in the pipeline.
@@ -465,8 +460,8 @@ public:
                const unsigned loopIndex, const FTexture2DRHIRef pReadBuffer,
                const FSamplerStateRHIRef pReadBuffSampler,
                const FUnorderedAccessViewRHIRef pWriteBuffer) {
-	// Update the Loop index.
-	SetShaderValue(RHICmdList, ShaderRHI, Loop, loopIndex);
+    // Update the Loop index.
+    SetShaderValue(RHICmdList, ShaderRHI, Loop, loopIndex);
     // Set read/write buffers.
     SetUAVParameter(RHICmdList, ShaderRHI, WriteBuffer, pWriteBuffer);
     SetTextureParameter(RHICmdList, ShaderRHI, ReadBuffer, ReadBufferSampler, pReadBuffSampler,
@@ -474,9 +469,9 @@ public:
   }
 
   void SetALightVolume(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
-	  FUnorderedAccessViewRHIRef pALightVolume) {
-	  // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
-	  SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pALightVolume);
+                       FUnorderedAccessViewRHIRef pALightVolume) {
+    // Set the multiplier to -1 if we're removing the light. Set to 1 if adding it.
+    SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, pALightVolume);
   }
 
   void SetPermutationMatrix(FRHICommandListImmediate& RHICmdList,
@@ -488,14 +483,16 @@ public:
                                FComputeShaderRHIParamRef ShaderRHI) override {
     // Unbind volume buffer.
     FRaymarchVolumeShader::UnbindResources(RHICmdList, ShaderRHI);
-	SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, FUnorderedAccessViewRHIParamRef());
+    SetUAVParameter(RHICmdList, ShaderRHI, ALightVolume, FUnorderedAccessViewRHIParamRef());
     SetUAVParameter(RHICmdList, ShaderRHI, WriteBuffer, FUnorderedAccessViewRHIParamRef());
     SetTextureParameter(RHICmdList, ShaderRHI, ReadBuffer, FTextureRHIParamRef());
   }
 
   virtual bool Serialize(FArchive& Ar) override {
     bool bShaderHasOutdatedParameters = FRaymarchVolumeShader::Serialize(Ar);
-    Ar << Loop << PermutationMatrix << ReadBuffer << ReadBufferSampler << WriteBuffer << ALightVolume;;
+    Ar << Loop << PermutationMatrix << ReadBuffer << ReadBufferSampler << WriteBuffer
+       << ALightVolume;
+    ;
     return bShaderHasOutdatedParameters;
   }
 
@@ -512,7 +509,7 @@ protected:
   FShaderResourceParameter ALightVolume;
 };
 
-// A shader implementing directional light propagation. 
+// A shader implementing directional light propagation.
 // Originally, spot and cone lights were supposed to be also supported, but other things were more
 // important.
 class FDirLightPropagationShader : public FLightPropagationShader {
@@ -530,7 +527,7 @@ public:
                    FVector2D PixelOffset) {
     SetShaderValue(RHICmdList, ShaderRHI, PrevPixelOffset, PixelOffset);
   }
-  
+
   void SetUVWOffset(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
                     FVector pUVWOffset) {
     SetShaderValue(RHICmdList, ShaderRHI, UVWOffset, pUVWOffset);
@@ -555,7 +552,7 @@ protected:
 // Notice the UE macro DECLARE_SHADER_TYPE, unlike the shaders above (which are abstract)
 // this one actually gets implemented.
 class FAddDirLightShader : public FDirLightPropagationShader {
-	DECLARE_SHADER_TYPE(FAddDirLightShader, Global)
+  DECLARE_SHADER_TYPE(FAddDirLightShader, Global)
 public:
   FAddDirLightShader() : FDirLightPropagationShader() {}
 
@@ -566,7 +563,7 @@ public:
   }
 
   static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
-	  return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
   }
 
   void SetLightAdded(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
@@ -591,7 +588,7 @@ protected:
 // Notice the UE macro DECLARE_SHADER_TYPE, unlike the shaders above (which are abstract)
 // this one actually gets implemented.
 class FChangeDirLightShader : public FDirLightPropagationShader {
-	DECLARE_SHADER_TYPE(FChangeDirLightShader, Global)
+  DECLARE_SHADER_TYPE(FChangeDirLightShader, Global)
 
 public:
   FChangeDirLightShader() : FDirLightPropagationShader() {}
@@ -610,7 +607,7 @@ public:
   }
 
   static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) {
-	  return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+    return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
   }
 
   // Sets loop-dependent uniforms in the pipeline.
@@ -634,10 +631,10 @@ public:
                        FVector2D AddedPixelOffset, FVector2D RemovedPixelOffset) {
     SetShaderValue(RHICmdList, ShaderRHI, PrevPixelOffset, AddedPixelOffset);
     SetShaderValue(RHICmdList, ShaderRHI, RemovedPrevPixelOffset, RemovedPixelOffset);
- }
+  }
 
   void SetUVWOffsets(FRHICommandListImmediate& RHICmdList, FComputeShaderRHIParamRef ShaderRHI,
-                       FVector pAddedUVWOffset, FVector pRemovedUVWOffset) {
+                     FVector pAddedUVWOffset, FVector pRemovedUVWOffset) {
     SetShaderValue(RHICmdList, ShaderRHI, UVWOffset, pAddedUVWOffset);
     SetShaderValue(RHICmdList, ShaderRHI, RemovedUVWOffset, pRemovedUVWOffset);
   }

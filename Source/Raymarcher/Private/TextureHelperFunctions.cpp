@@ -172,7 +172,6 @@ bool UpdateVolumeTextureAsset(UVolumeTexture* VolumeTexture, EPixelFormat PixelF
   return RetVal;
 }
 
-
 bool HandleTextureEditorData(UTexture* Texture, const EPixelFormat PixelFormat,
                              const bool Persistent, const FIntVector Dimensions,
                              const uint8* BulkData) {
@@ -205,7 +204,7 @@ bool HandleTextureEditorData(UTexture* Texture, const EPixelFormat PixelFormat,
   return true;
 }
 
-uint8* LoadRawFileIntoArray(const FString FileName, const int64 BytesToLoad) {
+TUniquePtr<uint8> LoadRawFileIntoArray(const FString FileName, const int64 BytesToLoad) {
   IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
   // Try opening as absolute path.
   IFileHandle* FileHandle = PlatformFile.OpenRead(*FileName);
@@ -220,17 +219,17 @@ uint8* LoadRawFileIntoArray(const FString FileName, const int64 BytesToLoad) {
     MY_LOG("File could not be opened.");
     return nullptr;
   } else if (FileHandle->Size() < BytesToLoad) {
-    MY_LOG("File is smaller than expected, cannot read volume.")
+    MY_LOG("File is smaller than expected, cannot read volume.");
     delete FileHandle;
     return nullptr;
   } else if (FileHandle->Size() > BytesToLoad) {
     MY_LOG(
         "File is larger than expected, check your dimensions and pixel format (nonfatal, but the "
-        "texture will probably be screwed up)")
+        "texture will probably be screwed up)");
   }
 
-  uint8* LoadedArray = new uint8[BytesToLoad];
-  FileHandle->Read(LoadedArray, BytesToLoad);
+  auto LoadedArray = TUniquePtr<uint8>(new uint8[BytesToLoad]);
+  FileHandle->Read(LoadedArray.Get(), BytesToLoad);
   delete FileHandle;
 
   // Let the whole world know we were successful.

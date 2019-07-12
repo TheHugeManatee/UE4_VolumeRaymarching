@@ -12,6 +12,8 @@
 #include "RaymarchRendering.h"
 #include "UObject/ObjectMacros.h"
 
+#include "MhdInfo.h"
+
 #include "RaymarchBlueprintLibrary.generated.h"
 
 UCLASS()
@@ -70,19 +72,20 @@ public:
 
   /** Loads a RAW file into a provided Volume Texture. Will output error log messages
    * and return if unsuccessful */
-  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+  // UFUNCTION(BlueprintCallable, Category = "Raymarcher")
   static void LoadRawIntoVolumeTextureAsset(FString RawFileName, UVolumeTexture* inTexture,
-                                            FIntVector Dimensions, bool Persistent);
+                                            FIntVector Dimensions, EMhdElementType ElementType,
+                                            bool Persistent);
 
   /** Loads a RAW file into a newly created Volume Texture Asset. Will output error log messages
    * and return if unsuccessful.
    * @param FileName is supposed to be the absolute path of where the raw file can be found.
    * @param SaveAsset whether to save the asset to disk right away
    */
-  UFUNCTION(BlueprintCallable, Category = "Raymarcher")
+  // UFUNCTION(BlueprintCallable, Category = "Raymarcher")
   static void LoadRawIntoNewVolumeTextureAsset(FString RawFileName, FString TextureName,
-                                               FIntVector Dimensions, bool Persistent,
-                                               UVolumeTexture*& LoadedTexture);
+                                               FIntVector Dimensions, EMhdElementType ElementType,
+                                               bool Persistent, UVolumeTexture*& LoadedTexture);
 
   /** Loads a MHD file into a newly created Volume Texture Asset. Returns the loaded texture, it's
   world dimensions and texture dimensions.  **/
@@ -95,10 +98,10 @@ public:
   /** Loads a MHD file into a newly created Volume Texture Asset. Returns the loaded texture, it's
   world dimensions and texture dimensions.  **/
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
-  static void LoadMhdIntoVolumeTextureAsset(FString FileName, UVolumeTexture* VolumeAsset,
+  static void LoadMhdIntoVolumeTextureAsset(FString FileName,
+                                            UPARAM(ref) UVolumeTexture*& VolumeAsset,
                                             bool Persistent, FIntVector& TextureDimensions,
-                                            FVector& WorldDimensions,
-                                            UVolumeTexture*& LoadedTexture);
+                                            FVector& WorldDimensions);
 
   //
   //
@@ -127,7 +130,6 @@ public:
                                               FTransferFunctionRangeParameters TFRangeParams,
                                               bool HalfResolution,
                                               FBasicRaymarchRenderingResources& OutParameters);  //
-
 
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
   static void CheckBasicRaymarchingResources(FBasicRaymarchRenderingResources OutParameters);  //
@@ -230,12 +232,14 @@ public:
                                       UTexture2D* WrittenSliceTexture, int Layer);
 
   /**
-	Transforms Local (-1 to 1) coords to UV coords (0 to 1) coords. (The values are not clamped to the range).
+  Transforms Local (-1 to 1) coords to UV coords (0 to 1) coords. (The values are not clamped to the
+  range).
   */
   static void LocalToTextureCoords(FVector LocalCoords, FVector& TextureCoords);
 
   /**
-	Transforms UV coords (0 to 1) to Local (-1 to 1) coords. (The values are not clamped to the range).
+  Transforms UV coords (0 to 1) to Local (-1 to 1) coords. (The values are not clamped to the
+  range).
   */
   static void TextureToLocalCoords(FVector TextureCoors, FVector& LocalCoords);
 

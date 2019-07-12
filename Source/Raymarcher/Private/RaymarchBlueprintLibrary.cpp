@@ -2,11 +2,11 @@
 // Developed by Tomas Bartipan (tomas.bartipan@tum.de)
 
 #include "RaymarchBlueprintLibrary.h"
+#include "Experimental.h"
 #include "MhdInfo.h"
 #include "RaymarchRendering.h"
-#include "Experimental.h"
+#include "TextureHelperFunctions.h"
 
-#include <cstdio>
 #include "Classes/Engine/World.h"
 #include "Public/AssetRegistryModule.h"
 #include "Public/GlobalShader.h"
@@ -18,8 +18,9 @@
 #include "Public/SceneUtils.h"
 #include "Public/ShaderParameterUtils.h"
 #include "RHICommandList.h"
-#include "TextureHelperFunctions.h"
 #include "UnrealString.h"
+
+//#include <cstdio>
 
 #define LOCTEXT_NAMESPACE "RaymarchPlugin"
 
@@ -108,7 +109,7 @@ void URaymarchBlueprintLibrary::ChangeDirLightInSingleVolume(
 }
 
 void URaymarchBlueprintLibrary::ClearVolumeTexture(UVolumeTexture* VolumeTexture,
-                                                       float ClearValue) {
+                                                   float ClearValue) {
   FRHITexture3D* VolumeTextureResource = VolumeTexture->Resource->TextureRHI->GetTexture3D();
 
   // Call the actual rendering code on RenderThread.
@@ -137,40 +138,43 @@ void URaymarchBlueprintLibrary::ClearResourceLightVolumes(
 void URaymarchBlueprintLibrary::LoadRawIntoVolumeTextureAsset(FString RawFileName,
                                                               UVolumeTexture* inTexture,
                                                               FIntVector Dimensions,
+                                                              EMhdElementType ElementType,
                                                               bool Persistent) {
-  const int64 TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
+  const int64 TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z *
+                          FMhdInfo::ElementTypeInfo[int32(ElementType)].SizeBytes;
 
-  uint8* TempArray = LoadRawFileIntoArray(RawFileName, TotalSize);
+  auto TempArray = LoadRawFileIntoArray(RawFileName, TotalSize);
   if (!TempArray) {
     return;
   }
+
+  EPixelFormat PixelFormat = FMhdInfo::ConvertToBestPixelFormat(
+      TempArray, Dimensions.X * Dimensions.Y * Dimensions.Z, ElementType);
+
+  auto ptr = TempArray.Release();
 
   // Actually update the asset.
-  bool Success =
-      UpdateVolumeTextureAsset(inTexture, EPixelFormat::PF_G8, Dimensions, TempArray, Persistent);
-
-  // Delete temp data.
-  delete[] TempArray;
+  bool Success = false;
+  UpdateVolumeTextureAsset(inTexture, PixelFormat, Dimensions, ptr, Persistent);
 }
 
-void URaymarchBlueprintLibrary::LoadRawIntoNewVolumeTextureAsset(FString RawFileName,
-                                                                 FString TextureName,
-                                                                 FIntVector Dimensions,
-                                                                 bool Persistent,
-                                                                 UVolumeTexture*& LoadedTexture) {
-  const int64 TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z;
+void URaymarchBlueprintLibrary::LoadRawIntoNewVolumeTextureAsset(
+    FString RawFileName, FString TextureName, FIntVector Dimensions, EMhdElementType ElementType,
+    bool Persistent, UVolumeTexture*& LoadedTexture) {
+  const int64 TotalSize = Dimensions.X * Dimensions.Y * Dimensions.Z *
+                          FMhdInfo::ElementTypeInfo[int32(ElementType)].SizeBytes;
 
-  uint8* TempArray = LoadRawFileIntoArray(RawFileName, TotalSize);
+  auto TempArray = LoadRawFileIntoArray(RawFileName, TotalSize);
   if (!TempArray) {
     return;
   }
 
-  // Actually create the asset.
-  bool Success = CreateVolumeTextureAsset(TextureName, EPixelFormat::PF_G8, Dimensions,
-                                          LoadedTexture, TempArray, Persistent);
+  EPixelFormat PixelFormat = FMhdInfo::ConvertToBestPixelFormat(
+      TempArray, Dimensions.X * Dimensions.Y * Dimensions.Z, ElementType);
 
-  // Ddelete temp data.
-  delete[] TempArray;
+  // Actually create the asset.
+  bool Success = CreateVolumeTextureAsset(TextureName, PixelFormat, Dimensions, LoadedTexture,
+                                          TempArray.Get(), Persistent);
 }
 
 void URaymarchBlueprintLibrary::LoadMhdIntoNewVolumeTextureAsset(
@@ -187,13 +191,12 @@ void URaymarchBlueprintLibrary::LoadMhdIntoNewVolumeTextureAsset(
   TextureDimensions = info.Dimensions;
 
   LoadRawIntoNewVolumeTextureAsset(FileName.Replace(TEXT(".mhd"), TEXT(".raw")), TextureName,
-                                   info.Dimensions, Persistent, LoadedTexture);
-  return;
+                                   info.Dimensions, info.ElementType, Persistent, LoadedTexture);
 }
 
 void URaymarchBlueprintLibrary::LoadMhdIntoVolumeTextureAsset(
-    FString FileName, UVolumeTexture* VolumeAsset, bool Persistent, FIntVector& TextureDimensions,
-    FVector& WorldDimensions, UVolumeTexture*& LoadedTexture) {
+    FString FileName, UPARAM(ref) UVolumeTexture*& VolumeAsset, bool Persistent,
+    FIntVector& TextureDimensions, FVector& WorldDimensions) {
   FMhdInfo info = FMhdInfo::LoadAndParseMhdFile(FileName);
   if (!info.ParseSuccessful) {
     MY_LOG("MHD Parsing failed!");
@@ -205,7 +208,7 @@ void URaymarchBlueprintLibrary::LoadMhdIntoVolumeTextureAsset(
   TextureDimensions = info.Dimensions;
 
   LoadRawIntoVolumeTextureAsset(FileName.Replace(TEXT(".mhd"), TEXT(".raw")), VolumeAsset,
-                                info.Dimensions, Persistent);
+                                info.Dimensions, info.ElementType, Persistent);
 }
 
 void URaymarchBlueprintLibrary::TryVolumeTextureSliceWrite(FIntVector Dimensions,
@@ -346,7 +349,8 @@ void URaymarchBlueprintLibrary::ColorCurveToTextureRanged(
 void CreateBufferTextures(FIntPoint Size, EPixelFormat PixelFormat,
                           OneAxisReadWriteBufferResources& RWBuffers) {
   if (Size.X == 0 || Size.Y == 0) {
-    UE_LOG(LogTemp, Error, TEXT("Error: Creating Buffer Textures: Size is Zero!"), 3);
+    UE_LOG(LogTemp, Error,
+           TEXT("[CreateBufferTextures] Error: Creating Buffer Textures: Size is Zero!"), 3);
     return;
   }
   FRHIResourceCreateInfo CreateInfo(FClearValueBinding::Transparent);
@@ -362,13 +366,15 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
     FTransferFunctionRangeParameters TFRangeParams, bool HalfResolution,
     FBasicRaymarchRenderingResources& OutParameters) {
   if (!Volume || !ALightVolume || !TransferFunction) {
-    UE_LOG(LogTemp, Error, TEXT("Invalid input parameters!"));
+    UE_LOG(LogTemp, Error,
+           TEXT("[CreateBasicRaymarchingResources] Error: Invalid input parameters!"));
     return;
   }
 
   OutParameters.VolumeTextureRef = Volume;
   OutParameters.ALightVolumeRef = ALightVolume;
   OutParameters.TFTextureRef = TransferFunction;
+  OutParameters.TFRangeParameters = TFRangeParams;
 
   int X = Volume->GetSizeX();
   int Y = Volume->GetSizeY();
@@ -551,7 +557,8 @@ void URaymarchBlueprintLibrary::GetDominantFace(FVector LocalDirectionVector,
 void URaymarchBlueprintLibrary::GetDominantFaceNotX(FVector LocalDirectionVector,
                                                     FCubeFace& DominantFace) {
   FMajorAxes axes = GetMajorAxes(LocalDirectionVector);
-  if (axes.FaceWeight[0].first != FCubeFace::XNegative && axes.FaceWeight[0].first != FCubeFace::XPositive) {
+  if (axes.FaceWeight[0].first != FCubeFace::XNegative &&
+      axes.FaceWeight[0].first != FCubeFace::XPositive) {
     DominantFace = axes.FaceWeight[0].first;
   } else {
     DominantFace = axes.FaceWeight[1].first;
@@ -621,17 +628,15 @@ void URaymarchBlueprintLibrary::TextureToLocalCoords(FVector TextureCoors, FVect
   LocalCoords = (TextureCoors - 0.5f) * 2.0f;
 }
 
-
-
 void URaymarchBlueprintLibrary::UpdateVolumeTextureSource(UVolumeTexture* Texture) {
   if (!ensure(Texture != nullptr)) {
-//    UE_LOG(OpenCV, Error, TEXT("The given texture is empty!"));
-	return;
+    //    UE_LOG(OpenCV, Error, TEXT("The given texture is empty!"));
+    return;
   }
 
   if (!ensure(Texture->PlatformData != nullptr && Texture->PlatformData->Mips.Num() > 0)) {
-//    UE_LOG(OpenCV, Error,
- //          TEXT("Given texture does not have platform data or does not have mipmaps!"));
+    //    UE_LOG(OpenCV, Error,
+    //          TEXT("Given texture does not have platform data or does not have mipmaps!"));
     return;
   }
 
@@ -640,7 +645,7 @@ void URaymarchBlueprintLibrary::UpdateVolumeTextureSource(UVolumeTexture* Textur
 
   struct FCopyBufferData {
     UVolumeTexture* Texture;
-	uint8* Payload;
+    uint8* Payload;
     TPromise<void> Promise;
   };
   using FCommandDataPtr = TSharedPtr<FCopyBufferData, ESPMode::ThreadSafe>;
@@ -654,11 +659,9 @@ void URaymarchBlueprintLibrary::UpdateVolumeTextureSource(UVolumeTexture* Textur
 
   auto Future = CommandData->Promise.GetFuture();
 
-    // Call the actual rendering code on RenderThread.
+  // Call the actual rendering code on RenderThread.
   ENQUEUE_RENDER_COMMAND(CaptureCommand)
   ([=](FRHICommandListImmediate& RHICmdList) {
-
-
     TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
     TShaderMapRef<FWriteSliceToTextureShader> ComputeShader(GlobalShaderMap);
 
@@ -666,48 +669,44 @@ void URaymarchBlueprintLibrary::UpdateVolumeTextureSource(UVolumeTexture* Textur
     // RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
     // LightVolumeResource);
 
+    FRHIResourceCreateInfo CreateInfo(FClearValueBinding::Transparent);
 
-	
-  FRHIResourceCreateInfo CreateInfo(FClearValueBinding::Transparent);
-
-    FTexture2DRHIRef SumTexture = RHICreateTexture2D(
-         Dimensions.X, Dimensions.Y, PF_G8, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
+    FTexture2DRHIRef SumTexture =
+        RHICreateTexture2D(Dimensions.X, Dimensions.Y, PF_G8, 1, 1,
+                           TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
     FUnorderedAccessViewRHIRef TextureUAV;
 
     TextureUAV = RHICreateUnorderedAccessView(SumTexture, 0);
     RHICmdList.TransitionResource(EResourceTransitionAccess::ERWBarrier, SumTexture);
-	
-    
-	for (int i = 0; i < Dimensions.Z; i++) {
-	
-		RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
-                                  EResourceTransitionPipeline::EComputeToCompute, TextureUAV);
 
-	ComputeShader->SetParameters(RHICmdList, Texture->Resource->TextureRHI->GetTexture3D(),
-                                 TextureUAV, i);
+    for (int i = 0; i < Dimensions.Z; i++) {
+      RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
+                                    EResourceTransitionPipeline::EComputeToCompute, TextureUAV);
 
-    uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)SumTexture->GetSizeX(),
-                                                32);
-    uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)SumTexture->GetSizeY(),
-                                                32);
+      ComputeShader->SetParameters(RHICmdList, Texture->Resource->TextureRHI->GetTexture3D(),
+                                   TextureUAV, i);
 
-    DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
-    ComputeShader->UnbindUAV(RHICmdList);
-    // Transition resources back to the renderer.
+      uint32 GroupSizeX = FMath::DivideAndRoundUp((int32)SumTexture->GetSizeX(), 32);
+      uint32 GroupSizeY = FMath::DivideAndRoundUp((int32)SumTexture->GetSizeY(), 32);
 
-	RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable, EResourceTransitionPipeline::EComputeToCompute, TextureUAV);
-    uint32 DestPitch{0};
+      DispatchComputeShader(RHICmdList, *ComputeShader, GroupSizeX, GroupSizeY, 1);
+      ComputeShader->UnbindUAV(RHICmdList);
+      // Transition resources back to the renderer.
 
-    uint32* rawData =
-        (uint32*)RHILockTexture2D(SumTexture, 0, EResourceLockMode::RLM_ReadOnly, DestPitch, false);
+      RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
+                                    EResourceTransitionPipeline::EComputeToCompute, TextureUAV);
+      uint32 DestPitch{0};
 
-	FMemory::Memcpy(CommandData->Payload + (Dimensions.X * Dimensions.Y * i), rawData, Dimensions.X * Dimensions.Y);
+      uint32* rawData = (uint32*)RHILockTexture2D(SumTexture, 0, EResourceLockMode::RLM_ReadOnly,
+                                                  DestPitch, false);
 
-	RHIUnlockTexture2D(SumTexture, 0, false);
+      FMemory::Memcpy(CommandData->Payload + (Dimensions.X * Dimensions.Y * i), rawData,
+                      Dimensions.X * Dimensions.Y);
 
-	}
-    
-		CommandData->Promise.SetValue();
+      RHIUnlockTexture2D(SumTexture, 0, false);
+    }
+
+    CommandData->Promise.SetValue();
   });
 
   // wait until render thread operation completes
@@ -715,6 +714,5 @@ void URaymarchBlueprintLibrary::UpdateVolumeTextureSource(UVolumeTexture* Textur
 
   UpdateVolumeTextureAsset(Texture, PF_G8, Dimensions, CommandData->Payload, true, true, true);
 }
-
 
 #undef LOCTEXT_NAMESPACE
