@@ -151,7 +151,7 @@ void URaymarchBlueprintLibrary::LoadRawIntoVolumeTextureAsset(FString RawFileNam
   EPixelFormat PixelFormat = FMhdInfo::ConvertToBestPixelFormat(
       TempArray, Dimensions.X * Dimensions.Y * Dimensions.Z, ElementType);
 
-  auto ptr = TempArray.Release();
+  auto ptr = TempArray.Get();
 
   // Actually update the asset.
   bool Success = false;
