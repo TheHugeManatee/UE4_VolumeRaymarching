@@ -24,7 +24,21 @@
 // (Volume is clipped away in the clipping direction)
 bool IsCurPosClipped(float3 CurPos, float3 ClippingCenter, float3 ClippingDirection)
 {
-    return (dot(CurPos - ClippingCenter, ClippingDirection) <= 0.0);
+    return (dot(CurPos - ClippingCenter, ClippingDirection) < 0.0);
+}
+
+// Converts a plane defined with a point and a normal to it's equivalent form
+// in HNF
+float4 PointAndNormalToHNF(float3 ClippingCenter, float3 ClippingDirection) {
+    float3 N = normalize(ClippingDirection);
+    float d = dot(N, ClippingCenter);
+    return float4(N.x, N.y, N.z, d);
+}
+
+// Returns true if CurPos is clipped by the clipping plane defined by its HNF
+bool IsCurPosClipped(float3 CurPos, float4 ClippingPlane)
+{
+    return (dot(CurPos, ClippingPlane.xyz) < ClippingPlane.w);
 }
 
 // Convert a uint in one byte range (0-255) to a corresponding U8 float (0 - 1 normalized).
@@ -104,4 +118,13 @@ float3 UVWToUnitLocal(float3 UVW)
 float3 UnitLocaltoUVW(float3 Local)
 {
     return (Local + 0.5);
+}
+
+// Recomposes a matrix from 4 row vectors.
+float4x4 MatrixFromRowVectors(float4 X0, float4 X1, float4 X2, float4 X3)
+{
+    return float4x4(X0.x, X0.y, X0.z, X0.a,
+                    X1.x, X1.y, X1.z, X1.a,
+                    X2.x, X2.y, X2.z, X2.a,
+                    X3.x, X3.y, X3.z, X3.a);
 }

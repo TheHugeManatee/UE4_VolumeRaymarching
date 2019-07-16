@@ -11,7 +11,52 @@
 
 // Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
 // and thickness of the cube in alpha. All values returned are in UVW space.
-float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
+// CubeSize: The size of the cube in **local space** inunreal units. Should default to float3(1.0)
+float4 PerformRaymarchCubeSetupNoSceneDepth(float3 CubeSize, FMaterialPixelParameters MaterialParameters)
+{
+    // Get cam pos and vector into local space too.
+    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), (GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)).xyz / CubeSize;
+    float3 TextureStep = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal) / CubeSize);
+
+    // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
+    LocalCamPos += 0.5;
+    float3 InverseRayDirVec = 1 / TextureStep;
+
+    // Because now we're in texture space where our box is at [0, 1] in each axis, it's easy to get intersections.
+    // LowIntersections will have the distance of the ray in X,Y,Z before it hits the respective axis.
+    // HighIntersections will have the distance of the ray in X,Y,Z before it reaches 1 in the respective axis.
+    float3 LowIntersections = (0 - LocalCamPos) * InverseRayDirVec;
+    float3 HighIntersections = (1 - LocalCamPos) * InverseRayDirVec;
+
+    // Get closest and furthest intersections
+    float3 ClosestIntersections = min(LowIntersections, HighIntersections);
+    float3 FurthestIntersections = max(LowIntersections, HighIntersections);
+
+    // The actual intersections of the box are the 2 values in the middle of the pack.
+    // T0 (entry) = the farthest of the closest intersections
+    float t0 = max(ClosestIntersections.x, max(ClosestIntersections.y, ClosestIntersections.z));
+    // T1 (exit) = the closest of the furthest intersections
+    float t1 = min(FurthestIntersections.x, min(FurthestIntersections.y, FurthestIntersections.z));
+
+    // Make sure the entry point is not behind the camera
+    t0 = max(0, t0);
+
+    // Make sure the exit point is not behind other scene geometry.
+    t1 = min(t1, 1.0);
+
+    // Calculate box thickness at this pixel (in local space).
+    float BoxThickness = max(0, t1 - t0);
+
+    // Get entry position in UVW space.
+    float3 EntryPos = LocalCamPos + (t0 * TextureStep);
+
+    return float4(EntryPos, BoxThickness);
+}
+
+// Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
+// and thickness of the cube in alpha. All values returned are in UVW space.
+// CubeSize: The size of the cube in **local space** inunreal units. Should default to float3(1.0)
+float4 PerformRaymarchCubeSetup(float3 CubeSize, FMaterialPixelParameters MaterialParameters)
 {
     // Get scene depth at this pixel.
     float LocalSceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(MaterialParameters)));
@@ -23,7 +68,7 @@ float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
     float3 WorldDepthVec = normalize(MaterialParameters.CameraVector) * LocalSceneDepth;
 
     // Transform this vector into the box's local space
-    WorldDepthVec = mul(WorldDepthVec, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal);
+    WorldDepthVec = mul(WorldDepthVec, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal) / CubeSize;
 
     // Get actual depth in local space, account for mesh bounds (by default, we use a centered 1x1x1 cube mesh, so this is unnecessary)
     LocalSceneDepth = length(WorldDepthVec);
@@ -33,12 +78,12 @@ float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
     LocalSceneDepth /= abs(dot(CameraFWDVecWorld, MaterialParameters.CameraVector));
 
     // Get cam pos and vector into local space too.
-    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), (GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)).xyz;
-    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
+    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), (GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)).xyz / CubeSize;
+    float3 TextureStep = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal) / CubeSize);
 
     // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
     LocalCamPos += 0.5;
-    float3 InverseRayDirVec = 1 / LocalCamVec;
+    float3 InverseRayDirVec = 1 / TextureStep;
 
     // Because now we're in texture space where our box is at [0, 1] in each axis, it's easy to get intersections.
     // LowIntersections will have the distance of the ray in X,Y,Z before it hits the respective axis.
@@ -66,8 +111,8 @@ float4 PerformRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters)
     float BoxThickness = max(0, t1 - t0);
 
     // Get entry position in UVW space.
-    float3 EntryPos = LocalCamPos + (t0 * LocalCamVec);
-    
+    float3 EntryPos = LocalCamPos + (t0 * TextureStep);
+
     return float4(EntryPos, BoxThickness);
 }
 
@@ -97,11 +142,11 @@ float4 PerformExperimentalRaymarchCubeSetup(FMaterialPixelParameters MaterialPar
 
     // Get cam pos and vector into local space too.
     float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), (GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal) * Scaling).xyz;
-    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
+    float3 TextureStep = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
 
     // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
     LocalCamPos += 0.5; //  ((LocalCamPos / (GetPrimitiveData(MaterialParameters.PrimitiveId).LocalObjectBoundsMax * 2))) + 0.5;
-    float3 InverseRayDirVec = 1 / LocalCamVec;
+    float3 InverseRayDirVec = 1 / TextureStep;
 
     // Because now we're in texture space where our box is at [0, 1] in each axis, it's easy to get intersections.
     // LowIntersections will have the distance of the ray in X,Y,Z before it hits the respective axis.
@@ -129,9 +174,9 @@ float4 PerformExperimentalRaymarchCubeSetup(FMaterialPixelParameters MaterialPar
     float BoxThickness = max(0, t1 - t0);
 
     // Get entry position in UVW space.
-    EntryPos.xyz = LocalCamPos + (t0 * LocalCamVec);
+    EntryPos.xyz = LocalCamPos + (t0 * TextureStep);
     EntryPos.a = BoxThickness;
-    ExitPos = LocalCamPos + (t1 * LocalCamVec);
+    ExitPos = LocalCamPos + (t1 * TextureStep);
 
     return EntryPos;
 }
@@ -140,7 +185,7 @@ float4 PerformExperimentalRaymarchCubeSetup(FMaterialPixelParameters MaterialPar
 // and thickness of the cube in alpha. All values returned are in UVW space. 
 // This setup is for performing the setup from a shader that's NOT run on the cube itself, it takes the
 // cube's transform as a parameter.
-float4 PerformOffsetRaymarchCubeSetup(float4x4 CubeTransformW2L, FMaterialPixelParameters MaterialParameters)
+float4 PerformOffsetRaymarchCubeSetup(float3 CubeSize, float4x4 CubeTransformW2L, FMaterialPixelParameters MaterialParameters)
 {
     // Get scene depth at this pixel.
     float LocalSceneDepth = CalcSceneDepth(ScreenAlignedPosition(GetScreenPosition(MaterialParameters)));
@@ -152,7 +197,7 @@ float4 PerformOffsetRaymarchCubeSetup(float4x4 CubeTransformW2L, FMaterialPixelP
     float3 WorldDepthVec = normalize(MaterialParameters.CameraVector) * LocalSceneDepth;
 
     // Transform this vector into the box's local space
-    WorldDepthVec = mul(WorldDepthVec, CubeTransformW2L);
+    WorldDepthVec = mul(WorldDepthVec, CubeTransformW2L) / CubeSize;
 
     // Get actual depth in local space, account for mesh bounds (by default, we use a centered 1x1x1 cube mesh, so this is unnecessary)
     LocalSceneDepth = length(WorldDepthVec);
@@ -161,12 +206,12 @@ float4 PerformOffsetRaymarchCubeSetup(float4x4 CubeTransformW2L, FMaterialPixelP
     LocalSceneDepth /= abs(dot(CameraFWDVecWorld, MaterialParameters.CameraVector));
 
     // Get cam pos and vector into local space too.
-    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), CubeTransformW2L).xyz;
-    float3 LocalCamVec = -normalize(mul(float4(ResolvedView.WorldCameraOrigin + MaterialParameters.CameraVector, 1.00000000), CubeTransformW2L).xyz - LocalCamPos);
+    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), CubeTransformW2L).xyz / CubeSize;
+    float3 TextureStep = -normalize(mul(float4(ResolvedView.WorldCameraOrigin + MaterialParameters.CameraVector, 1.00000000), CubeTransformW2L).xyz / CubeSize - LocalCamPos);
 
     // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
     LocalCamPos += 0.5;
-    float3 InverseRayDirVec = 1 / LocalCamVec;
+    float3 InverseRayDirVec = 1 / TextureStep;
        
     // Get intersections
     float3 FirstIntersections = (0 - LocalCamPos) * InverseRayDirVec;
@@ -191,7 +236,49 @@ float4 PerformOffsetRaymarchCubeSetup(float4x4 CubeTransformW2L, FMaterialPixelP
     float BoxThickness = max(0, t1 - t0);
 
     // Get entry position in local space.
-    float3 EntryPos = LocalCamPos + (t0 * LocalCamVec);
+    float3 EntryPos = LocalCamPos + (t0 * TextureStep);
+    
+    return float4(EntryPos, BoxThickness);
+}
+
+// Performs raymarch cube setup for this pixel. Returns the position of entry to the cube in rgb channels 
+// and thickness of the cube in alpha. All values returned are in UVW space. 
+// This setup is for performing the setup from a shader that's NOT run on the cube itself, it takes the
+// cube's transform as a parameter.
+float4 PerformOffsetRaymarchCubeSetupNoSceneDepth(float3 CubeSize, float4x4 CubeTransformW2L, FMaterialPixelParameters MaterialParameters)
+{
+    // Get cam pos and vector into local space too.
+    float3 LocalCamPos = mul(float4(ResolvedView.WorldCameraOrigin, 1.00000000), CubeTransformW2L).xyz / CubeSize;
+    float3 TextureStep = -normalize(mul(float4(ResolvedView.WorldCameraOrigin + MaterialParameters.CameraVector, 1.00000000), CubeTransformW2L).xyz / CubeSize - LocalCamPos);
+
+    // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
+    LocalCamPos += 0.5;
+    float3 InverseRayDirVec = 1 / TextureStep;
+       
+    // Get intersections
+    float3 FirstIntersections = (0 - LocalCamPos) * InverseRayDirVec;
+    float3 SecondIntersections = (1 - LocalCamPos) * InverseRayDirVec;
+
+    // Find closest and furthest intersections
+    float3 ClosestIntersections = min(FirstIntersections, SecondIntersections);
+    float3 FurthestIntersections = max(FirstIntersections, SecondIntersections);
+
+    // T0 (entry) = the farthest of the closest intersections
+    float t0 = max(ClosestIntersections.x, max(ClosestIntersections.y, ClosestIntersections.z));
+    // T1 (exit) = the closest of the furthest intersections
+    float t1 = min(FurthestIntersections.x, min(FurthestIntersections.y, FurthestIntersections.z));
+
+    // Make sure the entry point is not behind the camera
+    t0 = max(0, t0);
+
+    // Make sure the exit point is not behind other scene geometry.
+    t1 = min(t1, 1.0);
+
+    // Calculate box thickness at this pixel (in local space).
+    float BoxThickness = max(0, t1 - t0);
+
+    // Get entry position in local space.
+    float3 EntryPos = LocalCamPos + (t0 * TextureStep);
     
     return float4(EntryPos, BoxThickness);
 }
@@ -200,25 +287,36 @@ float4 PerformOffsetRaymarchCubeSetup(float4x4 CubeTransformW2L, FMaterialPixelP
 float4 PerformLitRaymarch(Texture3D DataVolume, // Data Volume 
                           Texture2D TF, float2 TFIntensityDomain, // Transfer func and intensity domain modifier
                           Texture3D LightVolume, // Light Volume  
-                          float3 CurPos, float MaxSteps, float StepSize, float FinalStep, // Position of ray entry to cube, number of steps, size of a step and a 0-1 value of how big the final step is compared to regular steps 
-                          float3 ClippingCenter, float3 ClippingDirection, // Clipping plane position and direction of clipped away region
+                          float3 EntryPos, // Ray Start position in texture coordinates
+                          float RayLength, // Ray length in texture coordinates, between [0, sqrt(3)]
+                          float SamplingStepSize, // The sampling step size in texture coordinates
+                          float4 ClippingPlane, // Clipping plane in HNF. Positive half space will be clipped
                           FMaterialPixelParameters MaterialParameters)                      // Material Parameters
 {
-// Get camera vector in local space and multiply it by step size.
-    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
+    // Get camera vector in texture space and
+    float3 RayDirection = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
+
+    float MaxSteps = RayLength / SamplingStepSize;
+    float FinalStep = frac(MaxSteps); // the final fractional step
+    MaxSteps = floor(MaxSteps); // the total number of steps to take
+
+    // multiply it by step size.
+    float3 TextureStep = RayDirection * SamplingStepSize;
     // Get step size in world units to be consistent with compute shaders' opacity calculations.
-    float StepSizeWorld = length(mul(LocalCamVec, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
+    float StepSizeWorld = length(mul(TextureStep, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
+
+    float3 CurPos = EntryPos;
+    // Jitter Entry position to avoid artifacts.
+    JitterEntryPos(CurPos, TextureStep, MaterialParameters);
+
     // Initialize accumulated light energy.
     float4 LightEnergy = 0;
-    // Jitter Entry position to avoid artifacts.
-    JitterEntryPos(CurPos, LocalCamVec, MaterialParameters);
 
     int i = 0;
     for (i = 0; i < MaxSteps; i++)
     {
-        CurPos += LocalCamVec; // Because we jitter only "against" the direction of LocalCamVec, start marching before first sample.
 	    // Any position that is clipped by the clipping plane shall be ignored.
-        if (!IsCurPosClipped(saturate(CurPos), ClippingCenter, ClippingDirection))
+        if (!IsCurPosClipped(saturate(CurPos), ClippingPlane))
         {
             AccumulateOneRaymarchStep(LightEnergy, CurPos, DataVolume, TF, TFIntensityDomain, LightVolume, StepSizeWorld);
         }
@@ -229,14 +327,15 @@ float4 PerformLitRaymarch(Texture3D DataVolume, // Data Volume
             LightEnergy.a = 1.0f;
             break;
         };
+        CurPos += TextureStep; // Because we jitter only "against" the direction of TextureStep, start marching before first sample.
     }
 
     // Handle FinalStep (only if we went through all the previous steps and the final step size is above zero)
     if (i == MaxSteps && FinalStep > 0.0f)
     {
-        CurPos += LocalCamVec * (FinalStep);
+        CurPos += TextureStep * FinalStep;
         // If the final step is clipped, don't do anything.
-        if (!IsCurPosClipped(saturate(CurPos), ClippingCenter, ClippingDirection))
+        if (!IsCurPosClipped(saturate(CurPos), ClippingPlane))
         {
             AccumulateOneRaymarchStep(LightEnergy, CurPos, DataVolume, TF, TFIntensityDomain, LightVolume, StepSizeWorld * FinalStep);
         }
@@ -251,21 +350,32 @@ float4 PerformLitRaymarch(Texture3D DataVolume, // Data Volume
 // or notTODO? - that can also be done for the regular raymarcher! But since labeling volumes ignore cutting plane, the labeled versions would still need to
 // march the whole cube anyways.
 float4 PerformIntensityRaymarch(Texture3D DataVolume, // Data Volume
-                                  float3 CurPos, float MaxSteps, float StepSize, float FinalStep, // Position of ray entry to cube, number of steps, size of a step and a 0-1 value of how big the final step is compared to regular steps 
-                                  float3 ClippingCenter, float3 ClippingDirection, // Clipping plane position and direction of clipped away region
-                                  FMaterialPixelParameters MaterialParameters)                      // Material Parameters
+                          float3 EntryPos, // Ray Start position in texture coordinates
+                          float RayLength, // Ray length in texture coordinates, between [0, sqrt(3)]
+                          float SamplingStepSize, // The sampling step size in texture coordinates
+                          float4 ClippingPlane, // Clipping plane in HNF. Positive half space will be clipped
+                          FMaterialPixelParameters MaterialParameters)                      // Material Parameters
 {
+    // Get camera vector in texture space and
+    float3 RayDirection = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
+
+    float MaxSteps = RayLength / SamplingStepSize;
+    float FinalStep = frac(MaxSteps); // the final fractional step
+    MaxSteps = floor(MaxSteps); // the total number of steps to take
+
     // Get camera vector in local space and multiply it by step size.
-    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
+    float3 TextureStep = RayDirection * SamplingStepSize;
+
+    float3 CurPos = EntryPos;
     // Jitter Entry position to avoid artifacts.
-    JitterEntryPos(CurPos, LocalCamVec, MaterialParameters);
+    //JitterEntryPos(CurPos, TextureStep, MaterialParameters);
 
     int i = 0;
     for (i = 0; i < MaxSteps; i++)
     {
-        CurPos += LocalCamVec;
+        CurPos += TextureStep;
 	    // Any position that is clipped by the clipping plane shall be ignored, otherwise just return the hit color.
-        if (!IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection))
+        if (!IsCurPosClipped(CurPos, ClippingPlane))
         {
             float GrayScale = DataVolume.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
             return float4(GrayScale, GrayScale, GrayScale, 1);
@@ -276,8 +386,8 @@ float4 PerformIntensityRaymarch(Texture3D DataVolume, // Data Volume
     // Handle FinalStep (only if we went through all the previous steps and the final step size is above zero)
     if (i == MaxSteps && FinalStep > 0.00f)
     {
-        CurPos += LocalCamVec * (FinalStep);
-        if (!IsCurPosClipped(CurPos, ClippingCenter, ClippingDirection))
+        CurPos += TextureStep * (FinalStep);
+        if (!IsCurPosClipped(CurPos, ClippingPlane))
         {
             float GrayScale = DataVolume.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
             return float4(GrayScale, GrayScale, GrayScale, 1);
@@ -296,27 +406,39 @@ float4 PerformIntensityRaymarch(Texture3D DataVolume, // Data Volume
 float4 PerformLitRaymarchLabeled(Texture3D DataVolume, // Data Volume
                                  Texture2D TF, float2 TFIntensityDomain, // Transfer func and intensity domain modifier
                                  Texture3D LightVolume,  Texture3D LabelVolume, 
-                                 float3 CurPos, float MaxSteps, float StepSize, float FinalStep, // Position of ray entry to cube, number of steps, size of a step and a 0-1 value of how big the final step is compared to regular steps 
-                                 float3 ClippingCenter, float3 ClippingDirection, // Clipping plane position and direction of clipped away region
-                                 FMaterialPixelParameters MaterialParameters)                    // Material Parameters
+                          float3 EntryPos, // Ray Start position in texture coordinates
+                          float RayLength, // Ray length in texture coordinates, between [0, sqrt(3)]
+                          float SamplingStepSize, // The sampling step size in texture coordinates
+                          float4 ClippingPlane, // Clipping plane in HNF. Positive half space will be clipped
+                          FMaterialPixelParameters MaterialParameters)                      // Material Parameters
 {
+    // Get camera vector in texture space and
+    float3 RayDirection = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
+
+    float MaxSteps = RayLength / SamplingStepSize;
+    float FinalStep = frac(MaxSteps); // the final fractional step
+    MaxSteps = floor(MaxSteps); // the total number of steps to take
+    
     // Get camera vector in local space and multiply it by step size.
-    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
+    float3 TextureStep = RayDirection * SamplingStepSize;
     // Get step size in world units to be consistent with compute shaders' opacity calculations.
-    float StepSizeWorld = length(mul(LocalCamVec, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
+    float StepSizeWorld = length(mul(TextureStep, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
+
+    float3 CurPos = EntryPos;
+    // Jitter Entry position to avoid artifacts.
+    JitterEntryPos(CurPos, TextureStep, MaterialParameters);
+
     // Initialize accumulated light energy.
     float4 LightEnergy = 0;
-    // Jitter Entry position to avoid artifacts.
-    JitterEntryPos(CurPos, LocalCamVec, MaterialParameters);
 
     int i = 0;
     for (i = 0; i < MaxSteps; i++)
     {
-        CurPos += LocalCamVec;
+        CurPos += TextureStep;
         // Label volume ignores clipping.
         AccumulateOneRaymarchLabelStep(LightEnergy, CurPos, LabelVolume, StepSizeWorld);
 	    // Any position that is clipped by the clipping plane shall be ignored.
-        if (!IsCurPosClipped(saturate(CurPos), ClippingCenter, ClippingDirection))
+        if (!IsCurPosClipped(saturate(CurPos), ClippingPlane))
         {
             AccumulateOneRaymarchStep(LightEnergy, CurPos, DataVolume, TF, TFIntensityDomain, LightVolume, StepSizeWorld);
         }
@@ -332,11 +454,11 @@ float4 PerformLitRaymarchLabeled(Texture3D DataVolume, // Data Volume
     // Handle FinalStep (only if we went through all the previous steps and the final step size is above zero)
     if (i == MaxSteps && FinalStep > 0.0f)
     {
-        CurPos += LocalCamVec * (FinalStep);
+        CurPos += TextureStep * (FinalStep);
         // Accumulate label.
         AccumulateOneRaymarchLabelStep(LightEnergy, CurPos, LabelVolume, StepSizeWorld * FinalStep);
         // If the final step is clipped, don't do anything.
-        if (!IsCurPosClipped(saturate(CurPos), ClippingCenter, ClippingDirection))
+        if (!IsCurPosClipped(saturate(CurPos), ClippingPlane))
         {
             AccumulateOneRaymarchStep(LightEnergy, CurPos, DataVolume, TF, TFIntensityDomain, LightVolume, StepSizeWorld * FinalStep);
         }
@@ -350,27 +472,39 @@ float4 PerformLitRaymarchLabeled(Texture3D DataVolume, // Data Volume
 // Labeling volume ignores the clipping plane, so labels are always visible. 
 // Intensity raymarch means as soon as we hit the volume, we take that as a fully opaque sample, mix in the color gotten from sampling labels until that point and return.
 float4 PerformIntensityRaymarchLabeled(Texture3D DataVolume, Texture3D LabelVolume, 
-                                        float3 CurPos, float MaxSteps, float StepSize, float FinalStep, // Position of ray entry to cube, number of steps, size of a step and a 0-1 value of how big the final step is compared to regular steps 
-                                        float3 ClippingCenter, float3 ClippingDirection, // Clipping plane position and direction of clipped away region
-                                        FMaterialPixelParameters MaterialParameters)                    // Material Parameters
+                          float3 EntryPos, // Ray Start position in texture coordinates
+                          float RayLength, // Ray length in texture coordinates, between [0, sqrt(3)]
+                          float SamplingStepSize, // The sampling step size in texture coordinates
+                          float4 ClippingPlane, // Clipping plane in HNF. Positive half space will be clipped
+                          FMaterialPixelParameters MaterialParameters)                      // Material Parameters
 {
+    // Get camera vector in texture space and
+    float3 RayDirection = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
+
+    float MaxSteps = RayLength / SamplingStepSize;
+    float FinalStep = frac(MaxSteps); // the final fractional step
+    MaxSteps = floor(MaxSteps); // the total number of steps to take
+
     // Get camera vector in local space and multiply it by step size.
-    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
+    float3 TextureStep = RayDirection * SamplingStepSize;
     // Get step size in world units to be consistent with compute shaders' opacity calculations.
-    float StepSizeWorld = length(mul(LocalCamVec, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
+    float StepSizeWorld = length(mul(TextureStep, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
+
+    float3 CurPos = EntryPos;
+    // Jitter Entry position to avoid artifacts.
+    JitterEntryPos(CurPos, TextureStep, MaterialParameters);
+
     // Initialize accumulated light energy.
     float4 LightEnergy = 0;
-    // Jitter Entry position to avoid artifacts.
-    JitterEntryPos(CurPos, LocalCamVec, MaterialParameters);
 
     int i = 0;
     for (i = 0; i < MaxSteps; i++)
     {
-        CurPos += LocalCamVec;
+        CurPos += TextureStep;
         // Label volume ignores clipping, so accumulate the color from that.
         AccumulateOneRaymarchLabelStep(LightEnergy, CurPos, LabelVolume, StepSizeWorld);
 	    // Once we hit the volume, raymarching is over. Take the sample as a fully opaque one, mix in the current label color and return.
-        if (!IsCurPosClipped(saturate(CurPos), ClippingCenter, ClippingDirection))
+        if (!IsCurPosClipped(saturate(CurPos), ClippingPlane))
         {
             float GrayScale = DataVolume.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
             AccumulateLightEnergy(LightEnergy, float4(GrayScale, GrayScale, GrayScale, 1.0));
@@ -389,11 +523,11 @@ float4 PerformIntensityRaymarchLabeled(Texture3D DataVolume, Texture3D LabelVolu
     // Handle FinalStep (only if we went through all the previous steps and the final step size is above zero)
     if (i == MaxSteps && FinalStep > 0.0f)
     {
-        CurPos += LocalCamVec * (FinalStep);
+        CurPos += TextureStep * (FinalStep);
         // Accumulate label.
         AccumulateOneRaymarchLabelStep(LightEnergy, CurPos, LabelVolume, StepSizeWorld * FinalStep);
         // If the final step is clipped, don't do anything.
-        if (!IsCurPosClipped(saturate(CurPos), ClippingCenter, ClippingDirection))
+        if (!IsCurPosClipped(saturate(CurPos), ClippingPlane))
         {
             float GrayScale = DataVolume.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
             AccumulateLightEnergy(LightEnergy, float4(GrayScale, GrayScale, GrayScale, 1.0));
@@ -404,24 +538,36 @@ float4 PerformIntensityRaymarchLabeled(Texture3D DataVolume, Texture3D LabelVolu
 }
 
 
-float4 PerformShadowRaymarch(Texture3D LightVolume, // Light Volume
-                                 float3 CurPos, float MaxSteps, float StepSize, float FinalStep, // Position of ray entry to cube, number of steps, size of a step and a 0-1 value of how big the final step is compared to regular steps 
-                                 FMaterialPixelParameters MaterialParameters)
+float4 PerformLightVolumeRaymarch(Texture3D LightVolume, // Light Volume
+                          float3 EntryPos, // Ray Start position in texture coordinates
+                          float RayLength, // Ray length in texture coordinates, between [0, sqrt(3)]
+                          float SamplingStepSize, // The sampling step size in texture coordinates
+                          float4 ClippingPlane, // Clipping plane in HNF. Positive half space will be clipped
+                          FMaterialPixelParameters MaterialParameters)                      // Material Parameters
 {
+    // Get camera vector in texture space and
+    float3 RayDirection = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal));
+
+    float MaxSteps = RayLength / SamplingStepSize;
+    float FinalStep = frac(MaxSteps); // the final fractional step
+    MaxSteps = floor(MaxSteps); // the total number of steps to take
 
      // Get camera vector in local space and multiply it by step size.
-    float3 LocalCamVec = -normalize(mul(MaterialParameters.CameraVector, GetPrimitiveData(MaterialParameters.PrimitiveId).WorldToLocal)) * StepSize;
+    float3 TextureStep = RayDirection * SamplingStepSize;
     // Get step size in world units to be consistent with compute shaders' opacity calculations.
-    float StepSizeWorld = length(mul(LocalCamVec, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
+    float StepSizeWorld = length(mul(TextureStep, GetPrimitiveData(MaterialParameters.PrimitiveId).LocalToWorld));
+
+    float3 CurPos = EntryPos;
+    // Jitter Entry position to avoid artifacts.
+    JitterEntryPos(CurPos, TextureStep, MaterialParameters);
+
     // Initialize accumulated light energy.
     float4 LightEnergy = 0;
-    // Jitter Entry position to avoid artifacts.
-    JitterEntryPos(CurPos, LocalCamVec, MaterialParameters);
 
     int i = 0;
     for (i = 0; i < MaxSteps; i++)
     {
-        CurPos += LocalCamVec;
+        CurPos += TextureStep;
         float ShadowValue = 1 - LightVolume.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
         AccumulateLightEnergy(LightEnergy, float4(ShadowValue, ShadowValue, ShadowValue, ShadowValue));
 
@@ -437,18 +583,123 @@ float4 PerformShadowRaymarch(Texture3D LightVolume, // Light Volume
     // Handle FinalStep (only if we went through all the previous steps and the final step size is above zero)
     if (i == MaxSteps && FinalStep > 0.01f)
     {
-        CurPos += LocalCamVec * (FinalStep);
+        CurPos += TextureStep * (FinalStep);
         float ShadowValue = 1 - LightVolume.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
         AccumulateLightEnergy(LightEnergy, float4(ShadowValue, ShadowValue, ShadowValue, ShadowValue));
     }
 
     return LightEnergy;
 }
-// Recomposes a matrix from 4 row vectors.
-float4x4 MatrixFromRowVectors(float4 X0, float4 X1, float4 X2, float4 X3)
+
+float4 PerformDRRRaymarch(Texture3D Tex, // Light Volume
+                          float3 EntryPos, // Ray Start position in texture coordinates
+                          float RayLength, // Ray length in texture coordinates, between [0, sqrt(3)]
+                          float SamplingStepSize, // The sampling step size in texture coordinates
+                          float4 ClippingPlane, // Clipping plane in HNF. Positive half space will be clipped
+                          float2 RemappingRange, // Range to remap intensity
+                          float3 VolumeSizeCM, // The volume size in centimeters
+                          float4x4 WorldToVolumeMat, // the transform from world to volume texture coordinates
+                          FMaterialPixelParameters MaterialParameters)                      // Material Parameters
 {
-    return float4x4(X0.x, X0.y, X0.z, X0.a,
-                    X1.x, X1.y, X1.z, X1.a,
-                    X2.x, X2.y, X2.z, X2.a,
-                    X3.x, X3.y, X3.z, X3.a);
+    const float AttenuationWater = 0.15; // [cm^-1], roughly, for 40keV
+
+    // Get camera vector in texture space and
+    float3 RayDirection = -normalize(mul(MaterialParameters.CameraVector, WorldToVolumeMat));
+
+    float MaxSteps = RayLength / SamplingStepSize;
+    float FinalStep = frac(MaxSteps); // the final fractional step
+    MaxSteps = floor(MaxSteps); // the total number of steps to take
+
+     // Get camera vector in local space and multiply it by step size.
+    float3 TextureStep = RayDirection * SamplingStepSize;
+    // Get step size in world units to be consistent with compute shaders' opacity calculations.
+
+    float TotalAttenuation = 0;
+
+    float3 CurPos = EntryPos;
+
+    // Essentially, this computes the integral over the attenuation coefficients using the Beer-Lambert law
+    // I = I0 * exp(- \int _x0 ^x1 \mu(x) \dx)
+    //      = I0 * exp(- SUM[i=0..N-1]( \mu(x0 + i*dX) * dX ) )
+    //      = I0 * exp(- SUM[i=0..N-1]( \mu(x0 + i*dX) ) * dX)
+    //  MaxSteps := N
+    //  CurPos := x0 + i*dX
+    //  StepSize := dX
+    //  Attenuation := \mu(x)
+    //  TotalAttenuation := SUM[i=0..N-1]( \mu(x0 + i*dX) ) * dX
+    [loop] for (int i = 0; i < MaxSteps; i++)
+    {
+        // Anything that is clipped by the clipping plane shall be ignored.
+        if (IsCurPosClipped(CurPos, ClippingPlane)) {
+            CurPos += TextureStep;
+            continue;
+        }
+
+        float CurSample = Tex.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
+        // float HounsfieldUnits = (CurSample * float(0xFFFF) - float(0x7FFF)); // assume that this was a signed short volume
+        // float Attenuation = (HounsfieldUnits / 1000) * AttenuationWater + AttenuationWater; // roughly in [0, 0.45]
+        float Attenuation = CurSample;
+        RemapIntensity(Attenuation, RemappingRange.xy);
+
+        TotalAttenuation += Attenuation;
+
+        CurPos += TextureStep;
+    }
+
+    // apply the multiplication with dX
+    float StepSizeCM = length(TextureStep * VolumeSizeCM); // the step size in centimeters
+    TotalAttenuation = TotalAttenuation * StepSizeCM;
+
+    // DRR Essentially images the total attenuation, where high attenuation is bright and low is black
+    // this remapping allows to map the numeric attenuation value to the intensity range [0,1]
+    float DRRIntensity = TotalAttenuation;
+    //RemapIntensity(DRRIntensity, RemappingRange.xy);
+
+    return float4(DRRIntensity, DRRIntensity, DRRIntensity, 1.0);
+}
+
+
+float4 PerformMIPRaymarch(Texture3D Tex, // Light Volume
+                          float3 EntryPos, // Ray Start position in texture coordinates
+                          float RayLength, // Ray length in texture coordinates, between [0, sqrt(3)]
+                          float SamplingStepSize, // The sampling step size in texture coordinates
+                          float4 ClippingPlane, // Clipping plane in HNF. Positive half space will be clipped
+                          float2 RemappingRange, // Range to remap intensity
+                          float4x4 WorldToVolumeMat, // the transform from world to volume texture coordinates
+                          FMaterialPixelParameters MaterialParameters)                      // Material Parameters
+{
+    const float AttenuationWater = 0.15; // [cm^-1], roughly, for 40keV
+
+    // Get camera vector in texture space and
+    float3 RayDirection = -normalize(mul(MaterialParameters.CameraVector, WorldToVolumeMat));
+
+    float MaxSteps = RayLength / SamplingStepSize;
+    float FinalStep = frac(MaxSteps); // the final fractional step
+    MaxSteps = floor(MaxSteps); // the total number of steps to take
+
+     // Get camera vector in local space and multiply it by step size.
+    float3 TextureStep = RayDirection * SamplingStepSize;
+
+    float3 CurPos = EntryPos;
+    float MaxIntensity = 0;
+
+    [loop] for (int i = 0; i < MaxSteps; i++)
+    {
+        // Anything that is clipped by the clipping plane shall be ignored.
+        if (IsCurPosClipped(CurPos, ClippingPlane)) {
+            CurPos += TextureStep;
+            continue;
+        }
+
+        float CurSample = Tex.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
+
+        if(CurSample > MaxIntensity)
+            MaxIntensity = CurSample;
+        
+        CurPos += TextureStep;
+    }
+
+    RemapIntensity(MaxIntensity, RemappingRange.xy);
+
+    return float4(MaxIntensity, MaxIntensity, MaxIntensity, 1.0);
 }
