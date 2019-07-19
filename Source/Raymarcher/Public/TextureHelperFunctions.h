@@ -57,8 +57,7 @@ bool HandleTextureEditorData(UTexture* Texture, const EPixelFormat PixelFormat,
                              const uint8* BulkData);
 
 /**
-  
-*/
-uint8* LoadRawFileIntoArray(const FString FileName, const int64 BytesToLoad);
+ */
+TUniquePtr<uint8> LoadRawFileIntoArray(const FString FileName, const int64 BytesToLoad);
 
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat);

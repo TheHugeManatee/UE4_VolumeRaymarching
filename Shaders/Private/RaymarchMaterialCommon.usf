@@ -77,9 +77,11 @@ float4 SampleLabelVolumeUI(float3 CurPos, float StepSize, Texture3D Volume)
 // Jitter position by random temporal jitter (in the direction of the camera).
 void JitterEntryPos(inout float3 EntryPos, float3 LocalCamVec, FMaterialPixelParameters MaterialParameters)
 {
-    int3 RandomPos = int3(MaterialParameters.SvPosition.xy, View.StateFrameIndexMod8);
+    int3 RandomPos = int3(float3(MaterialParameters.SvPosition.xy, View.StateFrameIndexMod8) * View.GameTime);
     float rand = float(Rand3DPCG16(RandomPos).x) / 0xffff;
-    EntryPos -= LocalCamVec * rand.x;
+    //float rand = frac(sin(MaterialParameters.SvPosition.x * 12.9898 + MaterialParameters.SvPosition.y * 78.233) * 43758.5453) - 0.5;
+    //float rand = frac(sin(dot(EntryPos, float3(12.9898, 78.233, 45.5432)) * 43758.5453)) - 0.5;
+    EntryPos += LocalCamVec * (rand.x - 0.5);
 }
 
 // Adds current sampled color and opacity to the accumulated LightEnergy
@@ -102,7 +104,7 @@ void AccumulateOneRaymarchStep(inout float4 AccumulatedLightEnergy, float3 CurPo
     // Get lighting information from illumination volume for current position and
     // Multiply sampled color with light color to adjust intensity according to light strength.
     ColorSample.rgb = ColorSample.rgb * LightVolume.SampleLevel(Material.Clamp_WorldGroupSettings, saturate(CurPos), 0).r;
-        // Accumulate current colored sample to the final values.
+    // Accumulate current colored sample to the final values.
     AccumulateLightEnergy(AccumulatedLightEnergy, ColorSample);
 }
 

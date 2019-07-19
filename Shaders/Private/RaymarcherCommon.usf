@@ -17,14 +17,28 @@
 // If you want denser volumes, multiply StepSize by this in SampleDataVolume / CorrectForStepSize.
 // We found that because we use Unreal units in our shaders, the results are nice as they are for
 // reasonably sized volumes.
-#define RAYMARCH_FIXED_DENSITY 20.0
+#define RAYMARCH_FIXED_DENSITY 200.0
 
 
 // Returns true if CurPos is clipped by the clipping plane defined by the center and direction.
 // (Volume is clipped away in the clipping direction)
 bool IsCurPosClipped(float3 CurPos, float3 ClippingCenter, float3 ClippingDirection)
 {
-    return (dot(CurPos - ClippingCenter, ClippingDirection) <= 0.0);
+    return (dot(CurPos - ClippingCenter, ClippingDirection) < 0.0);
+}
+
+// Converts a plane defined with a point and a normal to it's equivalent form
+// in HNF
+float4 PointAndNormalToHNF(float3 ClippingCenter, float3 ClippingDirection) {
+    float3 N = normalize(ClippingDirection);
+    float d = dot(N, ClippingCenter);
+    return float4(N.x, N.y, N.z, d);
+}
+
+// Returns true if CurPos is clipped by the clipping plane defined by its HNF
+bool IsCurPosClipped(float3 CurPos, float4 ClippingPlane)
+{
+    return (dot(CurPos, ClippingPlane.xyz) < ClippingPlane.w);
 }
 
 // Convert a uint in one byte range (0-255) to a corresponding U8 float (0 - 1 normalized).
@@ -51,6 +65,12 @@ float3 GetUVW(uint3 pos, float3 dimensions)
     return (pos + float3(0.5, 0.5, 0.5)) / dimensions;
 }
 
+// Returns Opacity corrected for stepsize.
+float CorrectForStepSize(float Opacity, float StepSize)
+{
+    return 1.0 - pow(1.0 - Opacity, StepSize*RAYMARCH_FIXED_DENSITY);
+}
+
 // Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize (in World units).
 float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
 {
@@ -58,7 +78,7 @@ float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, Sampler
     RemapIntensity(VolumeSample, TFIntensityDomain);
 
     float4 ColorSample = TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
-    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize);
+    ColorSample.a = CorrectForStepSize(ColorSample.a, StepSize);
     return ColorSample;
 }
 
@@ -75,12 +95,6 @@ float4 SampleDataVolumeUniformStep(float3 CurPos, Texture3D Volume, SamplerState
     float VolumeSample = Volume.SampleLevel(VolumeSampler, CurPos, 0).r;
     RemapIntensity(VolumeSample, TFIntensityDomain);
     return TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
-}
-
-// Returns intensity corrected for stepsize.
-float CorrectForStepSize(float Intensity, float StepSize)
-{
-    return 1.0 - pow(1.0 - Intensity, StepSize);
 }
 
 float3 UVWToLocal(float3 UVW)
@@ -104,4 +118,13 @@ float3 UVWToUnitLocal(float3 UVW)
 float3 UnitLocaltoUVW(float3 Local)
 {
     return (Local + 0.5);
+}
+
+// Recomposes a matrix from 4 row vectors.
+float4x4 MatrixFromRowVectors(float4 X0, float4 X1, float4 X2, float4 X3)
+{
+    return float4x4(X0.x, X0.y, X0.z, X0.a,
+                    X1.x, X1.y, X1.z, X1.a,
+                    X2.x, X2.y, X2.z, X2.a,
+                    X3.x, X3.y, X3.z, X3.a);
 }
