@@ -41,9 +41,6 @@ float4 PerformRaymarchCubeSetupNoSceneDepth(float3 CubeSize, FMaterialPixelParam
     // Make sure the entry point is not behind the camera
     t0 = max(0, t0);
 
-    // Make sure the exit point is not behind other scene geometry.
-    t1 = min(t1, 1.0);
-
     // Calculate box thickness at this pixel (in local space).
     float BoxThickness = max(0, t1 - t0);
 
@@ -270,9 +267,6 @@ float4 PerformOffsetRaymarchCubeSetupNoSceneDepth(float3 CubeSize, float4x4 Cube
 
     // Make sure the entry point is not behind the camera
     t0 = max(0, t0);
-
-    // Make sure the exit point is not behind other scene geometry.
-    t1 = min(t1, 1.0);
 
     // Calculate box thickness at this pixel (in local space).
     float BoxThickness = max(0, t1 - t0);
@@ -697,6 +691,10 @@ float4 PerformMIPRaymarch(Texture3D Tex, // Light Volume
             MaxIntensity = CurSample;
         
         CurPos += TextureStep;
+        
+        if(any(CurPos > 1.0) || any(CurPos < 0.0)) {
+           float4(1.0, 0.0 , 1.0, 1.0); 
+        }
     }
 
     RemapIntensity(MaxIntensity, RemappingRange.xy);
