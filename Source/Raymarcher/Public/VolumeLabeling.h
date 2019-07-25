@@ -78,7 +78,7 @@ protected:
 };
 
 /**
-  Render-thread side of writing a sphere to a volume. Takes care of binding the resources 
+  Render-thread side of writing a sphere to a volume. Takes care of binding the resources
   to the compute shader and dispatching it.
 */
 void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
@@ -88,7 +88,7 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
                                       FSurgeryLabel WrittenValue);
 
 /**
-  Render-thread side of writing a sphere to a volume. Takes care of binding the resources 
+  Render-thread side of writing a sphere to a volume. Takes care of binding the resources
   to the compute shader and dispatching it.
 */
 void WriteSphereToVolumeLocal_RenderThread(FRHICommandListImmediate& RHICmdList,
@@ -110,7 +110,8 @@ public:
 
   /** Recreates the labeling volume in the provided volume texture. */
   UFUNCTION(BlueprintCallable, Category = "Label Volume")
-  static void InitLabelingVolume(UVolumeTexture* LabelVolumeAsset, FIntVector Dimensions);
+  static void InitLabelingVolume(UPARAM(ref) UVolumeTexture*& LabelVolumeAsset,
+                                 FIntVector Dimensions);
 
   /**
     Writes the specified label into a volume at a sphere specified by world coordinates and size.

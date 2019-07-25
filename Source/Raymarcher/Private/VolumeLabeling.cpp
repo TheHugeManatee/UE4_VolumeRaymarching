@@ -46,9 +46,11 @@ void WriteSphereToVolume_RenderThread(FRHICommandListImmediate& RHICmdList,
   RHICmdList.TransitionResource(EResourceTransitionAccess::ERWNoBarrier,
                                 EResourceTransitionPipeline::EGfxToCompute, MarkedVolumeUAV);
 
-  //FString debug = "Written texture size = " + MarkedVolume->GetSizeXYZ().ToString() + "\nLocalCenter =" + LocalCenterUVW.ToString() + ", in ints = " + LocalCenterIntCoords.ToString() +
+  // FString debug = "Written texture size = " + MarkedVolume->GetSizeXYZ().ToString() +
+  // "\nLocalCenter =" + LocalCenterUVW.ToString() + ", in ints = " +
+  // LocalCenterIntCoords.ToString()
+  // +
   //              ", brush size in ints = " + BrushSizeInt.ToString();
-
 
   FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
   ComputeShader->SetMarkedVolumeUAV(RHICmdList, cs, MarkedVolumeUAV);
@@ -70,8 +72,9 @@ void WriteSphereToVolumeLocal_RenderThread(FRHICommandListImmediate& RHICmdList,
                                            const float SphereRadiusLocal,
                                            FSurgeryLabel WrittenValue) {
   // Get local center in integer space (need to add 0.5 to get from local to UVW)
-  FIntVector localCenterIntCoords = FIntVector((BrushLocalCenter + 0.5) * FVector(MarkedVolume->GetSizeXYZ()));
-  
+  FIntVector localCenterIntCoords =
+      FIntVector((BrushLocalCenter + 0.5) * FVector(MarkedVolume->GetSizeXYZ()));
+
   // Get shader ref from GlobalShaderMap
   TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
   TShaderMapRef<FWriteSphereToVolumeShader> ComputeShader(GlobalShaderMap);
@@ -84,18 +87,18 @@ void WriteSphereToVolumeLocal_RenderThread(FRHICommandListImmediate& RHICmdList,
   // writing them.
   RHICmdList.TransitionResource(EResourceTransitionAccess::EWritable,
                                 EResourceTransitionPipeline::EGfxToCompute, MarkedVolumeUAV);
-    
+
   // Get brush size in texture space.
   FIntVector brush = FIntVector(SphereRadiusLocal * 2 * MarkedVolume->GetSizeX() + 1,
                                 SphereRadiusLocal * 2 * MarkedVolume->GetSizeY() + 1,
                                 SphereRadiusLocal * 2 * MarkedVolume->GetSizeZ() + 1);
 
- /* FString debug = "Written texture size = " + MarkedVolume->GetSizeXYZ().ToString() +
-                "\nLocalCenter =" + BrushLocalCenter.ToString() +
-                ", in ints = " + localCenterIntCoords.ToString() +
-                "\nLocal Sphere diameter = " + FString::SanitizeFloat(SphereRadiusLocal * 2) +
-                ", brush size in ints = " + brush.ToString();*/
-//  GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
+  /* FString debug = "Written texture size = " + MarkedVolume->GetSizeXYZ().ToString() +
+                 "\nLocalCenter =" + BrushLocalCenter.ToString() +
+                 ", in ints = " + localCenterIntCoords.ToString() +
+                 "\nLocal Sphere diameter = " + FString::SanitizeFloat(SphereRadiusLocal * 2) +
+                 ", brush size in ints = " + brush.ToString();*/
+  //  GEngine->AddOnScreenDebugMessage(0, 20, FColor::Yellow, kkt);
 
   FComputeShaderRHIParamRef cs = ComputeShader->GetComputeShader();
   ComputeShader->SetMarkedVolumeUAV(RHICmdList, cs, MarkedVolumeUAV);
@@ -118,9 +121,11 @@ void ULabelVolumeLibrary::CreateNewLabelingVolumeAsset(FString AssetName, FIntVe
   }
 }
 
-void ULabelVolumeLibrary::InitLabelingVolume(UVolumeTexture* LabelVolumeAsset,
+void ULabelVolumeLibrary::InitLabelingVolume(UVolumeTexture*& LabelVolumeAsset,
                                              FIntVector Dimensions) {
-
+  if (!LabelVolumeAsset) {
+    LabelVolumeAsset = NewObject<UVolumeTexture>();
+  }
 
   if (!UpdateVolumeTextureAsset(LabelVolumeAsset, PF_G8, Dimensions, nullptr, false, false, true)) {
     GEngine->AddOnScreenDebugMessage(0, 10, FColor::Yellow,
@@ -161,13 +166,17 @@ void ULabelVolumeLibrary::LabelSphereInVolumeLocal(UVolumeTexture* MarkedVolume,
                                                    FVector BrushLocalCenter,
                                                    const float SphereLocalRadius,
                                                    const FSurgeryLabel WrittenValue) {
-if (MarkedVolume->Resource == NULL) return;
-  // Call the actual rendering code on RenderThread.
+  // input sanity checks
+  if (!ensure(MarkedVolume != nullptr)) return;
+  if (!ensure(MarkedVolume->Resource != nullptr)) return;
 
+  // Call the actual rendering code on RenderThread.
   ENQUEUE_RENDER_COMMAND(CaptureCommand)
   ([=](FRHICommandListImmediate& RHICmdList) {
-    WriteSphereToVolumeLocal_RenderThread(RHICmdList, MarkedVolume->Resource->TextureRHI->GetTexture3D(),
-                                     BrushLocalCenter, SphereLocalRadius, WrittenValue);
-  });}
+    WriteSphereToVolumeLocal_RenderThread(RHICmdList,
+                                          MarkedVolume->Resource->TextureRHI->GetTexture3D(),
+                                          BrushLocalCenter, SphereLocalRadius, WrittenValue);
+  });
+}
 
 #undef LOCTEXT_NAMESPACE
