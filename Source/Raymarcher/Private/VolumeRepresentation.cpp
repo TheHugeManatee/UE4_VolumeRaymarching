@@ -2,12 +2,12 @@
 
 #include "VolumeRepresentation.h"
 
-FVolumeRepresentation::FVolumeRepresentation()
+UVolumeRepresentation::UVolumeRepresentation()
   : Texture{nullptr}
   , VolumeSizeInMM{1.0, 1.0, 1.0}
   , CenterLocation{0.0, 0.0, 0.0}
   , Dimensions{0, 0, 0} {
 }
 
-FVolumeRepresentation::~FVolumeRepresentation() {
+UVolumeRepresentation::~UVolumeRepresentation() {
 }

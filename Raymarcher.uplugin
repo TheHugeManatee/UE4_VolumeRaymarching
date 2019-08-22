@@ -19,6 +19,11 @@
 				"Name": "Raymarcher",
 				"Type": "Developer",
 				"LoadingPhase": "PostConfigInit"
+			},
+			{
+				"Name": "RaymarcherEditor",
+				"Type": "Editor",
+				"LoadingPhase": "PostEngineInit"
 			}
 	]
 }

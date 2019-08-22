@@ -1,17 +1,18 @@
 // (C) Technical University of Munich - Computer Aided Medical Procedures
-// Developed by Tomas Bartipan (tomas.bartipan@tum.de)
+// Jakob Weiss <jakob.weiss@tum.de>
 
 using System.IO;
 using UnrealBuildTool;
 
-public class Raymarcher : ModuleRules
+public class RaymarcherEditor : ModuleRules
 {
-	public Raymarcher(ReadOnlyTargetRules Target) : base(Target)
+	public RaymarcherEditor(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		
 		PublicIncludePaths.AddRange(
 			new string[] {
+                Path.Combine(ModuleDirectory, "Public"),
             }
             );
 				
@@ -29,7 +30,8 @@ public class Raymarcher : ModuleRules
 				"Core",
                 "RenderCore",
                 "RHI",
-				"AssetRegistry" // ... add other public dependencies that you statically link with here ...
+				"AssetRegistry",
+                "Raymarcher"
 			}
 			);
 			
@@ -38,7 +40,8 @@ public class Raymarcher : ModuleRules
 			new string[]
 			{
 				"CoreUObject",
-				"Engine"
+				"Engine",
+                "UnrealEd"
             }
 			);
 		
