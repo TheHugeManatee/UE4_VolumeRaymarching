@@ -117,6 +117,9 @@ void AccumulateOneRaymarchLabelStep(inout float4 AccumulatedLightEnergy, float3 
     AccumulateLightEnergy(AccumulatedLightEnergy, ColorSample);
 }
 
+// TransformLocalPositionToWorld is not defined otherwise
+#if HAS_PRIMITIVE_UNIFORM_BUFFER
+
 // Gets the Distance Field light multiplier (even though it's named GetDFShadow, the return value is actualy the opposite - the amount of light preserved)
 // Notice we're using FMaterialPixelParameters and Primitive, which are not defined by us. 
 // Since this file is only used in materials, we know that these structs are defined and provided to us 
@@ -145,3 +148,5 @@ float GetDFShadow(float3 CurPos, int DFSteps, float LightTangent, float3 LightVe
     }
     return dfshadow;
 }
+
+#endif

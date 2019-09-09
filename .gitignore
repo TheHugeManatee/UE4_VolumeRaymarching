@@ -72,3 +72,19 @@ Plugins/*/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+
+Content/Materials/RaymarchCubeSetup_2.uasset
+
+Content/Materials/RaymarchCubeSetup_3.uasset
+
+Content/Materials/RaymarchCubeSetup.uasset
+
+Content/Materials/RaymarchCubeSetupNoSceneDepth_2.uasset
+
+Content/Materials/RaymarchCubeSetupNoSceneDepth.uasset
+
+Content/Materials/RaymarchCubeSetupNoSceneDepthOffset.uasset
+
+Content/Materials/RaymarchCubeSetupOffset.uasset
+
+Content/Materials/RaymarchingMaterialFunctions.uasset

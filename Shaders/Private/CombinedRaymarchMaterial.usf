@@ -10,7 +10,7 @@
 // to tell the shadercompiler to always recompile the raymarch shaders on startup)
 
 #pragma once
-#include "RaymarchMaterials.usf"
+#include "RaymarchMaterialCommon.usf"
 
 // Performs raymarch cube setup for this pixel. Modifies the output parameters instead of returning values.
 // All values returned are in UVW space (texture space - normalized to 0-1). 
@@ -63,6 +63,46 @@ void PerformOffsetRaymarchCubeSetup(FMaterialPixelParameters MaterialParameters,
 
     // Make sure the exit point is not behind other scene geometry.
     t1 = min(t1, LocalSceneDepth);
+
+    // Calculate box thickness at this pixel (in local space).
+    BoxThickness = max(0, t1 - t0);
+    // Get entry position in UVW space.
+    EntryPos = float4(LocalCamPos + (t0 * LocalCamVec), 1.0);
+    ExitPos = float4(LocalCamPos + (t1 * LocalCamVec), 1.0);
+}
+
+// Performs raymarch cube setup for this pixel. Modifies the output parameters instead of returning values.
+// All values returned are in UVW space (texture space - normalized to 0-1). 
+// This setup is for performing the setup from a shader that's NOT run on the cube itself, it takes the
+// cube's transform as a parameter. Does not take into account scene depth and can therefore be used as a generic raytrace 
+void PerformOffsetRaymarchCubeSetupNoSceneDepth(float3 CameraPosWS, float3 CameraDir, float4x4 CubeTransformW2L,
+                                    out float4 EntryPos, out float4 ExitPos, out float BoxThickness)
+{
+
+
+    // Get cam pos and vector into local space too.
+    float3 LocalCamPos = mul(CameraPosWS, CubeTransformW2L).xyz;
+    float3 LocalCamVec = -normalize(mul(float4(CameraPosWS + CameraDir, 1.00000), CubeTransformW2L).xyz - LocalCamPos);
+
+    // Transform camera pos from local to UVW coords (from +-0.5 to [0 - 1]). Again, The LocalObjectBoundsMax only have an effect if using a non-default cube mesh.
+    LocalCamPos += 0.5;
+    float3 InverseRayDirVec = 1 / LocalCamVec;
+       
+    // Get intersections
+    float3 FirstIntersections = (0 - LocalCamPos) * InverseRayDirVec;
+    float3 SecondIntersections = (1 - LocalCamPos) * InverseRayDirVec;
+
+    // Find closest and furthest intersections
+    float3 ClosestIntersections = min(FirstIntersections, SecondIntersections);
+    float3 FurthestIntersections = max(FirstIntersections, SecondIntersections);
+
+    // T0 (entry) = the farthest of the closest intersections
+    float t0 = max(ClosestIntersections.x, max(ClosestIntersections.y, ClosestIntersections.z));
+    // T1 (exit) = the closest of the furthest intersections
+    float t1 = min(FurthestIntersections.x, min(FurthestIntersections.y, FurthestIntersections.z));
+
+    // Make sure the entry point is not behind the camera
+    t0 = max(0, t0);
 
     // Calculate box thickness at this pixel (in local space).
     BoxThickness = max(0, t1 - t0);
