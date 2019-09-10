@@ -25,39 +25,43 @@
   be immediately saved to disk.
   Returns a reference to the created texture in the CreatedTexture param.
 */
-bool CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntVector Dimensions,
+bool RAYMARCHER_API CreateVolumeTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntVector Dimensions,
                               UVolumeTexture*& CreatedTexture, uint8* BulkData = nullptr,
                               bool Persistent = false, bool SaveNow = false,
                               bool UAVCompatible = false);
 
 /** Updates the provided Volume Texture asset to have the provided format, dimensions and pixel
  * data*/
-bool UpdateVolumeTextureAsset(UVolumeTexture* VolumeTexture, EPixelFormat PixelFormat,
+bool RAYMARCHER_API UpdateVolumeTextureAsset(UVolumeTexture* VolumeTexture, EPixelFormat PixelFormat,
                               FIntVector Dimensions, uint8* BulkData = nullptr,
                               bool Persistent = false, bool SaveNow = false,
                               bool UAVCompatible = false);
 
 /** Creates a 2D Texture asset with the given name from the provided bulk data with the given
  * format.*/
-bool Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
+bool RAYMARCHER_API Create2DTextureAsset(FString AssetName, EPixelFormat PixelFormat, FIntPoint Dimensions,
                           uint8* BulkData = nullptr, bool Persistent = false,
                           bool UAVCompatible = false, bool SaveNow = false,
                           TextureAddress TilingX = TA_Clamp, TextureAddress TilingY = TA_Clamp);
 
 /** Updates the provided 2D Texture asset to have the provided format, dimensions and pixel data*/
-bool Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoint Dimensions,
+bool RAYMARCHER_API Update2DTextureAsset(UTexture2D* Texture, EPixelFormat PixelFormat, FIntPoint Dimensions,
                           uint8* BulkData = nullptr, bool Persistent = false,
                           bool UAVCompatible = false, TextureAddress TilingX = TA_Clamp,
                           TextureAddress TilingY = TA_Clamp);
 
 /** Handles the saving of source data to persistent textures. Only works in-editor, as packaged
  builds no longer have source data for textures.*/
-bool HandleTextureEditorData(UTexture* Texture, const EPixelFormat PixelFormat,
+bool RAYMARCHER_API HandleTextureEditorData(UTexture* Texture, const EPixelFormat PixelFormat,
                              const bool Persistent, const FIntVector Dimensions,
                              const uint8* BulkData);
 
+bool RAYMARCHER_API Create2DTextureTransient(UTexture2D*& OutTexture, EPixelFormat PixelFormat, FIntPoint Dimensions, uint8* BulkData, TextureAddress TilingX = TA_Clamp, TextureAddress TilingY = TA_Clamp);
+
+
 /**
-  
+  
+
 */
 uint8* LoadRawFileIntoArray(const FString FileName, const int64 BytesToLoad);
 

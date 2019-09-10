@@ -217,7 +217,7 @@ void URaymarchBlueprintLibrary::TryVolumeTextureSliceWrite(FIntVector Dimensions
   });
 }
 
-void URaymarchBlueprintLibrary::ColorCurveToTexture(UCurveLinearColor* Curve, UTexture2D* Texture) {
+void URaymarchBlueprintLibrary::ColorCurveToTexture(UCurveLinearColor* Curve, UTexture2D*& OutTexture) {
   // Using float16 format because RGBA8 wouldn't be persistent for some reason.
   const unsigned sampleCount = 1000;
 
@@ -240,8 +240,7 @@ void URaymarchBlueprintLibrary::ColorCurveToTexture(UCurveLinearColor* Curve, UT
     FMemory::Memcpy(samples + (i * sampleCount * 4), samples, sampleCount * 4 * 2);
   }
 
-  Update2DTextureAsset(Texture, PF_FloatRGBA, FIntPoint(sampleCount, TextureHeight),
-                       (uint8*)samples);
+  Create2DTextureTransient(OutTexture, PF_FloatRGBA, FIntPoint(sampleCount, TextureHeight), (uint8*)samples);
 
   delete[] samples;  // Don't forget to free the memory here
   return;

@@ -108,7 +108,7 @@ public:
 
   /** Will create a 1D texture asset from a ColorCurve. xDim is the number of samples. */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
-  static void ColorCurveToTexture(UCurveLinearColor* Curve, UTexture2D* Texture);
+  static void ColorCurveToTexture(UCurveLinearColor* Curve, UTexture2D*& OutTexture);
 
   /** Will create a 1D texture asset from a ColorCurve. xDim is the number of samples. */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
