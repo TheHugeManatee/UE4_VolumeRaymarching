@@ -56,8 +56,10 @@ bool RAYMARCHER_API HandleTextureEditorData(UTexture* Texture, const EPixelForma
                              const bool Persistent, const FIntVector Dimensions,
                              const uint8* BulkData);
 
-bool RAYMARCHER_API Create2DTextureTransient(UTexture2D*& OutTexture, EPixelFormat PixelFormat, FIntPoint Dimensions, uint8* BulkData, TextureAddress TilingX = TA_Clamp, TextureAddress TilingY = TA_Clamp);
+bool RAYMARCHER_API Create2DTextureTransient(UTexture2D*& OutTexture, EPixelFormat PixelFormat, FIntPoint Dimensions, uint8* BulkData = nullptr, TextureAddress TilingX = TA_Clamp, TextureAddress TilingY = TA_Clamp);
 
+
+bool RAYMARCHER_API CreateVolumeTextureTransient(UVolumeTexture*& OutTexture, EPixelFormat PixelFormat, FIntVector Dimensions, uint8* BulkData = nullptr, bool bUAVTargetable = false);
 
 /**
   

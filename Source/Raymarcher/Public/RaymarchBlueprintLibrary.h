@@ -25,7 +25,7 @@ public:
   //
 
   UFUNCTION(BlueprintCallable, Category = "RGBRaymarcher")
-  static void InitLightVolume(UVolumeTexture* LightVolume, FIntVector Dimensions);
+  static void InitLightVolume(UVolumeTexture*& LightVolume, FIntVector Dimensions);
 
   /** Adds a light to light volume.	 */
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
@@ -122,7 +122,7 @@ public:
   //
 
   UFUNCTION(BlueprintCallable, Category = "Raymarcher")
-  static void CreateBasicRaymarchingResources(UVolumeTexture* Volume, UVolumeTexture* ALightVolume,
+  static void CreateBasicRaymarchingResources(UVolumeTexture* Volume,
                                               UTexture2D* TransferFunction,
                                               FTransferFunctionRangeParameters TFRangeParams,
                                               bool HalfResolution,

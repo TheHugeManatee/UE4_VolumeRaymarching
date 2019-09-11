@@ -382,13 +382,69 @@ bool Create2DTextureTransient(UTexture2D*& OutTexture, EPixelFormat PixelFormat,
 	UTexture2D* TransientTexture = UTexture2D::CreateTransient(Dimensions.X, Dimensions.Y, PixelFormat);
 	TransientTexture->AddressX = TilingX;
 	TransientTexture->AddressY = TilingY;
-
+	
 	FTexture2DMipMap& Mip = TransientTexture->PlatformData->Mips[0];
 	void* Data = Mip.BulkData.Lock(LOCK_READ_WRITE);
 
-	FMemory::Memcpy(Data, BulkData, TotalBytes);
+	if (BulkData) {
+		FMemory::Memcpy(Data, BulkData, TotalBytes);
+	}
+	else {
+		FMemory::Memset(Data, 0, TotalBytes);
+	}
+
 	Mip.BulkData.Unlock();
 	TransientTexture->UpdateResource();
 	OutTexture = TransientTexture;
 	return true;
 }
+
+bool CreateVolumeTextureTransient(UVolumeTexture*& OutTexture, EPixelFormat PixelFormat, FIntVector Dimensions,
+	uint8* BulkData, bool bUAVTargetable) {
+	int BlockBytes = GPixelFormats[PixelFormat].BlockBytes;
+	int TotalBytes = Dimensions.X * Dimensions.Y * Dimensions.Z * BlockBytes;
+
+	UVolumeTexture* TransientTexture = 
+		NewObject<UVolumeTexture>(
+			GetTransientPackage(),
+			NAME_None,
+			RF_Transient
+		);
+
+	// DEBUGING ONLY!!! Change to smth else!
+	//TransientTexture->SetLightingGuid();
+	//TransientTexture->CompressionSettings = TC_Masks;
+	//TransientTexture->Filter = TF_Nearest;
+	// END OF DEBUG
+
+	TransientTexture->SRGB = false;
+	TransientTexture->NeverStream = true;
+	TransientTexture->CompressionNone = true;
+
+	TransientTexture->PlatformData = new FTexturePlatformData();
+	TransientTexture->PlatformData->SizeX = Dimensions.X;
+	TransientTexture->PlatformData->SizeY = Dimensions.Y;
+	TransientTexture->PlatformData->NumSlices = Dimensions.Z;
+
+	TransientTexture->PlatformData->PixelFormat = PixelFormat;
+
+	// Allocate first mipmap.
+	FTexture2DMipMap* Mip = new FTexture2DMipMap();
+
+	TransientTexture->PlatformData->Mips.Add(Mip);
+	Mip->BulkData.Lock(LOCK_READ_WRITE);
+	void* Data = Mip->BulkData.Realloc(TotalBytes);
+
+	if (BulkData) {
+		FMemory::Memcpy(Data, BulkData, TotalBytes);
+	}
+	else {
+		FMemory::Memset(Data, 0, TotalBytes);
+	}
+	Mip->BulkData.Unlock();
+
+	TransientTexture->UpdateResource();
+	OutTexture = TransientTexture;
+	return true;
+}
+

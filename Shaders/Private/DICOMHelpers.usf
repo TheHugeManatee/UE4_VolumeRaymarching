@@ -1,0 +1,36 @@
+// This file contains functions used in Custom nodes in DICOM raymarching materials.
+// Because editing in custom node is horrible, it's nicer to just include and use a single 
+// function from this file.
+
+// Beware, modifications to this file will not be detected by the material shaders and they will not
+// be recompiled. Shaders using this file have to be recompiled manually! (unless I find a way
+// to tell the shadercompiler to always recompile the raymarch shaders on startup)
+
+#pragma once
+#include "RaymarchMaterialCommon.usf"
+
+// Returns the position (clamped to [0,1]) on the TransferFunction texture, depending on an input data float, byte size, signedness and window level and range 
+// Note that window level and range should be normalized to a float corresponding to the appropriate pixel format
+float TFPositionUCHAR(float value, float window, float level) {
+	
+}
+
+float TFPositionUnsigned(float value, float window, float level) {
+	
+}
+
+float TFPositionSigned(float value, float window, float level) {
+	
+}
+
+float TFPositionUSHORT(float value, float window, float level) {
+	
+}
+
+float TFPositionSHORT(float value, float window, float level) {
+	
+}
+
+float TFPositionUCHAR(float value, float window, float level) {
+
+}

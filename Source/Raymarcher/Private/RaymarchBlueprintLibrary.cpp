@@ -23,16 +23,10 @@
 
 #define LOCTEXT_NAMESPACE "RaymarchPlugin"
 
-void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture* LightVolume,
+void URaymarchBlueprintLibrary::InitLightVolume(UVolumeTexture*& LightVolume,
                                                 FIntVector Dimensions) {
-  if (!LightVolume) {
-    GEngine->AddOnScreenDebugMessage(
-        10, 10, FColor::Red, "Trying to init light volume without providing the volume texture.");
-    return;
-  }
-
   // FMemory::Memset(InitMemory, 1, TotalSize);
-  UpdateVolumeTextureAsset(LightVolume, PF_R32_FLOAT, Dimensions, nullptr, false, false, true);
+  CreateVolumeTextureTransient(LightVolume, PF_R32_FLOAT, Dimensions, nullptr);
 }
 
 void URaymarchBlueprintLibrary::AddDirLightToSingleVolume(
@@ -357,16 +351,15 @@ void CreateBufferTextures(FIntPoint Size, EPixelFormat PixelFormat,
 }
 
 void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
-    UVolumeTexture* Volume, UVolumeTexture* ALightVolume, UTexture2D* TransferFunction,
+    UVolumeTexture* Volume, UTexture2D* TransferFunction,
     FTransferFunctionRangeParameters TFRangeParams, bool HalfResolution,
     FBasicRaymarchRenderingResources& OutParameters) {
-  if (!Volume || !ALightVolume || !TransferFunction) {
+  if (!Volume || !TransferFunction) {
     UE_LOG(LogTemp, Error, TEXT("Invalid input parameters!"));
     return;
   }
 
   OutParameters.VolumeTextureRef = Volume;
-  OutParameters.ALightVolumeRef = ALightVolume;
   OutParameters.TFTextureRef = TransferFunction;
 
   int X = Volume->GetSizeX();
@@ -380,8 +373,7 @@ void URaymarchBlueprintLibrary::CreateBasicRaymarchingResources(
     Z = FMath::DivideAndRoundUp(Z, 2);
   }
 
-  // Initialize the Alpha Light volume
-  InitLightVolume(ALightVolume, FIntVector(X, Y, Z));
+  CreateVolumeTextureTransient(OutParameters.ALightVolumeRef, PF_R32_FLOAT, FIntVector(X,Y,Z), nullptr, true);
 
   // GEngine->AddOnScreenDebugMessage(-1, 20.0f, FColor::Yellow, "Made some fucking buffers, yo!");
 

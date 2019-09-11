@@ -97,7 +97,7 @@ void AccumulateOneRaymarchStep(inout float4 AccumulatedLightEnergy, float3 CurPo
                                Texture2D TF, float2 TFIntensityDomain, Texture3D LightVolume, float StepSize)
 {
     // Sample intensity from the volume and get corresponding color-opacity from transfer function.
-    float4 ColorSample = SampleDataVolume(CurPos, StepSize, DataVolume, Material.Clamp_WorldGroupSettings, TF, Material.Clamp_WorldGroupSettings, TFIntensityDomain);
+    float4 ColorSample = SampleDataVolumeShort(CurPos, StepSize, DataVolume, Material.Clamp_WorldGroupSettings, TF, Material.Clamp_WorldGroupSettings, TFIntensityDomain);
     
     // Get lighting information from illumination volume for current position and
     // Multiply sampled color with light color to adjust intensity according to light strength.

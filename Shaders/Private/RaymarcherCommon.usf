@@ -62,6 +62,63 @@ float4 SampleDataVolume(float3 CurPos, float StepSize, Texture3D Volume, Sampler
     return ColorSample;
 }
 
+// Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize (in World units).
+float4 SampleDataVolumeShort(float3 CurPos, float StepSize, Texture3D Volume, SamplerState VolumeSampler, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
+{
+
+    int x, y, z;
+    Volume.GetDimensions(x, y, z);
+    // Decrease dimensions by 1, because with any UVW coord being == 1, we would load one after the array length
+    // E.G - with X dimension == 2, U == 1, we want to sample x[1], not x[2] (as that doesn't exist)
+    int3 Dimensions = int3(x - 1, y - 1, z - 1);
+    // We don't want to interpolate here, use load instead of sample.
+    float LabelValue = Volume.Load(int4(round(Dimensions * saturate(CurPos)), 0));
+
+    if (LabelValue > 0)
+    {
+        return float4(1.0, 0.0, 0.0, 1.0);
+    }
+    //if (LabelValue.g > 0)
+    //{
+    //    return float4(0.0, 1.0, 0.0, 1.0);
+    //}
+    //if (LabelValue.b > 0)
+    //{
+    //    return float4(0.0, 0.0, 1.0, 1.0);
+    //}
+    //if (LabelValue.a > 0)
+    //{
+    //    return float4(1.0, 1.0, 1.0, 1.0);
+    //}
+
+    return float4(0, 0, 0, 0);
+}
+
+//// Samples a Data volume, transforms it to fit the TF Intensity domain and then transforms it by the TF. Corrects the opacity to account for StepSize (in World units).
+//float4 SampleDataVolumeShort(float3 CurPos, float StepSize, Texture3D Volume, Texture2D TF, SamplerState TFSampler, float2 TFIntensityDomain)
+//{
+//    int x, y, z;
+//    Volume.GetDimensions(x, y, z);
+//    // Decrease dimensions by 1, because with any UVW coord being == 1, we would load one after the array length
+//    // E.G - with X dimension == 2, U == 1, we want to sample x[1], not x[2] (as that doesn't exist)
+//    int3 Dimensions = int3(x - 1, y - 1, z - 1);
+//    // We don't want to interpolate here, use load instead of sample.
+//    uint ActualVal = (Volume.Load(int4(round(Dimensions * saturate(CurPos)), 0)).r);
+    
+//    if (ActualVal != 0)
+//        return float4(1.0, 1.0, 1.0, 1.0);
+//    else
+//        return float4(0.0, 0.0, 0.0, 0.0);
+
+//    float VolumeSample = (ActualVal); // / 65565.0;
+	
+//    // RemapIntensity(VolumeSample, TFIntensityDomain);
+
+//    float4 ColorSample = TF.SampleLevel(TFSampler, float2(VolumeSample, 0.5), 0);
+//    ColorSample.a = 1.0 - pow(1.0 - ColorSample.a, StepSize);
+//    return ColorSample;
+//}
+
 
 // Samples a Data volume at CurPos and given LOD;
 float SampleDataIntensityLoded(float3 CurPos, Texture3D Volume, SamplerState VolumeSampler, float LOD)
