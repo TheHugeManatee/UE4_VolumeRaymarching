@@ -31,7 +31,6 @@ IMPLEMENT_SHADER_TYPE(, FClearFloatRWTextureCS,
 #define NUM_THREADS_PER_GROUP_DIMENSION \
   16  // This has to be the same as in the compute shader's spec [X, X, 1]
 
-
 ETextureSourceFormat PixelFormatToSourceFormat(EPixelFormat PixelFormat) {
   // THIS IS UNTESTED FOR FORMATS OTHER THAN G8 AND R16G16B16A16_SNORM!
   // USE AT YOUR OWN PERIL!
@@ -198,7 +197,8 @@ FClippingPlaneParameters GetLocalClippingParameters(
   // Get clipping center to (0-1) texture local space. (Invert transform, add 0.5 to get to (0-1)
   // space of a unit cube centered on 0,0,0)
   RetVal.Center = WorldParameters.VolumeTransform.InverseTransformPosition(
-                      WorldParameters.ClippingPlaneParameters.Center) + 0.5;
+                      WorldParameters.ClippingPlaneParameters.Center) +
+                  0.5;
   // Get clipping direction in local space
   // TODO Why the hell does light direction work with regular InverseTransformVector
   // but clipping direction only works with NoScale and multiplying by scale afterwards?
@@ -469,7 +469,6 @@ void AddDirLightToSingleLightVolume_RenderThread(FRHICommandListImmediate& RHICm
   RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
                                 EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
 }
-#pragma optimize("", off)
 
 void ChangeDirLightInSingleLightVolume_RenderThread(
     FRHICommandListImmediate& RHICmdList, FBasicRaymarchRenderingResources Resources,
@@ -532,7 +531,8 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
   }
 
   // For GPU profiling.
-  SCOPED_DRAW_EVENTF(RHICmdList, ChangeDirLightInSingleLightVolume_RenderThread, TEXT("Changing Lights"));
+  SCOPED_DRAW_EVENTF(RHICmdList, ChangeDirLightInSingleLightVolume_RenderThread,
+                     TEXT("Changing Lights"));
   SCOPED_GPU_STAT(RHICmdList, GPUChangingLights);
 
   TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
@@ -607,11 +607,10 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
     RemovedUVWOffset.Normalize();
     RemovedUVWOffset *= LongestVoxelSide;
 
-    ComputeShader->SetStepSizes(RHICmdList, ShaderRHI,
-                                AddedStepSize, RemovedStepSize);
+    ComputeShader->SetStepSizes(RHICmdList, ShaderRHI, AddedStepSize, RemovedStepSize);
 
     ComputeShader->SetPixelOffsets(RHICmdList, ShaderRHI, AddedPixOffset, RemovedPixOffset);
-	ComputeShader->SetUVWOffsets(RHICmdList, ShaderRHI, AddedUVWOffset, RemovedUVWOffset);
+    ComputeShader->SetUVWOffsets(RHICmdList, ShaderRHI, AddedUVWOffset, RemovedUVWOffset);
 
     FMatrix perm = GetPermutationMatrix(RemovedLocalMajorAxes, i);
     ComputeShader->SetPermutationMatrix(RHICmdList, ShaderRHI, perm);
@@ -652,8 +651,6 @@ void ChangeDirLightInSingleLightVolume_RenderThread(
   RHICmdList.TransitionResource(EResourceTransitionAccess::EReadable,
                                 EResourceTransitionPipeline::EComputeToGfx, AVolumeUAV);
 }
-#pragma optimize("", on)
-
 
 void ClearVolumeTexture_RenderThread(FRHICommandListImmediate& RHICmdList,
                                      FRHITexture3D* VolumeResourceRef, float ClearValues) {

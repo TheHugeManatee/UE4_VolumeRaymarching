@@ -612,12 +612,13 @@ void URaymarchBlueprintLibrary::WriteVolumeTextureSlice(UVolumeTexture* VolumeTe
   // We are slicing along X, so make sure the other 2 dimensions match (slice X = volume Y, slice Y
   // = volume Z)
   check(WrittenSliceTexture->GetSizeX() == VolumeTexture->GetSizeY() &&
-        WrittenSliceTexture->GetSizeY() == VolumeTexture->GetSizeZ())
+        WrittenSliceTexture->GetSizeY() == VolumeTexture->GetSizeZ());
 
-      // Call the actual rendering code on RenderThread.
-      ENQUEUE_RENDER_COMMAND(CaptureCommand)([=](FRHICommandListImmediate& RHICmdList) {
-        WriteVolumeTextureSlice_RenderThread(RHICmdList, VolumeTexture, WrittenSliceTexture, Layer);
-      });
+  // Call the actual rendering code on RenderThread.
+  ENQUEUE_RENDER_COMMAND(CaptureCommand)
+  ([=](FRHICommandListImmediate& RHICmdList) {
+    WriteVolumeTextureSlice_RenderThread(RHICmdList, VolumeTexture, WrittenSliceTexture, Layer);
+  });
 }
 
 void URaymarchBlueprintLibrary::LocalToTextureCoords(FVector LocalCoords, FVector& TextureCoords) {
