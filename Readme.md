@@ -1,7 +1,14 @@
 
+# Deprecation notice
+This project is deprecated, find the new and improved version here:
+
+https://github.com/tommybazar/TBRaymarchProject
+
+The new one works without the need for a custom UE build, is way cleaner and more reliable and works with 4.25+
 
 # Volume Rendering Plugin for Unreal Engine
 Allows volume rendering with Unreal Engine.
+
 
 # Features
  * Volume raycasting for arbitrary `UVolumeTexture` textures
